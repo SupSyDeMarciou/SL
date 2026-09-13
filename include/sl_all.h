@@ -1,0 +1,30155 @@
+// SOURCE: base.h
+#ifndef _SL_UTILS_H_
+#define _SL_UTILS_H_
+
+/*
+ *  UTILS: Useful constructs which aren't big enough to warant their own header file. 
+ *  
+ *  TODO:
+ *  - 
+ * 
+*/
+
+#ifndef SL_NO_STDLIB
+    #include <stdint.h>
+    #include <stdbool.h>
+    #include <stdlib.h>
+    #include <stdio.h>
+    #include <string.h>
+    #include <math.h>
+
+    #include <stdarg.h>
+    #include <ctype.h>
+
+    #ifdef _WIN32
+    #   define sleep _sleep
+    #endif
+#endif
+
+#ifndef SL_header
+#   define SL_header static inline
+#endif
+#ifndef thread_local
+#   define thread_local _Thread_local
+#endif
+#if defined(__CLANG__)
+#   define typeof __typeof__
+#endif
+
+#ifndef always_inline
+#   ifdef _MSC_VER
+#       define always_inline __forceinline
+#   elif defined(__GNUC__)
+#       define always_inline inline __attribute__((__always_inline__))
+#   elif defined(__CLANG__)
+#       if __has_attribute(__always_inline__)
+#           define always_inline inline __attribute__((__always_inline__))
+#       else
+#           define always_inline inline
+#       endif
+#   else
+#       define always_inline inline
+#   endif
+#endif
+
+#if defined(SL_IMPLEMENTATION)
+#   define SL_implement(...) __VA_ARGS__
+#else
+#   define SL_implement(...)
+#endif
+
+#ifndef CAT
+#   define __CAT(x, y) x##y
+#   define CAT(x, y) __CAT(x, y)
+#endif
+
+#ifndef NOP
+#   define NOP(x) x
+#endif
+
+
+
+#pragma region TYPES
+
+#define SL_DEF_PTR(type) \
+    typedef type *CAT(type, p); \
+    typedef type **CAT(type, pp); \
+    typedef type ***CAT(type, ppp);
+
+SL_DEF_PTR(void) SL_DEF_PTR(int) SL_DEF_PTR(char) SL_DEF_PTR(float) SL_DEF_PTR(double)
+
+#ifdef bool
+#   undef bool
+    typedef _Bool bool;
+    SL_DEF_PTR(bool)
+#   define bool bool
+#endif
+
+#ifdef complex
+#   ifdef I
+#       undef I
+#       define lj _Complex_I
+#   endif
+    SL_DEF_PTR(complex)
+#endif
+
+typedef unsigned    uint;   SL_DEF_PTR(uint)
+typedef size_t      usize;  SL_DEF_PTR(usize)   typedef ssize_t     ssize;      SL_DEF_PTR(ssize)
+
+typedef uint8_t     u8;     SL_DEF_PTR(u8)
+typedef uint16_t    u16;    SL_DEF_PTR(u16)
+typedef uint32_t    u32;    SL_DEF_PTR(u32)
+typedef uint64_t    u64;    SL_DEF_PTR(u64)
+typedef int8_t      i8;     SL_DEF_PTR(i8)
+typedef int16_t     i16;    SL_DEF_PTR(i16)
+typedef int32_t     i32;    SL_DEF_PTR(i32)
+typedef int64_t     i64;    SL_DEF_PTR(i64)
+#ifdef _INT128_DEFINED
+typedef __int128_t  i128;   SL_DEF_PTR(i128)
+typedef __uint128_t u128;   SL_DEF_PTR(u128)
+#endif
+
+typedef char        char8;  SL_DEF_PTR(char8)
+typedef wchar_t     char16; SL_DEF_PTR(char16)
+typedef u32         char32; SL_DEF_PTR(char32)
+
+typedef _Float16    f16;    SL_DEF_PTR(f16)
+typedef float       f32;    SL_DEF_PTR(f32)  
+typedef double      f64;    SL_DEF_PTR(f64)
+typedef __float128  f128;   SL_DEF_PTR(f128)
+
+#define SL_DEF_ALIAS(base_type, ...) typedef base_type __VA_ARGS__
+
+#pragma endregion TYPES
+
+
+
+#pragma region ERROR
+
+typedef enum sl_error {
+    SL_ERR_NONE = 0,
+
+    SL_ERR_OUT_OF_BOUNDS,               /// @brief When a value is not stored within a container
+    SL_ERR_MEMORY,                      /// @brief Errors from `malloc`, `memcpy`, `memmove`, etc.
+    SL_ERR_DIVISION_BY_ZERO,            /// @brief When a division by zero occurs
+    SL_ERR_MISSMATCHING_DIMENSIONS,     /// @brief When two operands which are expected to share the same dimensions do not 
+    SL_ERR_THREAD_CREATE,               /// @brief When `pthread_create` fails
+    SL_ERR_THREAD_JOIN,                 /// @brief When `pthread_join` fails
+    SL_ERR_DUPLICATE,                   /// @brief When data is supposed to be unique
+    SL_ERR_MISSING_VALUE,               /// @brief When an expected piece of data is missing
+} sl_error;
+
+SL_header sl_error __SL_ERROR(sl_error);
+#define SL_ERROR (__SL_ERROR(SL_ERR_NONE))
+SL_header const char *SL_strerr(sl_error error);
+
+#define SL_terminate(error_code, msg, ...) do { fprintf(stderr, "%s:%u@%s - [TERMINATED(%d)] " msg, __FILE__, __LINE__, __FUNCTION__, error_code, ##__VA_ARGS__); exit(error_code); } while (0)
+
+#pragma endregion ERROR
+
+
+
+#pragma region GENERIC
+
+#if defined(__GNUC__) || defined(__clang__)
+#   define __SL_PTR(...) ((typeof(__VA_ARGS__)[1]){__VA_ARGS__})
+#   define __SL_PTR_T(type, ...) ((type[1]){(type)(__VA_ARGS__)})
+#else
+#   define __SL_PTR(...) (&(__VA_ARGS__))
+#   define __SL_PTR_T(type, ...) (&((type)(__VA_ARGS__)))
+#endif
+
+/// @brief Clone a memory block
+/// @param memory Source
+/// @param size Size of the source in bytes
+/// @return The newly cloned memory
+SL_header void *memclone(void *memory, size_t size);
+
+#ifdef SL_SIMPLE_NEW
+    /// @brief Allocate a new variable on the heap
+    /// @param type The type to allocate
+#   define new(type) (malloc(sizeof(type)))
+#else
+#   if defined(__GNUC__) || defined(__clang__)
+    /// @brief Allocate and fill memory on the heap
+    /// @param ... The value with which to fill the newly allocated memory
+    /// @return The newly allocated memory
+#   define new(...) (memclone(__SL_PTR((__VA_ARGS__)), sizeof(__VA_ARGS__)))
+#   else
+#       error "This compiler doesn't allow for the use of the "new" macro as intended. Please define SL_SIMPLE_NEW and use the other synthax if you wish to use the "new" macro."
+#   endif
+#endif
+/// @brief Allocate and fill memory on the heap from a static array
+/// @param ... The array with which to fill the newly allocated memory
+/// @return The newly allocated memory
+#define new_sa(...) (memclone(__VA_ARGS__, sizeof(__VA_ARGS__)))
+
+#define SL_static_count(static_array) (sizeof(static_array) / sizeof((static_array)[0]))
+
+#define SL_min(a, b) ((a) < (b) ? (a) : (b))
+#define SL_max(a, b) ((a) > (b) ? (a) : (b))
+
+#define SL_swap(a, b) do { typeof(a) __SL_SWAP__ = (a); (a) = (b); (b) = __SL_SWAP__; } while (0)
+#define __SL_swapi(a, b, cast) (*(cast *)&(a) ^= *(cast *)&(b), *(cast *)&(b) ^= *(cast *)&(a), *(cast *)&(a) ^= *(cast *)&(b))
+#define SL_swapi(a, b) (                     \
+    sizeof(a) == 1 ? __SL_swapi(a, b, u8)  : \
+    sizeof(a) == 2 ? __SL_swapi(a, b, u16) : \
+    sizeof(a) == 3 ? __SL_swapi(a, b, u32) : \
+                     __SL_swapi(a, b, u64)   \
+)
+
+/// @brief Temporary formated string
+/// @param fmt The format. If `NULL`, returns the last temporary string
+/// @param ... Additionnal arguments to format
+/// @return The temporary formatted string
+/// @warning This string is only valid until the next use of `tmpf`. DO NOT FREE THIS STRING
+SL_header char *SL_tmpf(const char *fmt, ...);
+
+/// @brief Align `n` to the next power of two
+/// @param n The value to approach
+/// @return The smallest power of two greater than `n`
+SL_header u64 SL_alignPow2(u64 n);
+
+#define __SL_DEF_CMP_FUNC(type, lhs, rhs, header, impl) header int type##_cmp(const type *lhs, const type *rhs); header int type##_cmp_inv(const type *lhs, const type *rhs) impl({ return -type##_cmp(lhs, rhs); }); header int type##_cmp(const type *lhs, const type *rhs) 
+/// @brief Define a comparaison function to use with qsort or dict
+/// @param type Type of the compared values
+/// @param lhs The name of the left operand
+/// @param rhs The name of the right operand
+/// @note a and b are pointers to their values
+/// @return Definition of functions `int {type}_cmp(const type *lhs, const type *rhs)` and `int {type}_cmp_inv(const type *lhs, const type *rhs)`, the second function returning the opposite of the first
+#define SL_DEF_CMP_FUNC(type, lhs, rhs) __SL_DEF_CMP_FUNC(type, lhs, rhs, , NOP)
+/// @brief Define a hash function to use with dict
+/// @param type Type of the hashed key
+/// @param key Name of the key operand
+/// @return Definition of the function `usize {type}_hash(const type *key, usize size)`
+#define SL_DEF_HASH_FUNC(type, key) SL_header usize type##_hash(const type *key)
+
+#pragma endregion GENERIC
+
+
+
+
+
+
+
+
+
+
+
+#endif // _SL_UTILS_H_
+
+
+
+
+
+// SOURCE: struct/allocator.h
+#ifndef _SL_ALLOCATOR_H_
+#define _SL_ALLOCATOR_H_
+
+/*
+ *  ALLOCATOR: allocator common ground for SL. It is used by many types such as array or list.  
+ *  
+ *  TODO:
+ *  - Better Arena (to be less dumb)
+ *  - Other kinds of allocators
+ * 
+*/
+
+// #include "../base.h"
+
+typedef struct sl_allocator sl_allocator;
+#define std_allocator ((sl_allocator *)NULL)
+
+typedef void *sl_func_alloc    (sl_allocator *alloc, usize size);                               /// @brief Memory allocate prototype
+typedef void *sl_func_zalloc   (sl_allocator *alloc, usize size);                               /// @brief Memory zero allocate prototype
+typedef void *sl_func_realloc  (sl_allocator *alloc, void *memory, usize size);                 /// @brief Memory reallocate prototype
+typedef void  sl_func_free     (sl_allocator *alloc, void *memory);                             /// @brief Memory free prototype
+typedef void *sl_func_clone    (sl_allocator *alloc, void *memory, usize size);                 /// @brief Memory clone prototype
+
+#define SL_aalloc(allocator, size)             (allocator == std_allocator ? malloc(size)        : (allocator)->alloc(allocator, size))              /// @brief Allocate memory with allocator
+#define SL_azalloc(allocator, size)            (allocator == std_allocator ? calloc(1, size)     : (allocator)->zalloc(allocator, size))             /// @brief Allocate zeroed memory with allocator
+#define SL_arealloc(allocator, ptr, size)      (allocator == std_allocator ? realloc(ptr, size)  : (allocator)->realloc(allocator, ptr, size))       /// @brief Reallocate memory with allocator
+#define SL_afree(allocator, ptr)               (allocator == std_allocator ? free(ptr)           : (allocator)->free(allocator, ptr))                /// @brief Free memory with allocator
+#define SL_aclone(allocator, src, size)        (allocator == std_allocator ? memclone(src, size) : (allocator)->clone(allocator, src, size))         /// @brief Clone memory with allocator    
+
+struct sl_allocator {
+    sl_func_alloc      *alloc;
+    sl_func_zalloc     *zalloc;
+    sl_func_realloc    *realloc;
+    sl_func_free       *free;
+    sl_func_clone      *clone;
+};
+/// @brief Create a new memory allocated
+/// @param alloc Memory allocate function
+/// @param zalloc Memory zero allocate function
+/// @param realloc Memory reallocate function
+/// @param free Memory free function
+/// @param copy Memory copy function
+/// @param move Memory move function
+/// @param clone Memory clone function
+/// @return The newly created allocator
+#define SL_allocator_(alloc_, zalloc_, realloc_, free_, clone_) ((sl_allocator) { .alloc = alloc, .zalloc = zalloc_, .realloc = realloc_, .free = free_, .clone = clone_})
+
+
+
+#endif // _SL_ALLOCATOR_H_
+
+
+
+
+
+// SOURCE: struct/array.h
+#ifndef _SL_ARRAY_H_
+#define _SL_ARRAY_H_
+
+/*
+ *  ARRAY: generic dynamic array in C. 
+ *  
+ *  TODO:
+ *  - Find a way to declare array of pointer types
+ * 
+*/
+
+// #include "../base.h"
+// #include "allocator.h"
+
+
+
+/// @brief Define the fields to make a struct compatible with every "array" function
+/// @param type type to be stored
+#define SL_ARRAY_FIELDS(type) type *data; usize count; usize capa; sl_allocator *alloc
+#define __SL_XPD_ARRAY(arr, ...) (void *) __VA_ARGS__ (arr).data, __VA_ARGS__ (arr).count, __VA_ARGS__ (arr).capa, (arr).alloc, sizeof(*(arr).data)
+/// @brief Define a new type of dynamic array
+/// @param type type to be stored
+/// @return The types "{type}_a" and "{type}_s" for dynamic array and slice respectively
+/// @note You can refer to the array using "array(type)" or directly by adding "_a" at the end of the type
+#define SL_DEF_ARRAY(type) typedef struct SL_slice(type) { type *data; usize count; } SL_slice(type); typedef struct SL_array(type) { SL_ARRAY_FIELDS(type); } SL_array(type)
+
+#define SL_array(type) CAT(type, _a)
+#define SL_slice(type) CAT(type, _s)
+#define SL_slice_(type, data_, count_)  ((SL_slice(type)){.data = data_, .count = count_})
+#define SL_slicea(type, array)          ((SL_slice(type)){.data = (array).data, .count = (array).count})
+#define SL_slicew(type, ...)            ((SL_slice(type)){.data = (type[]){__VA_ARGS__}, .count = (sizeof((type[]){__VA_ARGS__}) / sizeof(type))})
+
+
+
+/// @brief Create an array with initial capacity in a specified allocator
+/// @param type Type to be stored
+/// @param capa_ Initial capacity
+/// @param allocator_ Allocator
+/// @return The newly created array
+#define SL_arrayCreateA(type, capa_, allocator_) ((type##_a){.data = (capa_) <= 0 ? NULL : SL_aalloc(allocator_, sizeof(type) * (capa_)), .capa = (capa_) <= 0 ? 0 : (capa_), .count = 0, .alloc = allocator_})
+/// @brief Create an array with initial capacity
+/// @param type Type to be stored
+/// @param capa_ Initial capacity
+/// @return The newly created array
+#define SL_arrayCreate(type, capa_) SL_arrayCreateA(type, capa_, std_allocator)
+/// @brief Free array's resources and reset its value
+/// @param array Array
+#define SL_arrayDestroy(array) (SL_afree((array).alloc, (array).data), memset(&array, 0, sizeof(array)), array)
+/// @brief Clone array
+/// @param array Array
+/// @return A clone of array
+/// @note Use this to avoid having shared "data" on multiple arrays
+#define SL_arrayClone(array) ((typeof(array)){.data = SL_aclone((array).alloc, (array).data, sizeof(*(array).data) * (array).capa), .capa = (array).capa, .count = (array).count})
+/// @brief Clone array in a specified allocator
+/// @param array Array
+/// @param allocator Allocator
+/// @return A clone of array
+/// @note Use this to avoid having shared "data" on multiple arrays
+#define SL_arrayCloneA(array, allocator) ((typeof(array)){.data = SL_aclone(allocator, (array).data, sizeof(*(array).data) * (array).capa), .capa = (array).capa, .count = (array).count})
+
+/// @brief Wrap a C array into an SL array
+/// @param carray C array
+/// @param span Number of values in the C array
+/// @warning Opperations like "arrayAdd" may try to reallocate the array, so be careful with static memory and outside references.
+#define SL_arrayWrap(type, span, carray) ((type##_a){.data = carray, .capa = span, .count = span, .alloc = std_allocator})
+/// @brief Wrap a C array into an SL array with a specified allocator
+/// @param carray C array
+/// @param span Number of values in the C array
+/// @param allocator_ Allocator
+/// @warning Opperations like "arrayAdd" may try to reallocate the array, so be careful with static memory and outside references.
+#define SL_arrayWrapA(type, span, carray, allocator_) ((type##_a){.data = carray, .capa = span, .count = span, .alloc = allocator_})
+/// @brief Wrap a set of values into an SL array
+/// @param ... Values
+/// @warning Opperations like "arrayAdd" may try to reallocate the array, so be careful with static memory and outside references.
+#define SL_arrayWrapVar(type, ...) ((type##_a){.data = (type[]){__VA_ARGS__}, .capa = sizeof((type[]){__VA_ARGS__}) / sizeof(type), .count = sizeof((type[]){__VA_ARGS__}) / sizeof(type), .alloc = std_allocator})
+
+/// @brief Get first value in array
+/// @param array Array
+/// @return A pointer to the value if found, NULL otherwise
+#define SL_arrayFirst(array) ((array).count ? (array).data : NULL)
+/// @brief Get last value in array
+/// @param array Array
+/// @return A pointer to the value if found, NULL otherwise
+#define SL_arrayLast(array) ((array).count ? (array).data + (array).count - 1 : NULL)
+SL_header void *__SL_arrayAt(void *data, usize count, usize elemSize, ssize index);
+/// @brief Get value at index in array
+/// @param array Array
+/// @param index Index into the array. If negative, equivalent to ```SL_arrayAt(array, array.count + index)```
+/// @return A pointer to the value if found, NULL otherwise
+#define SL_arrayAt(array, index) ((typeof((array).data))__SL_arrayAt((array).data, (array).count, sizeof(*(array).data), index))
+
+
+
+SL_header void *__SL_arrayInsertRange(void **array_data, usize *array_count, usize *array_capa, sl_allocator *alloc, usize elemSize, usize index, usize span, void *values);
+/// @brief Insert range of values at index in array
+/// @param array Array
+/// @param index Index of first value into the array
+/// @param span Number of values to insert
+/// @param values Values to insert
+/// @return Pointer to the first inserted value
+/// @warning Will not insert if index is out of array bounds
+/// @note Error status is recorded in SL_ERROR
+#define SL_arrayInsertRange(array, index, span, values) ((typeof((array).data))__SL_arrayInsertRange(__SL_XPD_ARRAY(array, &), index, span, (void *)(typeof((array).data))values))
+/// @brief Insert value at index in array
+/// @param array Array
+/// @param index Index into the array
+/// @param value Value to insert
+/// @return Pointer to the inserted value
+/// @warning Will not insert if index is out of array bounds
+/// @note Error status is recorded in SL_ERROR
+#define SL_arrayInsert(array, index, value) SL_arrayInsertRange(array, index, 1, __SL_PTR(value))
+/// @brief Insert range of values at index in array
+/// @param array Array
+/// @param index Index of first value into the array
+/// @param span Number of values to insert
+/// @param ... Values to insert
+/// @return Pointer to the first inserted value
+/// @warning Will not insert if index is out of array bounds
+/// @note Error status is recorded in SL_ERROR
+#define SL_arrayInsertVar(array, index, ...) ((typeof((array).data))__SL_arrayInsertRange(__SL_XPD_ARRAY(array, &), index, sizeof((typeof(*(array).data)[]){__VA_ARGS__}) / sizeof(*(array).data), (typeof(*(array).data)[]){__VA_ARGS__})) 
+
+
+
+/// @brief Add range of values to end of array
+/// @param array Array
+/// @param span Number of values to insert
+/// @param values Values to insert
+/// @return Pointer to the first inserted value
+/// @note Error status is recorded in SL_ERROR
+#define SL_arrayAddRange(array, span, values) SL_arrayInsertRange(array, (array).count, span, values)
+/// @brief Add range of values to end of array
+/// @param array Array
+/// @param ... Values to insert
+/// @return Pointer to the first inserted value
+/// @note Error status is recorded in SL_ERROR
+#define SL_arrayAddVar(array, ...) SL_arrayInsertVar(array, (array).count, __VA_ARGS__)
+/// @brief Add value to end of array
+/// @param array Array
+/// @param value Value to add
+/// @return Pointer to the inserted value
+/// @note Error status is recorded in SL_ERROR
+#define SL_arrayAdd(array, value) SL_arrayAddRange(array, 1, (void *)__SL_PTR(value))
+/// @brief Concatenate two arrays
+/// @param a Left array
+/// @param b Right array
+/// @return Pointer to the first inserted value
+/// @note Result is stored in a
+/// @note Error status is recorded in SL_ERROR
+#define SL_arrayCat(a, b) SL_arrayAddRange(a, (b).count, (b).data)
+
+#define SL_arrayAddf(array, fmt, ...) (__SL_arrayInsertRange(SL_ARRAY_XPD(array, &), (array).count, strlen(tmpf(fmt, ##__VA_ARGS__)), tmpf(NULL)))
+
+SL_header bool __SL_arrayRemoveRange(void *array_data, usize *array_count, usize elemSize, usize index, usize span);
+/// @brief Remove values from `index` to `index + span` from array
+/// @param index Index of first value to remove
+/// @param span Number of values to remove
+/// @return Wether the removal was successful
+/// @warning Will not remove if full span is outside of array bounds
+/// @note Error status is recorded in SL_ERROR
+#define SL_arrayRemoveRange(array, index, span) (__SL_arrayRemoveRange((void *)(array).data, &(array).count, sizeof(*(array).data), index, span))
+/// @brief Remove value at index from array
+/// @param index Index of the value to remove
+/// @return Wether the removal was successful
+/// @note Error status is recorded in SL_ERROR
+#define SL_arrayRemove(array, index) SL_arrayRemoveRange(array, index, 1)
+
+SL_header bool __SL_arrayRemoveUnordered(void *array_data, usize *array_count, usize elemSize, usize index);
+/// @brief Remove value at index from array without regards for order
+/// @param index Index of the value to remove
+/// @return Wether the removal was successful
+/// @warning The order of the elements inside of this array will not be preserved after this operation
+/// @note Error status is recorded in SL_ERROR
+#define SL_arrayRemoveUnordered(array, index) (__SL_arrayRemoveUnordered((array).data, &(array).count, sizeof(*(array).data), index))
+/// @brief Take out last value of array
+/// @param array Array
+/// @return Pointer to popped value
+/// @warning The pointer to the popped value is only garantied to be valid when this function is called
+/// @note Error status is recorded in SL_ERROR
+#define SL_arrayPop(array) ((array).count ? (array).data + --(array).count : __SL_ERROR(SL_ERR_OUT_OF_BOUNDS), NULL)
+
+
+
+/// @brief Sort array using stdlib's "qsort"
+/// @param array Array
+/// @param condition Function which, given two consecutive values of the array, compares them and returns a positive int if their order is correct and a negative int if they should swap
+/// @note Some basic qsort functions are provided. They are named "{type}_cmp" and "{type}_cmp_inv".
+#define SL_arraySort(array, condition) (qsort((array).data, (array).count, sizeof(*(array).data), (int(*)(const void *, const void *))condition))
+
+SL_header void __SL_arrayFill(void *array_data, usize array_count, usize elemSize, void *elem);
+#define SL_arrayFill(array, value) __SL_arrayFill((array).data, (array).count, sizeof(*(array).data), __SL_PTR_T(typeof(*(array).data), value)), array
+
+SL_header bool __SL_arraySetCapacity(void **array_data, usize *array_count, usize *array_capa, sl_allocator *alloc, usize elemSize, usize new_capa);
+#define SL_arrayReserve(array, new_capacity) (__SL_arraySetCapacity(__SL_XPD_ARRAY(array, &), new_capacity))
+
+/// @brief Print array to a stream with user defined formatting
+/// @param array Array
+/// @param dst Destination in which to print. Uses generic "gprintf" function to differenciate between printing to a string or a file
+/// @param fmt The format of the data to print
+/// @param varname The name of the iterator
+/// @param ... How to expand the value stored to fit the format specified with 'fmt'
+#define SL_arrayPrintf_full(array, dst, fmt, varname, ...) do { \
+    if (!(array).data) SL_gprintf(dst, "array[]"); \
+    else { \
+        SL_aforeach(varname, array) SL_gprintf(dst, SL_aindex(varname) == 0 ? "array["fmt : ", "fmt, ##__VA_ARGS__); \
+        SL_gprintf(dst, "]"); \
+    } \
+} while (0)
+/// @brief Print array to a stream with user defined formatting
+/// @param array Array
+/// @param dst Destination in which to print. Uses generic "gprintf" function to differenciate between printing to a string or a file
+/// @param fmt The format of the data to print
+/// @param ... How to expand the value stored to fit the format specified with 'fmt'
+#define SL_arrayPrintf(array, dst, fmt) SL_arrayPrintf_full(array, dst, fmt, __SL_VARNAME__, *__SL_VARNAME__)
+
+
+
+/// @brief Iterate over every item into an array
+/// @param varname The name of the iterator
+/// @param array Array
+/// @note "varname" is a pointer to a value in array at each iteration.
+#define SL_aforeach(varname, array) for (typeof((array).data) varname = (array).data, __##varname##_MIN__ = (array).data, __##varname##_MAX__ = (array).data + (array).count; varname < __##varname##_MAX__; ++varname)
+/// @brief Index of element in array
+/// @warning This is supposed to be used inside of the "aforeach" scope, no bound checks are done on this value
+/// @returns The index of the element in the currently iterated array
+#define SL_aindex(varname) (((usize)(varname) - (usize)(__##varname##_MIN__)) / sizeof(*varname))
+#define SL_aindex_in(ptr, array) (((usize)(varname) - (usize)((array).data)) / sizeof(*varname))
+
+#define SL_anext(array, ptr) ((ptr) = ((ptr) >= (array).data + (array).count ? NULL : (ptr) + 1))
+
+
+
+
+
+
+
+#endif // _SL_ARRAY_H_
+
+
+
+
+
+// SOURCE: struct/list.h
+#ifndef _SL_LIST_H_
+#define _SL_LIST_H_
+
+/*
+ *  LIST: generic chained lists in C. 
+ *  
+ *  TODO:
+ *  - Add variants with ranges and other chained lists
+ * 
+*/
+
+// #include "../base.h"
+// #include "allocator.h"
+
+
+
+/// @brief Define the fields to make a struct compatible with every "list" function
+/// @param type type to be stored
+/// @param node_name name of the "node" structure holding the actual data
+#define SL_LIST_FIELDS(type, node_name) struct node_name { struct node_name *next; type data; } *first, *last; usize count; sl_allocator *alloc
+/// @brief Define the fields to make a struct compatible with every "dlist" function
+/// @param type type to be stored
+/// @param node_name name of the "node" structure holding the actual data
+#define SL_DLIST_FIELDS(type, node_name) struct node_name { struct node_name *next, *prev; type data; } *first, *last; usize count; sl_allocator *alloc
+#define __SL_XPD_LIST(list, ...) (void *)__VA_ARGS__(list).first, (void *)__VA_ARGS__(list).last, __VA_ARGS__(list).count, (list).alloc
+#define __SL_IS_DLIST(list) (offsetof(typeof(*(list).first), data) > sizeof(void *))
+
+/// @brief Define a new type of chained list
+/// @param type type to be stored
+/// @return Defines linked list ("..._l") and double linked list ("..._dl")
+/// @note You can refer to the list using "list(type)" or directly by adding "_l" at the end of the type
+#define SL_DEF_LIST(type) \
+    typedef struct CAT(type, _list)  { SL_LIST_FIELDS(type, type##_ln);   } CAT(type, _list); \
+    typedef struct CAT(type, _dlist) { SL_DLIST_FIELDS(type, type##_dln); } CAT(type, _dlist)
+
+struct __list_gen_node { struct __list_gen_node *next; void *data; };                                   // For generic functions like "listNodeAt"
+typedef struct { struct __list_gen_node *first, *last; usize count; sl_allocator *alloc; } void_l;      //
+
+struct __dlist_gen_node { struct __dlist_gen_node *next, *prev; void *data; };                          // For generic functions like "dlistNodeAt"
+typedef struct { struct __dlist_gen_node *first, *last; usize count; sl_allocator *alloc; } void_dl;    //
+
+#define SL_list(type)  CAT(type, _list)
+#define SL_dlist(type) CAT(type, _dlist)
+
+
+
+/// @brief Create an empty list in a specified allocator
+/// @param type Type to be stored
+/// @param allocator_ Allocator
+/// @return The newly created list
+#define SL_listCreateA(type, allocator_)  (SL_list(type){.alloc = allocator_})
+/// @brief Create an empty list in a specified allocator
+/// @param type Type to be stored
+/// @param allocator_ Allocator
+/// @return The newly created list
+#define SL_dlistCreateA(type, allocator_) (SL_dlist(type){.alloc = allocator_})
+/// @brief Free list's resources and reset its value
+/// @param list List
+#define SL_listClear(list) do { \
+    while ((list).first) { \
+        (list).last = (list).first->next; \
+        SL_afree((list).alloc, (list).first); \
+        (list).first = (list).last; \
+    } \
+    (list).first = NULL; \
+    (list).last = NULL; \
+    (list).count = 0; \
+} while (0)
+
+
+
+/// @brief Get first value in list
+/// @param list List
+/// @return A pointer to the value if exists, NULL otherwise
+/// @note Error status is recorded in SL_ERROR
+#define SL_listFirst(list) ((list).first ? &(list).first->data : __SL_ERROR(SL_ERR_OUT_OF_BOUNDS), NULL)
+/// @brief Get last value in list
+/// @param list List
+/// @return A pointer to the value if exists, NULL otherwise
+/// @note Error status is recorded in SL_ERROR
+#define SL_listLast(list) ((list).last ? &(list).last->data : __SL_ERROR(SL_ERR_OUT_OF_BOUNDS), NULL)
+
+SL_header void *__SL_listNodeAt (void *first, void *last, usize count, usize index);
+SL_header void *__SL_dlistNodeAt(void *first, void *last, usize count, usize index);
+SL_header void *__SL_listValueFromNode(void *node_ptr, bool is_dlist);
+/// @brief Get value at index in list
+/// @param list List
+/// @param index Index into the list
+/// @return A pointer to the value if found, NULL otherwise
+/// @note Error status is recorded in SL_ERROR
+#define SL_listAt(list, index) ((typeof((list).first->data)*)__SL_listValueFromNode((__SL_IS_DLIST(list) ? __SL_dlistNodeAt : __SL_listNodeAt)((list).first, (list).last, (list).count, index), __SL_IS_DLIST(list)))
+
+SL_header void *__SL_listInsert (void **first, void **last, usize *count, sl_allocator *alloc, usize elemSize, usize index, void *value);
+SL_header void *__SL_dlistInsert(void **first, void **last, usize *count, sl_allocator *alloc, usize elemSize, usize index, void *value);
+/// @brief Insert value at index in list
+/// @param list List
+/// @param index Index into the list
+/// @param value Value to insert
+/// @return Pointer to the added value
+/// @note Error status is recorded in SL_ERROR
+#define SL_listInsert(list, _index, value) ((typeof((list).first->data) *)(__SL_IS_DLIST(list) ? __SL_dlistInsert : __SL_listInsert)(__SL_XPD_LIST(list, &), sizeof((list).first->data), _index, __SL_PTR_T(typeof((list).first->data), value)))
+/// @brief Insert value of other type at index in list
+/// @param list List
+/// @param index Index into the list
+/// @param value Value to insert
+/// @return Pointer to the added value
+/// @note Error status is recorded in SL_ERROR
+/// @warning The value inserted will have the size of the expression `value`
+#define SL_listInsertTyped(list, _index, value) ((typeof(value) *)(__SL_IS_DLIST(list) ? __SL_dlistInsert : __SL_listInsert)(__SL_XPD_LIST(list, &), sizeof(value), _index, (void *)__SL_PTR(value)))
+/// @brief Add value to start of list
+/// @param list List
+/// @param value Value to add
+/// @return Pointer to the added value
+/// @return Pointer to the added value
+/// @note Error status is recorded in SL_ERROR
+#define SL_listAddStart(list, value) SL_listInsert((list), 0, (value))
+/// @brief Add value to end of list
+/// @param list List
+/// @param value Value to add
+/// @return Pointer to the added value
+/// @note Error status is recorded in SL_ERROR
+#define SL_listAddEnd(list, value) SL_listInsert((list), (list).count, (value))
+
+SL_header bool __SL_listRemove (void **first, void **last, usize *count, sl_allocator *alloc, usize elemSize, usize index, void *into);
+SL_header bool __SL_dlistRemove(void **first, void **last, usize *count, sl_allocator *alloc, usize elemSize, usize index, void *into);
+/// @brief Remove a node at index in list and store its value in "into"
+/// @param list List
+/// @param index Index into the list
+/// @param into Pointer to a variable in which to store the popped value
+/// @return Wether the node was successfully removed
+/// @note Error status is recorded in SL_ERROR
+#define SL_listPop(list, index, into) ((__SL_IS_DLIST(list) ? __SL_dlistRemove : __SL_listRemove)(__SL_XPD_LIST(list, &), sizeof((list).first->data), index, into))
+/// @brief Remove a node at index in list
+/// @param list List
+/// @param index Index into the list
+/// @return Wether the node was successfully removed
+/// @note Error status is recorded in SL_ERROR
+#define SL_listRemove(list, index) SL_listPop(list, index, NULL)
+
+
+
+/// @brief Print list to an arbitrary reciever with user defined formatting
+/// @param list List
+/// @param varname The name of the iterator
+/// @param dst Destination in which to print. Uses generic "gprintf" function to differenciate between printing to a string or a file
+/// @param fmt The format of the data to print
+/// @param ... How to expand the value stored to fit the format specified with 'fmt'
+/// @note Can be used with both "list" and "dlist" types.
+#define SL_listPrintf_full(list, dst, fmt, varname, ...) do { \
+    if (!(list).first) SL_gprintf(dst, "list[]"); \
+    else { \
+        SL_lforeach(varname, list) SL_gprintf(dst, SL_lindex(varname) == 0 ? "list["fmt : ", "fmt, ##__VA_ARGS__); \
+        SL_gprintf(dst, "]"); \
+    } \
+} while (0)
+
+/// @brief Print list to a string
+/// @param list List
+/// @param dst Destination string
+/// @param fmt The format of the data to print
+#define SL_listPrintf(list, dst, fmt) SL_listPrintf_full(list, dst, fmt, __SL_VARNAME__, *__SL_VARNAME__)
+
+
+
+/// @brief Iterate over every item into a list
+/// @param varname The name of the iterator
+/// @param list List
+/// @note "varname" is a pointer to a value in list at each iteration.
+/// @note Can be used with both "list" and "dlist" types.
+#define SL_lforeach(varname, list) \
+for ( \
+    typeof((list).first->data) *__##varname##_NODE__ = (void*)(list).first, *varname = __##varname##_NODE__ ? &((typeof((list).first))__##varname##_NODE__)->data : NULL, *__##varname##_COUNT__ = NULL; \
+    __##varname##_NODE__; \
+    __##varname##_NODE__ = (void*)((typeof((list).first))__##varname##_NODE__)->next, varname = __##varname##_NODE__ ? &((typeof((list).first))__##varname##_NODE__)->data : NULL, __##varname##_COUNT__ = (void *)(((usize)__##varname##_COUNT__) + 1) \
+)
+#define SL_lindex(varname) ((usize)__##varname##_COUNT__)
+#define SL_lnext(list, ptr) ((ptr) = ((ptr) ? ((struct __list_gen_node)(((void *)(ptr)) - 2 * sizeof(void *)))->next : NULL))
+
+
+
+
+
+
+
+
+
+#endif // _SL_LIST_H_
+
+
+
+
+
+// SOURCE: struct/dict.h
+#ifndef _SL_DICT_H_
+#define _SL_DICT_H_
+
+/*
+ *  HASH: generic dictionaries in C. 
+ *  
+ *  TODO:
+ *  - Add expansion of dict based on a heuristic
+ * 
+*/
+
+// #include "../base.h"
+// #include "array.h"
+
+
+
+/// @brief Define a new type of dictionary
+/// @param key_type Type of the key representing
+/// @param value_type Type of the value to be stored
+/// @note You can refer to the dict using "dict(key_type, value_type)" or directly with "{key_type}_{value_type}_d"
+#define SL_DEF_DICT(key_type, value_type) \
+    typedef struct SL_dict(key_type, value_type) { \
+        SL_ARRAY_FIELDS(struct CAT(SL_dict(key_type, value_type), _bucket) { struct CAT(SL_dict(key_type, value_type), _bucket) *next; key_type key; value_type value; } *); \
+        usize (*hash)(const key_type *); \
+        int (*cmp)(const key_type *, const key_type *); \
+    } SL_dict(key_type, value_type)
+
+#define SL_dict(key_type, value_type) CAT(CAT(CAT(key_type, _), value_type), _dict)
+
+struct __dict_gen { 
+    SL_ARRAY_FIELDS(struct __dict_gen_bucket { struct __dict_gen_bucket *next; void *key; } *);
+    usize (*hash)(const void *); 
+    int (*cmp)(const void *, const void *);
+};
+
+
+/// @brief Create an empty dict
+/// @param key_type Type of the key representing
+/// @param value_type Type of the value to be stored
+/// @param hash_func Function for hashing the key
+/// @param cmp_func Function for compairing two keys
+/// @param initialCapacity Maximum number of hashes possible
+/// @param allocator_ Allocator
+/// @return The newly created list
+#define SL_dictCreateA_full(key_type, value_type, hash_func, cmp_func, initialCapacity, allocator_) ((SL_dict(key_type, value_type)){.data = SL_azalloc(allocator_, initialCapacity * sizeof(void *)), .capa = initialCapacity, .count = 0, .hash = hash_func, .cmp = cmp_func, .alloc = allocator_})
+/// @brief Create an empty dict
+/// @param key_type Type of the key representing
+/// @param value_type Type of the value to be stored
+/// @param initialCapacity Maximum number of hashes possible
+/// @param allocator_ Allocator
+/// @return The newly created list
+#define SL_dictCreateA(key_type, value_type, initialCapacity, allocator_) SL_dictCreateA_full(key_type, value_type, key_type##_hash, key_type##_cmp, initialCapacity, allocator_)
+/// @brief Create an empty dict
+/// @param key_type Type of the key representing
+/// @param value_type Type of the value to be stored
+/// @param hash_func Function for hashing the key
+/// @param cmp_func Function for compairing two keys
+/// @param initialCapacity Maximum number of hashes possible
+/// @return The newly created list
+#define SL_dictCreate_full(key_type, value_type, hash_func, cmp_func, initialCapacity) SL_dictCreateA_full(key_type, value_type, hash_func, cmp_func, initialCapacity, std_allocator)
+/// @brief Create an empty dict
+/// @param key_type Type of the key representing
+/// @param value_type Type of the value to be stored
+/// @param initialCapacity Maximum number of hashes possible
+/// @return The newly created list
+#define SL_dictCreate(key_type, value_type, initialCapacity) SL_dictCreateA(key_type, value_type, initialCapacity, std_allocator)
+
+/// @brief Clear every entry in dict
+/// @param dict Dict
+SL_header void __SL_dictClear(struct __dict_gen *dict);
+/// @brief Clear every entry in dict
+/// @param dict Dict
+#define SL_dictClear(dict) (__SL_dictClear((void*)&(dict).data))
+/// @brief Free dict's resources and reset its value
+/// @param dict Dict
+#define SL_dictDestroy(dict) (__SL_dictClear((void*)&(dict)), SL_afree((dict).alloc, (dict).data), memset(&(dict), 0, sizeof(dict)))
+
+/// @brief Hash a key using a dict's hash function
+/// @param dict Dict
+/// @param key Pointer to key
+/// @return The hashed key 
+#define SL_dictHash2(dict, key) ((dict).hash(key) % (dict).capa)
+/// @brief Hash a key using a dict's hash function
+/// @param dict Dict
+/// @param key Key
+/// @return The hashed key 
+#define SL_dictHash(dict, key) SL_dictHash2(dict, __SL_PTR(key))
+/// @brief Compare two keys using a dict's cmp function
+/// @param dict Dict
+/// @param a Pointer to first key
+/// @param b Pointer to second key
+/// @return Whether the two keys match 
+#define SL_dictCmp2(dict, a, b) ((dict).cmp(a, b))
+/// @brief Compare two keys using a dict's cmp function
+/// @param dict Dict
+/// @param a First key
+/// @param b Second key
+/// @return Whether the two keys match 
+#define SL_dictCmp(dict, a, b) SL_dictCmp2(dict, __SL_PTR(a), __SL_PTR(b))
+
+SL_header void *__SL_dictGet(struct __dict_gen *dict, usize keySize, const void *key);
+/// @brief Get value assciated with key in dict
+/// @param dict Dict
+/// @param key_ Key
+/// @return A pointer to the value if found, NULL otherwise
+/// @note Error status is recorded in SL_ERROR
+#define SL_dictGet(dict, key_) ((typeof((*(dict).data)->value)*)__SL_dictGet((void *)&(dict), sizeof((*(dict).data)->key), __SL_PTR_T(typeof((*(dict).data)->key), key_)))
+
+SL_header void *__SL_dictAdd(struct __dict_gen *dict, usize keySize, const void *key, usize valueSize, const void *value);
+/// @brief Get value assciated with key in dict
+/// @param dict Dict
+/// @param key_ Key
+/// @param value_ Value
+/// @return A pointer to the added value, or NULL in case of an error
+/// @note Error status is recorded in SL_ERROR
+#define SL_dictAdd(dict, key_, value_) ((typeof((*(dict).data)->value)*)__SL_dictAdd((void *)&(dict), sizeof((*(dict).data)->key), __SL_PTR_T(typeof((*(dict).data)->key), key_), sizeof((*(dict).data)->value), __SL_PTR_T(typeof((*(dict).data)->value), value_)))
+
+SL_header bool __SL_dictRemove(struct __dict_gen *dict, usize keySize, void *key);
+/// @brief Remove value assciated with key in dict
+/// @param dict Dict
+/// @param key Key
+/// @return Wether the removal was successful
+/// @note Error status is recorded in SL_ERROR
+#define SL_dictRemove(dict, key) (__SL_dictRemove((void *)&(dict).data, sizeof(key), __SL_PTR(key)))
+
+#define SL_dictKey(dict, ptr) (typeof((dict).data[0]->key) *)((usize)(ptr) - sizeof(void *) - sizeof((dict).data[0]->key))
+
+
+
+#define SL_dforeach(varname, dict) \
+    for (typeof((dict).data) __##varname##_ARRAY__ = (dict).data, __##varname##_MAX__ = (dict).data + (dict).capa; __##varname##_ARRAY__ < __##varname##_MAX__; ++__##varname##_ARRAY__) \
+    if ((*__##varname##_ARRAY__)) for (typeof((*__##varname##_ARRAY__)) varname = *__##varname##_ARRAY__; varname; varname = varname->next)
+
+
+
+
+
+
+#endif // _SL_DICT_H_
+
+
+
+
+
+// SOURCE: struct/arena.h
+#ifndef _SL_ARENA_H_
+#define _SL_ARENA_H_
+
+/*
+ *  ARENA: Arena allocator implementation
+ *  
+ *  TODO:
+ *  - Better Arena (to be less dumb)
+ * 
+*/
+
+// #include "allocator.h"
+// #include "list.h"
+
+SL_DEF_LIST(voidp);
+typedef struct sl_arena {
+    sl_allocator description;
+
+    SL_list(voidp) buffers;
+    void *currentPage;
+    void *current;
+    usize pageSize;
+} sl_arena;
+
+SL_header void *SL_arenaAlloc(sl_allocator *a_, usize size);
+SL_header void *SL_arenaZalloc(sl_allocator *a_, usize size);
+SL_header void *SL_arenaRealloc(sl_allocator *a_, void *memory, usize size);
+SL_header void SL_arenaFree(sl_allocator *a_, void *memory);
+SL_header void *SL_arenaCopy(sl_allocator *a_, void *dest, void *source, usize size);
+SL_header void *SL_arenaMove(sl_allocator *a_, void *dest, void *source, usize size);
+SL_header void *SL_arenaClone(sl_allocator *a_, void *memory, usize size);
+
+/// @brief Create an areana allocator
+/// @param pageSize Capacity of each page
+/// @return The newly created arena allocator
+SL_header sl_arena SL_arenaCreate(usize pageSize);
+/// @brief Free allocator's resources
+/// @param arena Arena
+SL_header void SL_arenaDestroy(sl_arena arena);
+
+
+
+
+
+#endif // _SL_ARENA_H_
+
+
+
+
+
+// SOURCE: struct/tuple.h
+#ifndef _SL_TUPLE_H
+#define _SL_TUPLE_H
+
+// #include "../base.h"
+
+#define SL_DEF_TUPLE2(t0_, t1_)                typedef struct tuple2(t0_, t1_) { u8 count[0][2]; t0 d0; t1 d1; } tuple2(t0_, t1_)
+#define SL_DEF_TUPLE3(t0_, t1_, t2_)           typedef struct tuple3(t0_, t1_, t2_) { u8 count[0][3]; t0 d0; t1 d1; t2 d2; } tuple3(t0_, t1_, t2_)
+#define SL_DEF_TUPLE4(t0_, t1_, t2_, t3_)      typedef struct tuple4(t0_, t1_, t2_, t3_) { u8 count[0][4]; t0 d0; t1 d1; t2 d2; t3 d3; } tuple4(t0_, t1_, t2_, t3_)
+#define SL_DEF_TUPLE5(t0_, t1_, t2_, t3_, t4_) typedef struct tuple5(t0_, t1_, t2_, t3_, t4_) { u8 count[0][5]; t0 d0; t1 d1; t2 d2; t3 d3; t4 d4; } tuple5(t0_, t1_, t2_, t3_, t4_)
+
+#define SL_DEF_TUPLE(n, ...) SL_DEF_TUPPLE##n(__VA_ARGS__)
+
+#define tuple2(t0_, t1_) CAT(CAT(tuple_, t0_), t1_)
+#define tuple3(t0_, t1_, t2_) CAT(tuple2(t0_, t1_), t2_)
+#define tuple4(t0_, t1_, t2_, t3_) CAT(tuple3(t0_, t1_, t2_), t3_)
+#define tuple5(t0_, t1_, t2_, t3_, t4_) CAT(tuple4(t0_, t1_, t2_, t3_), t4_)
+
+#define tuple(n, ...)  CAT(tuple, n)(__VA_ARGS__)
+#define tuple_count(t) sizeof((t).count[0])
+
+#define XPD_TUPLE2(t) t.d0, t.d1
+#define XPD_TUPLE3(t) XPD_TUPLE2(t), t.d3
+#define XPD_TUPLE4(t) XPD_TUPLE3(t), t.d4
+#define XPD_TUPLE5(t) XPD_TUPLE4(t), t.d5
+
+#endif // _SL_TUPLE_H
+
+
+
+
+
+// SOURCE: misc/io.h
+#ifndef _SL_IO_H_
+#define _SL_IO_H_
+
+/*
+ *  IO: Utilities for io. 
+ *  
+ *  TODO:
+ *  - Give access to the va_list to the custom formating functions to allow passing structs by value
+ *  - Use "length" and "precision" and other base formating arguments in custom print
+ * 
+*/
+
+// #include "../base.h"
+
+/// @brief Transform evrey character in a string based on an input function
+/// @param str String to transform
+/// @param func Function to apply
+/// @return The input string, to allow chaining functions
+SL_header char *SL_strtrsfrm(char *str, int (*func)(int));
+/// @brief Apply "toupper" function to every character in string
+/// @param str String to turn uppercase
+/// @return The input string, to allow chaining functions
+SL_header char *SL_strupper(char *str);
+/// @brief Apply "tolower" function to every character in string
+/// @param str String to turn uppercase
+/// @return The input string, to allow chaning functions
+SL_header char *SL_strlower(char *str);
+/// @brief Check wether a string starts with another
+/// @param str String in which to search
+/// @param fact Substring to find
+/// @return True if str starts with fact
+SL_header bool SL_strstart(const char *str, const char *fact);
+/// @brief Check wether a string ends with another
+/// @param str String in which to search
+/// @param fact Substring to find
+/// @return True if str ends with fact
+SL_header bool SL_strend(const char *str, const char *fact);
+
+/// @brief Read the entirety of a file and dump it into a string
+/// @param path Path to the file
+/// @param size Pointer in which to store the size read (may be NULL)
+/// @return The file data as a NULL-terminated string
+SL_header char *SL_readEntireFile(const char *path, usize *size);
+/// @brief Write the entirety of a file
+/// @param path Path to the file
+/// @param size Size of the data to write in bytes
+/// @param data Data to write
+/// @return Wether the process was a success
+SL_header bool SL_writeEntireFile(const char *path, usize size, void *data);
+
+
+
+// typedef struct sl_path
+// {
+// } sl_path;
+
+
+
+typedef int sl_func_print(void *output_stream, const char *format, ...);                                                        /// @brief Generic functions type (which can deal with either a string or a FILE)
+typedef int sl_func_vprint(void *output_stream, const char *format, va_list list);                                              /// @brief Generic functions type (which can deal with either a string or a FILE)
+typedef struct sl_stream { union { FILE *file; char *string; void *generic; }; bool is_str; } sl_stream;                        /// @brief Stream structure. Abstracts the funcdamental type for print-type functions
+#define sl_stream_(dst) _Generic((dst), sl_stream: (dst), default: ((sl_stream){.file = (dst), .is_str = _Generic((dst), FILE *: false, default: true)})) /// @brief Generic stream constructor /// @param dst Either a `char *`, `FILE *` or another `sl_stream`
+
+SL_header int __SL_stream_vprintf(sl_stream stream, const char *fmt, va_list list);
+SL_header int __SL_stream_printf(sl_stream stream, const char *fmt, ...);
+/// @brief Generic printf
+/// @note Equivalent to calls to either `fprintf` or `sprintf`
+#define SL_gprintf(stream, fmt, ...) _Generic((stream), \
+    sl_stream: (__SL_stream_printf),                    \
+    FILE *:    (fprintf),                               \
+    default:   (sprintf)                                \
+)(stream, fmt, ##__VA_ARGS__)
+
+/// @brief Generic vprintf
+/// @note Equivalent to calls to either `vfprintf` or `vsprintf`
+#define SL_vgprintf(stream, fmt, list)  _Generic((stream),                              \
+    sl_stream: ((stream).is_str ? (sl_func_print*)vsprintf : (sl_func_print*)vfprintf), \
+    FILE *:    ((sl_func_print*)vfprintf),                                              \
+    default:   ((sl_func_print*)vsprintf)                                               \
+)((stream).generic, fmt, list)
+
+SL_header int __SL_gprintBin(sl_stream dst, usize size, void *data);
+/// @brief Print a value's binary representation
+/// @param dst Stream in which to print
+/// @param val The value to print
+#define SL_gprintBin(dst, val) (__SL_gprintBin(sl_stream_(dst), sizeof(val), __SL_PTR(val)))
+/// @brief Print a value's binary representation to standard output
+/// @param val The value to print
+#define SL_printBin(val) SL_gprintBin(stdout, val)
+    
+SL_header int __SL_gprintHex(sl_stream dst, usize size, void *data);
+/// @brief Print a value's hexadecimal representation
+/// @param dst Stream in which to print
+/// @param val The value to print
+#define SL_gprintHex(dst, val) (__SL_gprintHex(sl_stream_(dst), sizeof(val), __SL_PTR(val)))
+/// @brief Print a value's hexadecimal representation to standard output
+/// @param val The value to print
+#define SL_printHex(val) SL_gprintHex(stdout, val)
+
+
+
+
+
+
+#endif // _SL_IO_H_
+
+
+
+
+
+// SOURCE: misc/async.h
+#ifndef _SL_ASYNC_H_
+#define _SL_ASYNC_H_
+
+/*
+ *  THREAD: Utilities for thread manipulation.
+ *  
+ *  TODO:
+ *  - Try finding better declarative statement
+ * 
+*/
+
+// #include "../base.h"
+#include <pthread.h>
+
+
+
+typedef enum SL_TaskState {
+    SL_TASK_WAIT,
+    SL_TASK_WORKING,
+    SL_TASK_DONE
+} sl_task_state;
+
+bool __SL_await(pthread_t thread, const void *task, usize ret_size, const void *task_ret, void *usr_ret);
+/// @brief Waits until the task is complete
+/// @param task The task to complete
+/// @param ... A pointer in which to store the return value of the task
+/// @return Wether the task was successfuly completed
+/// @note Error status is recorded in SL_ERROR
+#define SL_await(task, ...) __SL_await((task)->thread, (task), sizeof(typeof((task)->__ret[0][0])), (void *)&(task)->__ret, (typeof((task)->__ret[0][0]) *)(NULL, ##__VA_ARGS__))
+
+/// @brief Define the necessary functions and structures to call tasks seamlessly
+/// @param func The function to make asynchronous
+/// @note `SL_DEF_ASYNC[n]` macro must be chosen based on `n`, the parameter count
+#define SL_DEF_ASYNC0(func) \
+    typedef struct func##_task { sl_task_state status; pthread_t thread; typeof(func()) *__ret[]; } func##_task;                                \
+    void *__##func##_async_exec(func##_task *task) {                                                                                            \
+        task->status = SL_TASK_WORKING;                                                                                                         \
+        memcpy(&task->__ret, __SL_PTR(func()), sizeof(task->__ret[0][0]));                                                                      \
+        task->status = SL_TASK_DONE;                                                                                                            \
+        pthread_exit(NULL);                                                                                                                     \
+    }                                                                                                                                           \
+    const func##_task *func##_async_full(pthread_attr_t *attr) {                                                                                \
+        func##_task *task = malloc(sizeof(func##_task) - 1 + sizeof(((func##_task *)NULL)->__ret[0][0]));                                       \
+        task->status = SL_TASK_WAIT;                                                                                                            \
+        if (pthread_create(&task->thread, attr, (void *(*)(void *))__##func##_async_exec, task)) return free((void *)task), __SL_ERROR(SL_ERR_THREAD_CREATE), NULL; \
+        return task;                                                                                                                            \
+    }                                                                                                                                           \
+    const func##_task *func##_async(void) { return func##_async_full(NULL); }
+
+/// @brief Define the necessary functions and structures to call tasks seamlessly
+/// @param func The function to make asynchronous
+/// @param arg[i]_t The functions's i-th argument's type
+/// @param arg[i]_n The functions's i-th argument's name
+/// @note `SL_DEF_ASYNC[n]` macro must be chosen based on `n`, the parameter count
+#define SL_DEF_ASYNC1(func, arg0_t, arg0_n) \
+    typedef struct func##_task { sl_task_state status; pthread_t thread; arg0_t arg0_n; typeof(func(*(arg0_t *)NULL)) *__ret[]; } func##_task;  \
+    void *__##func##_async_exec(func##_task *task) {                                                                                            \
+        task->status = SL_TASK_WORKING;                                                                                                         \
+        memcpy(&task->__ret, __SL_PTR(func(task->arg0_n)), sizeof(task->__ret[0][0]));                                                          \
+        task->status = SL_TASK_DONE;                                                                                                            \
+        pthread_exit(NULL);                                                                                                                     \
+    }                                                                                                                                           \
+    const func##_task *func##_async_full(arg0_t arg0_n, pthread_attr_t *attr) {                                                                 \
+        func##_task *task = malloc(sizeof(func##_task) - 1 + sizeof(((func##_task *)NULL)->__ret[0][0]));                                       \
+        task->status = SL_TASK_WAIT;                                                                                                            \
+        task->arg0_n = arg0_n;                                                                                                                  \
+        if (pthread_create(&task->thread, attr, (void *(*)(void *))__##func##_async_exec, task)) return free((void *)task), __SL_ERROR(SL_ERR_THREAD_CREATE), NULL; \
+        return task;                                                                                                                            \
+    }                                                                                                                                           \
+    const func##_task *func##_async(arg0_t arg0_n) { return func##_async_full(arg0_n, NULL); }
+
+/// @brief Define the necessary functions and structures to call tasks seamlessly
+/// @param func The function to make asynchronous
+/// @param arg[i]_t The functions's i-th argument's type
+/// @param arg[i]_n The functions's i-th argument's name
+/// @note `SL_DEF_ASYNC[n]` macro must be chosen based on `n`, the parameter count
+#define SL_DEF_ASYNC2(func, arg0_t, arg0_n, arg1_t, arg1_n) \
+    typedef struct func##_task { sl_task_state status; pthread_t thread; arg0_t arg0_n; arg1_t arg1_n; typeof(func(*(arg0_t *)NULL, *(arg1_t *)NULL)) *__ret[]; } func##_task;  \
+    void *__##func##_async_exec(func##_task *task) {                                                                                            \
+        task->status = SL_TASK_WORKING;                                                                                                         \
+        memcpy(&task->__ret, __SL_PTR(func(task->arg0_n, task->arg1_n)), sizeof(task->__ret[0][0]));                                            \
+        task->status = SL_TASK_DONE;                                                                                                            \
+        pthread_exit(NULL);                                                                                                                     \
+    }                                                                                                                                           \
+    const func##_task *func##_async_full(arg0_t arg0_n, arg1_t arg1_n, pthread_attr_t *attr) {                                                  \
+        func##_task *task = malloc(sizeof(func##_task) - 1 + sizeof(((func##_task *)NULL)->__ret[0][0]));                                       \
+        task->status = SL_TASK_WAIT;                                                                                                            \
+        task->arg0_n = arg0_n; task->arg1_n = arg1_n;                                                                                           \
+        if (pthread_create(&task->thread, attr, (void *(*)(void *))__##func##_async_exec, task)) return free((void *)task), __SL_ERROR(SL_ERR_THREAD_CREATE), NULL; \
+        return task;                                                                                                                            \
+    }                                                                                                                                           \
+    const func##_task *func##_async(arg0_t arg0_n, arg1_t arg1_n) { return func##_async_full(arg0_n, arg1_n, NULL); }
+
+/// @brief Define the necessary functions and structures to call tasks seamlessly
+/// @param func The function to make asynchronous
+/// @param arg[i]_t The functions's i-th argument's type
+/// @param arg[i]_n The functions's i-th argument's name
+/// @note `SL_DEF_ASYNC[n]` macro must be chosen based on `n`, the parameter count
+#define SL_DEF_ASYNC3(func, arg0_t, arg0_n, arg1_t, arg1_n, arg2_t, arg2_n) \
+    typedef struct func##_task { sl_task_state status; pthread_t thread; arg0_t arg0_n; arg1_t arg1_n; arg2_t arg2_n; typeof(func(*(arg0_t *)NULL, *(arg1_t *)NULL, *(arg2_t *)NULL)) *__ret[]; } func##_task;  \
+    void *__##func##_async_exec(func##_task *task) {                                                                                            \
+        task->status = SL_TASK_WORKING;                                                                                                         \
+        memcpy(&task->__ret, __SL_PTR(func(task->arg0_n, task->arg1_n, task->arg2_n)), sizeof(task->__ret[0][0]));                              \
+        task->status = SL_TASK_DONE;                                                                                                            \
+        pthread_exit(NULL);                                                                                                                     \
+    }                                                                                                                                           \
+    const func##_task *func##_async_full(arg0_t arg0_n, arg1_t arg1_n, arg2_t arg2_n, pthread_attr_t *attr) {                                   \
+        func##_task *task = malloc(sizeof(func##_task) - 1 + sizeof(((func##_task *)NULL)->__ret[0][0]));                                       \
+        task->status = SL_TASK_WAIT;                                                                                                            \
+        task->arg0_n = arg0_n; task->arg1_n = arg1_n; task->arg2_n = arg2_n;                                                                    \
+        if (pthread_create(&task->thread, attr, (void *(*)(void *))__##func##_async_exec, task)) return free((void *)task), __SL_ERROR(SL_ERR_THREAD_CREATE), NULL; \
+        return task;                                                                                                                            \
+    }                                                                                                                                           \
+    const func##_task *func##_async(arg0_t arg0_n, arg1_t arg1_n, arg2_t arg2_n) { return func##_async_full(arg0_n, arg1_n, arg2_n, NULL); }
+
+/// @brief Define the necessary functions and structures to call tasks seamlessly
+/// @param func The function to make asynchronous
+/// @param arg[i]_t The functions's i-th argument's type
+/// @param arg[i]_n The functions's i-th argument's name
+/// @note `SL_DEF_ASYNC[n]` macro must be chosen based on `n`, the parameter count
+#define SL_DEF_ASYNC4(func, arg0_t, arg0_n, arg1_t, arg1_n, arg2_t, arg2_n, arg3_t, arg3_n) \
+    typedef struct func##_task { sl_task_state status; pthread_t thread; arg0_t arg0_n; arg1_t arg1_n; arg2_t arg2_n; arg3_t arg3_n; typeof(func(*(arg0_t *)NULL, *(arg1_t *)NULL, *(arg2_t *)NULL, *(arg3_t *)NULL)) *__ret[]; } func##_task;  \
+    void *__##func##_async_exec(func##_task *task) {                                                                                            \
+        task->status = SL_TASK_WORKING;                                                                                                         \
+        memcpy(&task->__ret, __SL_PTR(func(task->arg0_n, task->arg1_n, task->arg2_n, task->arg3_n)), sizeof(task->__ret[0][0])); \
+        task->status = SL_TASK_DONE;                                                                                                            \
+        pthread_exit(NULL);                                                                                                                     \
+    }                                                                                                                                           \
+    const func##_task *func##_async_full(arg0_t arg0_n, arg1_t arg1_n, arg2_t arg2_n, arg3_t arg3_n, pthread_attr_t *attr) {                    \
+        func##_task *task = malloc(sizeof(func##_task) - 1 + sizeof(((func##_task *)NULL)->__ret[0][0]));                                       \
+        task->status = SL_TASK_WAIT;                                                                                                            \
+        task->arg0_n = arg0_n; task->arg1_n = arg1_n; task->arg2_n = arg2_n; task->arg3_n = arg3_n;                                             \
+        if (pthread_create(&task->thread, attr, (void *(*)(void *))__##func##_async_exec, task)) return free((void *)task), __SL_ERROR(SL_ERR_THREAD_CREATE), NULL; \
+        return task;                                                                                                                            \
+    }                                                                                                                                           \
+    const func##_task *func##_async(arg0_t arg0_n, arg1_t arg1_n, arg2_t arg2_n, arg3_t arg3_n) { return func##_async_full(arg0_n, arg1_n, arg2_n, arg3_n, NULL); }
+
+/// @brief Define the necessary functions and structures to call tasks seamlessly
+/// @param func The function to make asynchronous
+/// @param arg[i]_t The functions's i-th argument's type
+/// @param arg[i]_n The functions's i-th argument's name
+/// @note `SL_DEF_ASYNC[n]` macro must be chosen based on `n`, the parameter count
+#define SL_DEF_ASYNC5(func, arg0_t, arg0_n, arg1_t, arg1_n, arg2_t, arg2_n, arg3_t, arg3_n, arg4_t, arg4_n) \
+    typedef struct func##_task { sl_task_state status; pthread_t thread; arg0_t arg0_n; arg1_t arg1_n; arg2_t arg2_n; arg3_t arg3_n; arg4_t arg4_n; typeof(func(*(arg0_t *)NULL, *(arg1_t *)NULL, *(arg2_t *)NULL, *(arg3_t *)NULL, *(arg4_t *)NULL)) *__ret[]; } func##_task;  \
+    void *__##func##_async_exec(func##_task *task) {                                                                                            \
+        task->status = SL_TASK_WORKING;                                                                                                         \
+        memcpy(&task->__ret, __SL_PTR(func(task->arg0_n, task->arg1_n, task->arg2_n, task->arg3_n, task->arg4_n)), sizeof(task->__ret[0][0]));  \
+        task->status = SL_TASK_DONE;                                                                                                            \
+        pthread_exit(NULL);                                                                                                                     \
+    }                                                                                                                                           \
+    const func##_task *func##_async_full(arg0_t arg0_n, arg1_t arg1_n, arg2_t arg2_n, arg3_t arg3_n, arg4_t arg4_n, pthread_attr_t *attr) {     \
+        func##_task *task = malloc(sizeof(func##_task) - 1 + sizeof(((func##_task *)NULL)->__ret[0][0]));                                       \
+        task->status = SL_TASK_WAIT;                                                                                                            \
+        task->arg0_n = arg0_n; task->arg1_n = arg1_n; task->arg2_n = arg2_n; task->arg3_n = arg3_n; task->arg4_n = arg4_n;                      \
+        if (pthread_create(&task->thread, attr, (void *(*)(void *))__##func##_async_exec, task)) return free((void *)task), __SL_ERROR(SL_ERR_THREAD_CREATE), NULL; \
+        return task;                                                                                                                            \
+    }                                                                                                                                           \
+    const func##_task *func##_async(arg0_t arg0_n, arg1_t arg1_n, arg2_t arg2_n, arg3_t arg3_n, arg4_t arg4_n) { return func##_async_full(arg0_n, arg1_n, arg2_n, arg3_n, arg4_n, NULL); }
+
+/// @brief Define the necessary functions and structures to call tasks seamlessly
+/// @param func The function to make asynchronous
+/// @param arg[i]_t The functions's i-th argument's type
+/// @param arg[i]_n The functions's i-th argument's name
+/// @note `SL_DEF_ASYNC[n]` macro must be chosen based on `n`, the parameter count
+#define SL_DEF_ASYNC6(func, arg0_t, arg0_n, arg1_t, arg1_n, arg2_t, arg2_n, arg3_t, arg3_n, arg4_t, arg4_n, arg5_t, arg5_n) \
+    typedef struct func##_task { sl_task_state status; pthread_t thread; arg0_t arg0_n; arg1_t arg1_n; arg2_t arg2_n; arg3_t arg3_n; arg4_t arg4_n; arg5_t arg5_n; typeof(func(*(arg0_t *)NULL, *(arg1_t *)NULL, *(arg2_t *)NULL, *(arg3_t *)NULL, *(arg4_t *)NULL, *(arg5_t *)NULL)) *__ret[]; } func##_task;  \
+    void *__##func##_async_exec(func##_task *task) {                                                                                            \
+        task->status = SL_TASK_WORKING;                                                                                                         \
+        memcpy(&task->__ret, __SL_PTR(func(task->arg0_n, task->arg1_n, task->arg2_n, task->arg3_n, task->arg4_n, task->arg5_n)), sizeof(task->__ret[0][0])); \
+        task->status = SL_TASK_DONE;                                                                                                            \
+        pthread_exit(NULL);                                                                                                                     \
+    }                                                                                                                                           \
+    const func##_task *func##_async_full(arg0_t arg0_n, arg1_t arg1_n, arg2_t arg2_n, arg3_t arg3_n, arg4_t arg4_n, arg5_t arg5_n, pthread_attr_t *attr) { \
+        func##_task *task = malloc(sizeof(func##_task) - 1 + sizeof(((func##_task *)NULL)->__ret[0][0]));                                       \
+        task->status = SL_TASK_WAIT;                                                                                                            \
+        task->arg0_n = arg0_n; task->arg1_n = arg1_n; task->arg2_n = arg2_n; task->arg3_n = arg3_n; task->arg4_n = arg4_n; task->arg5_n = arg5_n; \
+        if (pthread_create(&task->thread, attr, (void *(*)(void *))__##func##_async_exec, task)) return free((void *)task), __SL_ERROR(SL_ERR_THREAD_CREATE), NULL; \
+        return task;                                                                                                                            \
+    }                                                                                                                                           \
+    const func##_task *func##_async(arg0_t arg0_n, arg1_t arg1_n, arg2_t arg2_n, arg3_t arg3_n, arg4_t arg4_n, arg5_t arg5_n) { return func##_async_full(arg0_n, arg1_n, arg2_n, arg3_n, arg4_n, arg5_n, NULL); }
+
+
+/// @brief Define the necessary functions and structures to call tasks seamlessly
+/// @param func The function to make asynchronous
+/// @param arg[i]_t The functions's i-th argument's type
+/// @param arg[i]_n The functions's i-th argument's name
+/// @note `SL_DEF_ASYNC[n]` macro must be chosen based on `n`, the parameter count
+#define SL_DEF_ASYNC7(func, arg0_t, arg0_n, arg1_t, arg1_n, arg2_t, arg2_n, arg3_t, arg3_n, arg4_t, arg4_n, arg5_t, arg5_n, arg6_t, arg6_n) \
+    typedef struct func##_task { sl_task_state status; pthread_t thread; arg0_t arg0_n; arg1_t arg1_n; arg2_t arg2_n; arg3_t arg3_n; arg4_t arg4_n; arg5_t arg5_n; arg6_t arg6_n; typeof(func(*(arg0_t *)NULL, *(arg1_t *)NULL, *(arg2_t *)NULL, *(arg3_t *)NULL, *(arg4_t *)NULL, *(arg5_t *)NULL, *(arg6_t *)NULL)) *__ret[]; } func##_task;  \
+    void *__##func##_async_exec(func##_task *task) {                                                                                            \
+        task->status = SL_TASK_WORKING;                                                                                                         \
+        memcpy(&task->__ret, __SL_PTR(func(task->arg0_n, task->arg1_n, task->arg2_n, task->arg3_n, task->arg4_n, task->arg5_n, task->arg6_n)), sizeof(task->__ret[0][0])); \
+        task->status = SL_TASK_DONE;                                                                                                            \
+        pthread_exit(NULL);                                                                                                                     \
+    }                                                                                                                                           \
+    const func##_task *func##_async_full(arg0_t arg0_n, arg1_t arg1_n, arg2_t arg2_n, arg3_t arg3_n, arg4_t arg4_n, arg5_t arg5_n, arg6_t arg6_n, pthread_attr_t *attr) { \
+        func##_task *task = malloc(sizeof(func##_task) - 1 + sizeof(((func##_task *)NULL)->__ret[0][0]));                                       \
+        task->status = SL_TASK_WAIT;                                                                                                            \
+        task->arg0_n = arg0_n; task->arg1_n = arg1_n; task->arg2_n = arg2_n; task->arg3_n = arg3_n; task->arg4_n = arg4_n; task->arg5_n = arg5_n; task->arg6_n = arg6_n; \
+        if (pthread_create(&task->thread, attr, (void *(*)(void *))__##func##_async_exec, task)) return free((void *)task), __SL_ERROR(SL_ERR_THREAD_CREATE), NULL; \
+        return task;                                                                                                                            \
+    }                                                                                                                                           \
+    const func##_task *func##_async(arg0_t arg0_n, arg1_t arg1_n, arg2_t arg2_n, arg3_t arg3_n, arg4_t arg4_n, arg5_t arg5_n, arg6_t arg6_n) { return func##_async_full(arg0_n, arg1_n, arg2_n, arg3_n, arg4_n, arg5_n, arg6_n, NULL); }
+
+/// @brief Define the necessary functions and structures to call tasks seamlessly
+/// @param func The function to make asynchronous
+/// @param arg[i]_t The functions's i-th argument's type
+/// @param arg[i]_n The functions's i-th argument's name
+/// @note `SL_DEF_ASYNC[n]` macro must be chosen based on `n`, the parameter count
+#define SL_DEF_ASYNC8(func, arg0_t, arg0_n, arg1_t, arg1_n, arg2_t, arg2_n, arg3_t, arg3_n, arg4_t, arg4_n, arg5_t, arg5_n, arg6_t, arg6_n, arg7_t, arg7_n) \
+    typedef struct func##_task { sl_task_state status; pthread_t thread; arg0_t arg0_n; arg1_t arg1_n; arg2_t arg2_n; arg3_t arg3_n; arg4_t arg4_n; arg5_t arg5_n; arg6_t arg6_n; arg7_t arg7_n; typeof(func(*(arg0_t *)NULL, *(arg1_t *)NULL, *(arg2_t *)NULL, *(arg3_t *)NULL, *(arg4_t *)NULL, *(arg5_t *)NULL, *(arg6_t *)NULL, *(arg7_t *)NULL)) *__ret[]; } func##_task;  \
+    void *__##func##_async_exec(func##_task *task) {                                                                                            \
+        task->status = SL_TASK_WORKING;                                                                                                         \
+        memcpy(&task->__ret, __SL_PTR(func(task->arg0_n, task->arg1_n, task->arg2_n, task->arg3_n, task->arg4_n, task->arg5_n, task->arg6_n, task->arg7_n)), sizeof(task->__ret[0][0])); \
+        task->status = SL_TASK_DONE;                                                                                                            \
+        pthread_exit(NULL);                                                                                                                     \
+    }                                                                                                                                           \
+    const func##_task *func##_async_full(arg0_t arg0_n, arg1_t arg1_n, arg2_t arg2_n, arg3_t arg3_n, arg4_t arg4_n, arg5_t arg5_n, arg6_t arg6_n, arg7_t arg7_n, pthread_attr_t *attr) { \
+        func##_task *task = malloc(sizeof(func##_task) - 1 + sizeof(((func##_task *)NULL)->__ret[0][0]));                                       \
+        task->status = SL_TASK_WAIT;                                                                                                            \
+        task->arg0_n = arg0_n; task->arg1_n = arg1_n; task->arg2_n = arg2_n; task->arg3_n = arg3_n; task->arg4_n = arg4_n; task->arg5_n = arg5_n; task->arg6_n = arg6_n; task->arg7_n = arg7_n; \
+        if (pthread_create(&task->thread, attr, (void *(*)(void *))__##func##_async_exec, task)) return free((void *)task), __SL_ERROR(SL_ERR_THREAD_CREATE), NULL; \
+        return task;                                                                                                                            \
+    }                                                                                                                                           \
+    const func##_task *func##_async(arg0_t arg0_n, arg1_t arg1_n, arg2_t arg2_n, arg3_t arg3_n, arg4_t arg4_n, arg5_t arg5_n, arg6_t arg6_n, arg7_t arg7_n) { return func##_async_full(arg0_n, arg1_n, arg2_n, arg3_n, arg4_n, arg5_n, arg6_n, arg7_n, NULL); }
+
+/// @brief Define the necessary functions and structures to call tasks seamlessly
+/// @param func The function to make asynchronous
+/// @param argc The number of parameters of the function. Should be an integer litteral in base 10 (used to select appropriate macro)
+/// @param arg[i]_t The functions's i-th argument's type
+/// @param arg[i]_n The functions's i-th argument's name
+/// @return Definition of task type `{func}_task`, creation of functions `{func}_task *{func}_async(args...)` and `{func}_task *{func}_async2(args..., pthread_attr_t *attr)`
+/// @note To declare a function parameter, you must first put the type of the parameter, a comma, and then the name of the parameter :
+/// ``` 
+/// int foo(int x, char *y);
+/// SL_DEF_ASYNC(foo, 2, int, x, char *, y); // or SL_DEF_ASYNC2(foo, int, x, char *, y);
+/// ```
+/// @warning Due to the internals of how this works, you cannot declare a void return type for an async function. Just use int and ignore the return value instead
+/// @note Macros are declared for up to 8 parameters
+#define SL_DEF_ASYNC(func, argc, ...) SL_DEF_ASYNC##argc(func, ##__VA_ARGS__)
+
+
+
+
+
+
+#endif // _SL_ASYNC_H_
+
+
+
+
+
+// SOURCE: misc/log.h
+#ifndef _SL_LOG_H_
+#define _SL_LOG_H_
+
+#include <stdio.h>
+
+#define SL_DEF_LOGGER(name, title_, lvl) \
+    struct __LOGGER_##name##_t__ { const char *title; FILE *stream; int level; } __LOGGER_##name##__ = { .level = lvl, .title = title_, .stream = NULL }; \
+    static struct __LOGGER_##name##_t__  *__LOGGER__ = &__LOGGER_##name##__
+
+typedef enum SL_log_lvl {
+    SL_LOG_LVL_ALL     = -100,
+    SL_LOG_LVL_INFO    = 0,
+    SL_LOG_LVL_WARNING = 1,
+    SL_LOG_LVL_ERROR   = 2,
+    SL_LOG_LVL_OFF     = 3,
+} SL_log_lvl;
+
+#define SL_logger_log(logger, log_level, color, title_, msg, ...) (logger->level <= (log_level) && logger->level <= LOG_LVL_GLOBAL ? fprintf(logger->stream ? logger->stream : stderr, "\033["#color"m%s:%u@%s - [%s "title_"] "msg"\033[0m\n", __FILE__, __LINE__, __FUNCTION__, logger->title, ##__VA_ARGS__) : (0))
+
+#define SL_todo(msg, ...) (SL_logger_log(__LOGGER__, SL_LOG_LVL_ALL,     32, "TODO",    msg, ##__VA_ARGS__), exit(1))
+#define SL_logI(msg, ...)  SL_logger_log(__LOGGER__, SL_LOG_LVL_INFO,    37, "INFO",    msg, ##__VA_ARGS__)
+#define SL_logW(msg, ...)  SL_logger_log(__LOGGER__, SL_LOG_LVL_WARNING, 33, "WARNING", msg, ##__VA_ARGS__)
+#define SL_logE(msg, ...)  SL_logger_log(__LOGGER__, SL_LOG_LVL_ERROR,   31, "ERROR",   msg, ##__VA_ARGS__)
+
+#define SL_logger_lvl(name, log_level)     (__LOGGER_##name##__.level = (log_level))
+#define SL_logger_out(name, output_stream) (__LOGGER_##name##__.stream = (output_stream))
+
+#ifndef LOG_LVL_GLOBAL
+#   define LOG_LVL_GLOBAL SL_LOG_LVL_ALL
+#endif
+
+
+
+
+#endif // _SL_LOG_H_
+
+
+
+
+
+// SOURCE: misc/tui.h
+#ifndef _SL_TUI_H_
+#define _SL_TUI_H_
+
+// #include "../base.h"
+// #include "../struct/array.h"
+
+typedef enum sl_cmd_arg_type {
+    SL_CMD_ARG_TOGGLE = 0,
+    SL_CMD_ARG_INT,
+    SL_CMD_ARG_REAL,
+    SL_CMD_ARG_STRING,
+    SL_CMD_ARG_UNKNOWN,
+} sl_cmd_arg_type;
+typedef union sl_cmd_arg_union {
+    bool   toggle;
+    i64    integer;
+    double real;
+    char  *string;
+} sl_cmd_arg_union;
+typedef struct sl_cmd_arg {
+    sl_cmd_arg_type type;
+    const char *name_long; 
+    const char *name_short;
+    sl_cmd_arg_union default_value;
+    
+    bool assigned;
+    sl_cmd_arg_union assigned_value;
+} sl_cmd_arg;
+SL_DEF_ARRAY(sl_cmd_arg);
+
+#define sl_cmd_arg_toggle_(name_long_, name_short_)           ((sl_cmd_arg){.type = SL_CMD_ARG_TOGGLE, .name_long = name_long_, .name_short = name_short_, .default_value = false,   .assigned = false, .assigned_value.toggle  = false})
+#define sl_cmd_arg_integer_(name_long_, name_short_, default) ((sl_cmd_arg){.type = SL_CMD_ARG_INT,    .name_long = name_long_, .name_short = name_short_, .default_value = default, .assigned = false, .assigned_value.integer = default})
+#define sl_cmd_arg_real_(name_long_, name_short_, default)    ((sl_cmd_arg){.type = SL_CMD_ARG_REAL,   .name_long = name_long_, .name_short = name_short_, .default_value = default, .assigned = false, .assigned_value.real    = default})
+#define sl_cmd_arg_string_(name_long_, name_short_, default)  ((sl_cmd_arg){.type = SL_CMD_ARG_STRING, .name_long = name_long_, .name_short = name_short_, .default_value = default, .assigned = false, .assigned_value.string  = default})
+
+SL_header bool SL_cmd_arg_parse(int argc, char **argv, SL_array(sl_cmd_arg) *arguments);
+
+
+
+
+
+
+
+
+#endif // _SL_TUI_H_
+
+
+
+
+
+// SOURCE: math/math.h
+#ifndef _SL_MATH_H_
+#define _SL_MATH_H_
+
+/*
+ *  MATH: Math related functions and constructs. 
+ *  
+ *  TODO:
+ *  - Provide more hashing functions
+ * 
+*/
+
+// #include "../base.h"
+
+/// @brief The ratio of the circumference to the diameter
+#define SL_PI 3.1415926535897931
+/// @brief The ratio of the circumference to the radius
+#define SL_TAU 6.2831853071796
+/// @brief The ratio of 2*PI rad over 360°
+#define SL_DEG_TO_RAD (SL_TAU / 360.0)
+/// @brief The ratio of 360° over 2*PI rad
+#define SL_RAD_TO_DEG (360.0 / SL_PI)
+/// @brief Euler's number, e
+#define SL_E 2.7182818284590452
+/// @brief Golden ratio
+#define SL_PHI 1.6180339887498948482045868
+
+#define SL_FLOAT_MAX HUGE_VALF
+#define SL_DOUBLE_MAX HUGE_VAL
+
+/// @brief Get minimum value between a and b
+/// @param a The first value
+/// @param b The second value
+/// @return The minimum of a and b
+SL_header uint SL_umin(uint a, uint b);
+/// @brief Get minimum value between a and b
+/// @param a The first value
+/// @param b The second value
+/// @return The minimum of a and b
+SL_header u64 SL_u64min(u64 a, u64 b);
+/// @brief Get minimum value between a and b
+/// @param a The first value
+/// @param b The second value
+/// @return The minimum of a and b
+SL_header int SL_imin(int a, int b);
+/// @brief Get minimum value between a and b
+/// @param a The first value
+/// @param b The second value
+/// @return The minimum of a and b
+SL_header i64 SL_i64min(i64 a, i64 b);
+/// @brief Get minimum value between a and b
+/// @param a The first value
+/// @param b The second value
+/// @return The minimum of a and b
+SL_header float SL_fmin(float a, float b);
+/// @brief Get minimum value between a and b
+/// @param a The first value
+/// @param b The second value
+/// @return The minimum of a and b
+SL_header double SL_dmin(double a, double b);
+
+/// @brief Get maximum value between a and b
+/// @param a The first value
+/// @param b The second value
+/// @return The maximum of a and b
+SL_header uint SL_umax(uint a, uint b);
+/// @brief Get maximum value between a and b
+/// @param a The first value
+/// @param b The second value
+/// @return The maximum of a and b
+SL_header u64 SL_u64max(u64 a, u64 b);
+/// @brief Get maximum value between a and b
+/// @param a The first value
+/// @param b The second value
+/// @return The maximum of a and b
+SL_header int SL_imax(int a, int b);
+/// @brief Get maximum value between a and b
+/// @param a The first value
+/// @param b The second value
+/// @return The maximum of a and b
+SL_header i64 SL_i64max(i64 a, i64 b);
+/// @brief Get maximum value between a and b
+/// @param a The first value
+/// @param b The second value
+/// @return The maximum of a and b
+SL_header float SL_fmax(float a, float b);
+/// @brief Get maximum value between a and b
+/// @param a The first value
+/// @param b The second value
+/// @return The maximum of a and b
+SL_header double SL_dmax(double a, double b);
+
+/// @brief Sign of a an int
+/// @param i The int
+/// @return The sign of i
+SL_header int SL_isign(int i);
+/// @brief Sign of a an int64
+/// @param i The i64
+/// @return The sign of i
+SL_header i64 SL_i64sign(i64 i);
+/// @brief Sign of a an float
+/// @param f The float
+/// @return The sign of f
+SL_header float SL_fsign(float f);
+/// @brief Sign of a an double
+/// @param f The double
+/// @return The sign of f
+SL_header double SL_dsign(double f);
+
+/// @brief Floor f to the closest step
+/// @param f The value to floor
+/// @param step_size The size of a step
+/// @return The greatest step lower than f
+SL_header float SL_fstep(float f, float step_size);
+/// @brief Floor f to the closest step
+/// @param f The value to floor
+/// @param step_size The size of a step
+/// @return The greatest step lower than f
+SL_header double SL_dstep(double f, double step_size);
+
+/// @brief Linear interpolation between two floats
+/// @param lhs The source float
+/// @param rhs The destination float
+/// @param t The interpolation factor
+/// @return The resulting interpolated value
+SL_header float SL_flerp(float lhs, float rhs, float t);
+/// @brief Linear interpolation between two doubles
+/// @param lhs The source double
+/// @param rhs The destination double
+/// @param t The interpolation factor
+/// @return The resulting interpolated value
+SL_header double SL_dlerp(double lhs, double rhs, double t);
+
+/// @brief Clamp f between two values (low and high bounds)
+/// @param f The value to clamp
+/// @param min The low bound
+/// @param max The high bound
+/// @return The clamped value of f
+SL_header float SL_fclamp(float f, float min, float max);
+/// @brief Clamp f between two values (low and high bounds)
+/// @param f The value to clamp
+/// @param min The low bound
+/// @param max The high bound
+/// @return The clamped value of f
+SL_header double SL_dclamp(double f, double min, double max);
+
+/// @brief Interpret bits of a u32 as those of a float
+/// @param u The u32
+/// @return The resulting float
+SL_header float SL_inplaceU32ToFloat(u32 u);
+/// @brief Interpret bits of a float as those of a u32
+/// @param f The float
+/// @return The resulting u32
+SL_header u32 SL_inplaceFloatToU32(float f);
+/// @brief Interpret bits of a u64 as those of a double
+/// @param u The u64
+/// @return The resulting double
+SL_header double SL_inplaceU64ToDouble(u64 u);
+/// @brief Interpret bits of a double as those of a u64
+/// @param f The double
+/// @return The resulting u64
+SL_header u64 SL_inplaceDoubleToU64(double f);
+/// @brief Interpret bits of a u32 as the mantissa of a float brought back the the [0.0f, 1.0f] range
+/// @param u The u32
+/// @return The resulting float
+SL_header float SL_inplaceU32ToFloat01(u32 u);
+/// @brief Interpret bits of a u64 as the mantissa of a double brought back the the [0.0, 1.0] range
+/// @param u The u64
+/// @return The resulting double
+SL_header double SL_inplaceU64ToDouble01(u64 u);
+
+/// @brief PCG hashing of a u32
+/// @param u The u32
+/// @return The hashed u32
+SL_header u32 SL_u32hash_PCG(u32 u);
+/// @brief Set the seed of the pseudo-random u32 generator
+/// @param new_seed The new seed
+/// @note Based on the PCG hash
+SL_header void SL_u32srand(u32 new_seed);
+/// @brief Generate a pseudo-random u32
+/// @return The random u32
+SL_header u32 SL_u32rand();
+/// @brief Generate a pseudo-random u32 in the range [low, high]
+/// @param low Lowest value
+/// @param high Highest value
+/// @return A value between low and high
+SL_header u32 SL_u32rand_in(u32 low, u32 high);
+
+/// @brief Generate a pseudo-random float in the range [0.0f, 1.0f]
+/// @return The randomly generated float
+SL_header float SL_frand();
+/// @brief Generate a pseudo-random double in the range [0.0, 1.0]
+/// @return The randomly generated double
+SL_header double SL_drand();
+/// @brief Generate a pseudo-random float in the range [low, high]
+/// @param low Lowest value
+/// @param high Highest value
+/// @return The randomly generated float
+SL_header float SL_frand_between(float low, float high);
+/// @brief Generate a pseudo-random double in the range [low, high]
+/// @param low Lowest value
+/// @param high Highest value
+/// @return The randomly generated double
+SL_header double SL_drand_between(double low, double high);
+
+
+
+
+
+
+#endif // _SL_MATH_H_
+
+
+
+
+
+// SOURCE: math/vector.h
+#ifndef __SL_VECTOR_H
+#define __SL_VECTOR_H
+
+// #include "../base.h"
+
+#define SL_XPD_V(V)  (V).count, (V).data
+#define SL_XPD_V2(V) (V).x, (V).y
+#define SL_XPD_V3(V) (V).x, (V).y, (V).z
+#define SL_XPD_V4(V) (V).x, (V).y, (V).z, (V).w
+
+#define SL_FMT_V2(fmt) "v2("fmt", "fmt")"
+#define SL_FMT_V3(fmt) "v3("fmt", "fmt", "fmt")"
+#define SL_FMT_V4(fmt) "v4("fmt", "fmt", "fmt", "fmt")"
+
+#define SL_vsize(V) (sizeof(V) / sizeof(((typeof(V) *)(NULL))->data[0]))
+
+#pragma region I8
+
+/// @brief Vector of i8 with arbitrary dimension
+typedef struct {
+    const usize count;
+    i8 data[];
+} i8v;
+
+/// @brief Vector of i8 with dimension 2
+typedef union {
+    i8 data[2];
+    struct {
+        union { i8 x, r, u; };
+        union { i8 y, g, v; };
+    };
+} i8v2;
+
+#define SL_i8v2_zero  ((i8v2){.x =  0, .y =  0})
+#define SL_i8v2_one   ((i8v2){.x =  1, .y =  1})
+#define SL_i8v2_right ((i8v2){.x =  1, .y =  0})
+#define SL_i8v2_up    ((i8v2){.x =  0, .y =  1})
+#define SL_i8v2_left  ((i8v2){.x = -1, .y =  0})
+#define SL_i8v2_down  ((i8v2){.x =  0, .y = -1})
+
+/// @brief Vector of i8 with dimension 3
+typedef union {
+    i8 data[3];
+    struct {
+        union { i8 x, r, u; };
+        union { i8 y, g, v; };
+        union { i8 z, b, s; };
+    };
+    struct {
+        union { i8 __x, __r, __u; };
+        union { i8v2 yz, gb, vs; };
+    };
+    struct {
+        union { i8v2 xy, rg, uv; };
+        union { i8 __z, __b, __s; };
+    };
+} i8v3;
+
+#define SL_i8v3_zero  ((i8v3){.x =  0, .y =  0, .z =  0})
+#define SL_i8v3_one   ((i8v3){.x =  1, .y =  1, .z =  1})
+#define SL_i8v3_right ((i8v3){.x =  1, .y =  0, .z =  0})
+#define SL_i8v3_up    ((i8v3){.x =  0, .y =  1, .z =  0})
+#define SL_i8v3_forw  ((i8v3){.x =  0, .y =  0, .z =  1})
+#define SL_i8v3_left  ((i8v3){.x = -1, .y =  0, .z =  0})
+#define SL_i8v3_down  ((i8v3){.x =  0, .y = -1, .z =  0})
+#define SL_i8v3_back  ((i8v3){.x =  0, .y =  0, .z = -1})
+
+/// @brief Vector of i8 with dimension 4
+typedef union {
+    i8 data[4];
+    struct {
+        union { i8 x, r, u; };
+        union { i8 y, g, v; };
+        union { i8 z, b, s; };
+        union { i8 w, a, t; };
+    };
+    struct {
+        union { i8 __x0, __r0, __u0; };
+        union { i8v2 yz, gb, vs; };
+        union { i8 __w0, __a0, __t0; };
+    };
+    struct {
+        union { i8v2 xy, rb, uv; };
+        union { i8v2 zw, ba, st; };
+    };
+    struct {
+        union { i8v3 xyz, rgb, uvs; };
+        union { i8 __w1, __a1, __t1; };
+    };
+    struct {
+        union { i8 __x1, __r1, __u1; };
+        union { i8v3 yzw, gba, vst; };
+    };
+} i8v4;
+
+#define SL_i8v4_zero  ((i8v4){.x = 0, .y = 0, .z = 0, .w = 0})
+#define SL_i8v4_one   ((i8v4){.x = 1, .y = 1, .z = 1, .w = 1})
+
+
+
+#define SL_i8v2_(X, Y)       ((i8v2){.x = X, .y = Y})
+#define SL_i8v3_(X, Y, Z)    ((i8v3){.x = X, .y = Y, .z = Z})
+#define SL_i8v4_(X, Y, Z, W) ((i8v4){.x = X, .y = Y, .z = Z, .w = W})
+
+#define SL_i8v2s(S)          ((i8v2){.x = S, .y = S})
+#define SL_i8v3s(S)          ((i8v3){.x = S, .y = S, .z = S})
+#define SL_i8v4s(S)          ((i8v4){.x = S, .y = S, .z = S, .w = S})
+
+#define SL_i8v2v(V, ...)     ((i8v2){.x = (V).x, .y = (V).y})
+#define SL_i8v3v(V, ...)     ((i8v3){.x = (V).x, .y = (V).y, .z = (SL_vsize(V) >= 2 ? (V).data[2] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[1]))})
+#define SL_i8v4v(V, ...)     ((i8v4){.x = (V).x, .y = (V).y, .z = (SL_vsize(V) >= 2 ? (V).data[2] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[1])), .w = (SL_vsize(V) >= 3 ? (V).data[3] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[2]))})
+
+
+
+/// @brief Addition of two i8v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8* SL_i8vadd_(i8* lhs, i8* rhs, i8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i8v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8v* SL_i8vadd(i8v* lhs, i8v* rhs, i8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i8vadd_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i8v2
+SL_header i8v2 SL_i8v2add(i8v2 lhs, i8v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v2) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i8v3
+SL_header i8v3 SL_i8v3add(i8v3 lhs, i8v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v3) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y,
+        .z = lhs.z + rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i8v4
+SL_header i8v4 SL_i8v4add(i8v4 lhs, i8v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v4) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y,
+        .z = lhs.z + rhs.z,
+        .w = lhs.w + rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i8v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8* SL_i8vsub_(i8* lhs, i8* rhs, i8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i8v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8v* SL_i8vsub(i8v* lhs, i8v* rhs, i8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i8vsub_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i8v2
+SL_header i8v2 SL_i8v2sub(i8v2 lhs, i8v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v2) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i8v3
+SL_header i8v3 SL_i8v3sub(i8v3 lhs, i8v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v3) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y,
+        .z = lhs.z - rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i8v4
+SL_header i8v4 SL_i8v4sub(i8v4 lhs, i8v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v4) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y,
+        .z = lhs.z - rhs.z,
+        .w = lhs.w - rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two i8v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8* SL_i8vmul_(i8* lhs, i8* rhs, i8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two i8v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8v* SL_i8vmul(i8v* lhs, i8v* rhs, i8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i8vmul_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two i8v2
+SL_header i8v2 SL_i8v2mul(i8v2 lhs, i8v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v2) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two i8v3
+SL_header i8v3 SL_i8v3mul(i8v3 lhs, i8v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v3) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y,
+        .z = lhs.z * rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two i8v4
+SL_header i8v4 SL_i8v4mul(i8v4 lhs, i8v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v4) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y,
+        .z = lhs.z * rhs.z,
+        .w = lhs.w * rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a i8v* with a scalar
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8* SL_i8vmuls_(i8* lhs, i8 rhs, i8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * rhs;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a i8v* with a scalar
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8v* SL_i8vmuls(i8v* lhs, i8 rhs, i8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i8vmuls_(lhs->data, rhs, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a i8v2 with a scalar
+SL_header i8v2 SL_i8v2muls(i8v2 lhs, i8 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v2) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a i8v3 with a scalar
+SL_header i8v3 SL_i8v3muls(i8v3 lhs, i8 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v3) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs,
+        .z = lhs.z * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a i8v4 with a scalar
+SL_header i8v4 SL_i8v4muls(i8v4 lhs, i8 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v4) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs,
+        .z = lhs.z * rhs,
+        .w = lhs.w * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two i8v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8* SL_i8vdiv_(i8* lhs, i8* rhs, i8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] / rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two i8v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8v* SL_i8vdiv(i8v* lhs, i8v* rhs, i8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i8vdiv_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two i8v2
+SL_header i8v2 SL_i8v2div(i8v2 lhs, i8v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v2) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two i8v3
+SL_header i8v3 SL_i8v3div(i8v3 lhs, i8v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v3) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y,
+        .z = lhs.z / rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two i8v4
+SL_header i8v4 SL_i8v4div(i8v4 lhs, i8v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v4) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y,
+        .z = lhs.z / rhs.z,
+        .w = lhs.w / rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a i8v* with a scalar
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8* SL_i8vdivs_(i8* lhs, i8 rhs, i8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] / rhs;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a i8v* with a scalar
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8v* SL_i8vdivs(i8v* lhs, i8 rhs, i8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i8vdivs_(lhs->data, rhs, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a i8v2 with a scalar
+SL_header i8v2 SL_i8v2divs(i8v2 lhs, i8 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v2) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a i8v3 with a scalar
+SL_header i8v3 SL_i8v3divs(i8v3 lhs, i8 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v3) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs,
+        .z = lhs.z / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a i8v4 with a scalar
+SL_header i8v4 SL_i8v4divs(i8v4 lhs, i8 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v4) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs,
+        .z = lhs.z / rhs,
+        .w = lhs.w / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i8v* with lhs scaled by a i8
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8* SL_i8vaddS_(i8* lhs, i8* rhs, i8 s, i8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * s;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i8v* with lhs scaled by a i8
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8v* SL_i8vaddS(i8v* lhs, i8v* rhs, i8 s, i8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i8vaddS_(lhs->data, rhs->data, s, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i8v2 with lhs scaled by a i8
+SL_header i8v2 SL_i8v2addS(i8v2 lhs, i8v2 rhs, i8 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v2) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i8v3 with lhs scaled by a i8
+SL_header i8v3 SL_i8v3addS(i8v3 lhs, i8v3 rhs, i8 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v3) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s,
+        .z = lhs.z + rhs.z * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i8v4 with lhs scaled by a i8
+SL_header i8v4 SL_i8v4addS(i8v4 lhs, i8v4 rhs, i8 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v4) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s,
+        .z = lhs.z + rhs.z * s,
+        .w = lhs.w + rhs.w * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i8v* with lhs scaled by a i8
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8* SL_i8vsubS_(i8* lhs, i8* rhs, i8 s, i8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * s;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i8v* with lhs scaled by a i8
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8v* SL_i8vsubS(i8v* lhs, i8v* rhs, i8 s, i8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i8vsubS_(lhs->data, rhs->data, s, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i8v2 with lhs scaled by a i8
+SL_header i8v2 SL_i8v2subS(i8v2 lhs, i8v2 rhs, i8 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v2) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i8v3 with lhs scaled by a i8
+SL_header i8v3 SL_i8v3subS(i8v3 lhs, i8v3 rhs, i8 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v3) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s,
+        .z = lhs.z - rhs.z * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i8v4 with lhs scaled by a i8
+SL_header i8v4 SL_i8v4subS(i8v4 lhs, i8v4 rhs, i8 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v4) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s,
+        .z = lhs.z - rhs.z * s,
+        .w = lhs.w - rhs.w * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i8v* with lhs multiplied with a i8
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8* SL_i8vaddM_(i8* lhs, i8* rhs, i8* m, i8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i8v* with lhs multiplied with a i8
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8v* SL_i8vaddM(i8v* lhs, i8v* rhs, i8v* m, i8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i8vaddM_(lhs->data, rhs->data, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i8v2 with lhs multiplied with a i8
+SL_header i8v2 SL_i8v2addM(i8v2 lhs, i8v2 rhs, i8v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v2) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i8v3 with lhs multiplied with a i8
+SL_header i8v3 SL_i8v3addM(i8v3 lhs, i8v3 rhs, i8v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v3) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y,
+        .z = lhs.z + rhs.z * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i8v4 with lhs multiplied with a i8
+SL_header i8v4 SL_i8v4addM(i8v4 lhs, i8v4 rhs, i8v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v4) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y,
+        .z = lhs.z + rhs.z * m.z,
+        .w = lhs.w + rhs.w * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i8v* with lhs multiplied with a i8
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8* SL_i8vsubM_(i8* lhs, i8* rhs, i8* m, i8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i8v* with lhs multiplied with a i8
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8v* SL_i8vsubM(i8v* lhs, i8v* rhs, i8v* m, i8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i8vsubM_(lhs->data, rhs->data, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i8v2 with lhs multiplied with a i8
+SL_header i8v2 SL_i8v2subM(i8v2 lhs, i8v2 rhs, i8v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v2) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i8v3 with lhs multiplied with a i8
+SL_header i8v3 SL_i8v3subM(i8v3 lhs, i8v3 rhs, i8v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v3) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y,
+        .z = lhs.z - rhs.z * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i8v4 with lhs multiplied with a i8
+SL_header i8v4 SL_i8v4subM(i8v4 lhs, i8v4 rhs, i8v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v4) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y,
+        .z = lhs.z - rhs.z * m.z,
+        .w = lhs.w - rhs.w * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i8v* with lhs scaled by i8 and multiplied with a i8
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8* SL_i8vaddSM_(i8* lhs, i8* rhs, i8 s, i8* m, i8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * s * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i8v* with lhs scaled by i8 and multiplied with a i8
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8v* SL_i8vaddSM(i8v* lhs, i8v* rhs, i8 s, i8v* m, i8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i8vaddSM_(lhs->data, rhs->data, s, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i8v2 with lhs scaled by i8 and multiplied with a i8
+SL_header i8v2 SL_i8v2addSM(i8v2 lhs, i8v2 rhs, i8 s, i8v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v2) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i8v3 with lhs scaled by i8 and multiplied with a i8
+SL_header i8v3 SL_i8v3addSM(i8v3 lhs, i8v3 rhs, i8 s, i8v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v3) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y,
+        .z = lhs.z + rhs.z * s * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i8v4 with lhs scaled by i8 and multiplied with a i8
+SL_header i8v4 SL_i8v4addSM(i8v4 lhs, i8v4 rhs, i8 s, i8v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v4) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y,
+        .z = lhs.z + rhs.z * s * m.z,
+        .w = lhs.w + rhs.w * s * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i8v* with lhs scaled by i8 and multiplied with a i8
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8* SL_i8vsubSM_(i8* lhs, i8* rhs, i8 s, i8* m, i8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * s * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i8v* with lhs scaled by i8 and multiplied with a i8
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8v* SL_i8vsubSM(i8v* lhs, i8v* rhs, i8 s, i8v* m, i8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i8vsubSM_(lhs->data, rhs->data, s, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i8v2 with lhs scaled by i8 and multiplied with a i8
+SL_header i8v2 SL_i8v2subSM(i8v2 lhs, i8v2 rhs, i8 s, i8v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v2) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i8v3 with lhs scaled by i8 and multiplied with a i8
+SL_header i8v3 SL_i8v3subSM(i8v3 lhs, i8v3 rhs, i8 s, i8v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v3) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y,
+        .z = lhs.z - rhs.z * s * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i8v4 with lhs scaled by i8 and multiplied with a i8
+SL_header i8v4 SL_i8v4subSM(i8v4 lhs, i8v4 rhs, i8 s, i8v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v4) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y,
+        .z = lhs.z - rhs.z * s * m.z,
+        .w = lhs.w - rhs.w * s * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i8v* with rhs scaled by a i8
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8* SL_i8vSadd_(i8* lhs, i8 s, i8* rhs, i8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * s + rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i8v* with rhs scaled by a i8
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8v* SL_i8vSadd(i8v* lhs, i8 s, i8v* rhs, i8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i8vSadd_(lhs->data, s, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i8v2 with rhs scaled by a i8
+SL_header i8v2 SL_i8v2Sadd(i8v2 lhs, i8 s, i8v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v2) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i8v3 with rhs scaled by a i8
+SL_header i8v3 SL_i8v3Sadd(i8v3 lhs, i8 s, i8v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v3) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y,
+        .z = lhs.z * s + rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i8v4 with rhs scaled by a i8
+SL_header i8v4 SL_i8v4Sadd(i8v4 lhs, i8 s, i8v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v4) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y,
+        .z = lhs.z * s + rhs.z,
+        .w = lhs.w * s + rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i8v* with rhs scaled by a i8
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8* SL_i8vSsub_(i8* lhs, i8 s, i8* rhs, i8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * s - rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i8v* with rhs scaled by a i8
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8v* SL_i8vSsub(i8v* lhs, i8 s, i8v* rhs, i8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i8vSsub_(lhs->data, s, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i8v2 with rhs scaled by a i8
+SL_header i8v2 SL_i8v2Ssub(i8v2 lhs, i8 s, i8v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v2) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i8v3 with rhs scaled by a i8
+SL_header i8v3 SL_i8v3Ssub(i8v3 lhs, i8 s, i8v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v3) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y,
+        .z = lhs.z * s - rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i8v4 with rhs scaled by a i8
+SL_header i8v4 SL_i8v4Ssub(i8v4 lhs, i8 s, i8v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v4) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y,
+        .z = lhs.z * s - rhs.z,
+        .w = lhs.w * s - rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a i8v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8* SL_i8vneg_(i8* v, i8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = -v[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Negation of a i8v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8v* SL_i8vneg(i8v* v, i8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i8vneg_(v->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Negation of a i8v2
+SL_header i8v2 SL_i8v2neg(i8v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v2) {
+        .x = -v.x,
+        .y = -v.y
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a i8v3
+SL_header i8v3 SL_i8v3neg(i8v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v3) {
+        .x = -v.x,
+        .y = -v.y,
+        .z = -v.z
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a i8v4
+SL_header i8v4 SL_i8v4neg(i8v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v4) {
+        .x = -v.x,
+        .y = -v.y,
+        .z = -v.z,
+        .w = -v.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a i8v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8* SL_i8vabs_(i8* v, i8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = v[i] < 0 ? -v[i] : v[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a i8v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8v* SL_i8vabs(i8v* v, i8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i8vabs_(v->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a i8v2
+SL_header i8v2 SL_i8v2abs(i8v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v2) {
+        .x = v.x < 0 ? -v.x : v.x,
+        .y = v.y < 0 ? -v.y : v.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a i8v3
+SL_header i8v3 SL_i8v3abs(i8v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v3) {
+        .x = v.x < 0 ? -v.x : v.x,
+        .y = v.y < 0 ? -v.y : v.y,
+        .z = v.z < 0 ? -v.z : v.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a i8v4
+SL_header i8v4 SL_i8v4abs(i8v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v4) {
+        .x = v.x < 0 ? -v.x : v.x,
+        .y = v.y < 0 ? -v.y : v.y,
+        .z = v.z < 0 ? -v.z : v.z,
+        .w = v.w < 0 ? -v.w : v.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two i8v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8* SL_i8vmin_(i8* lhs, i8* rhs, i8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] < rhs[i] ? lhs[i] : rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two i8v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8v* SL_i8vmin(i8v* lhs, i8v* rhs, i8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i8vmin_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two i8v2
+SL_header i8v2 SL_i8v2min(i8v2 lhs, i8v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v2) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two i8v3
+SL_header i8v3 SL_i8v3min(i8v3 lhs, i8v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v3) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z < rhs.z ? lhs.z : rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two i8v4
+SL_header i8v4 SL_i8v4min(i8v4 lhs, i8v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v4) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z < rhs.z ? lhs.z : rhs.z,
+        .w = lhs.w < rhs.w ? lhs.w : rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two i8v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8* SL_i8vmax_(i8* lhs, i8* rhs, i8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] > rhs[i] ? lhs[i] : rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two i8v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8v* SL_i8vmax(i8v* lhs, i8v* rhs, i8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i8vmax_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two i8v2
+SL_header i8v2 SL_i8v2max(i8v2 lhs, i8v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v2) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two i8v3
+SL_header i8v3 SL_i8v3max(i8v3 lhs, i8v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v3) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z > rhs.z ? lhs.z : rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two i8v4
+SL_header i8v4 SL_i8v4max(i8v4 lhs, i8v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v4) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z > rhs.z ? lhs.z : rhs.z,
+        .w = lhs.w > rhs.w ? lhs.w : rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Dot product of two i8v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i8vdot_(i8* lhs, i8* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    i64 dest = 0;
+    for (usize i = 0; i < count; ++i) dest += lhs[i] * rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Dot product of two i8v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i8vdot(i8v* lhs, i8v* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i8vdot_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Dot product of two i8v2
+SL_header i64 SL_i8v2dot(i8v2 lhs, i8v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y;
+}
+#else
+;
+#endif
+/// @brief Dot product of two i8v3
+SL_header i64 SL_i8v3dot(i8v3 lhs, i8v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
+}
+#else
+;
+#endif
+/// @brief Dot product of two i8v4
+SL_header i64 SL_i8v4dot(i8v4 lhs, i8v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z + lhs.w * rhs.w;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a i8v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i8vlen_max_(i8* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    i64 dest = 0;
+    for (usize i = 0; i < count; ++i) dest = dest < llabs(v[i]) ? llabs(v[i]) : dest;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a i8v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i8vlen_max(i8v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i8vlen_max_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Maximum component of a i8v2
+SL_header i64 SL_i8v2len_max(i8v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    i8v2 av = SL_i8v2_(llabs(v.x), llabs(v.y));
+    return av.x > av.y ? av.x : av.y;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a i8v3
+SL_header i64 SL_i8v3len_max(i8v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    i8v3 av = SL_i8v3_(llabs(v.x), llabs(v.y), llabs(v.z));
+    return av.x > av.y ? (av.x > av.z ? av.x : av.z) : (av.y > av.z ? av.y : av.z);
+}
+#else
+;
+#endif
+/// @brief Maximum component of a i8v4
+SL_header i64 SL_i8v4len_max(i8v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    i8v4 av = SL_i8v4_(llabs(v.x), llabs(v.y), llabs(v.z), llabs(v.w));
+    return av.x > av.y ? (av.x > av.z ? (av.x > av.w ? av.x : av.w) : (av.z > av.w ? av.z : av.w)) : (av.y > av.z ? (av.y > av.w ? av.y : av.w) : (av.z > av.w ? av.z : av.w));
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a i8v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i8vlen_manh_(i8* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    i64 dest = 0;
+    for (usize i = 0; i < count; ++i) dest += llabs(v[i]);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a i8v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i8vlen_manh(i8v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i8vlen_manh_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a i8v2
+SL_header i64 SL_i8v2len_manh(i8v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return llabs(v.x) + llabs(v.y);
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a i8v3
+SL_header i64 SL_i8v3len_manh(i8v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return llabs(v.x) + llabs(v.y) + llabs(v.z);
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a i8v4
+SL_header i64 SL_i8v4len_manh(i8v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return llabs(v.x) + llabs(v.y) + llabs(v.z) + llabs(v.w);
+}
+#else
+;
+#endif
+/// @brief Squared euclidean length of a i8v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i8vlen_srq_(i8* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i8vdot_(v, v, count);
+}
+#else
+;
+#endif
+/// @brief Squared euclidean length of a i8v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i8vlen_srq(i8v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i8vlen_srq_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Square length of a i8v2
+SL_header i64 SL_i8v2len_sqr(i8v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i8v2dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Square length of a i8v3
+SL_header i64 SL_i8v3len_sqr(i8v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i8v3dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Square length of a i8v4
+SL_header i64 SL_i8v4len_sqr(i8v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i8v4dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a i8v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_i8vlen_(i8* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_i8vdot_(v, v, count));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a i8v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_i8vlen(i8v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i8vlen_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a i8v2
+SL_header double SL_i8v2len(i8v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_i8v2dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a i8v3
+SL_header double SL_i8v3len(i8v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_i8v3dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a i8v4
+SL_header double SL_i8v4len(i8v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_i8v4dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance bewteen two i8v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_i8vdist_(i8* lhs, i8* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    double accum = 0;
+    for (int i = 0; i < count; ++i) accum += (lhs[i] - rhs[i]) * (lhs[i] - rhs[i]);
+    return sqrt(accum);
+}
+#else
+;
+#endif
+/// @brief Euclidean distance bewteen two i8v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_i8vdist(i8v* lhs, i8v* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i8vdist_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two i8v2
+SL_header double SL_i8v2dist(i8v2 lhs, i8v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i8v2len(SL_i8v2sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two i8v3
+SL_header double SL_i8v3dist(i8v3 lhs, i8v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i8v3len(SL_i8v3sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two i8v4
+SL_header double SL_i8v4dist(i8v4 lhs, i8v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i8v4len(SL_i8v4sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Reflection of i8v2 v around vector i8v2 n
+SL_header i8v2 SL_i8v2refl(i8v2 v, i8v2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i8v2subS(v, n, 2.0 * SL_i8v2dot(v, n) / SL_i8v2dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of i8v3 v around vector i8v3 n
+SL_header i8v3 SL_i8v3refl(i8v3 v, i8v3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i8v3subS(v, n, 2.0 * SL_i8v3dot(v, n) / SL_i8v3dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of i8v4 v around vector i8v4 n
+SL_header i8v4 SL_i8v4refl(i8v4 v, i8v4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i8v4subS(v, n, 2.0 * SL_i8v4dot(v, n) / SL_i8v4dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of i8v2 v around vector i8v2 n assumed to be of unit length
+SL_header i8v2 SL_i8v2refl_u(i8v2 v, i8v2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i8v2subS(v, n, 2.0 * SL_i8v2dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of i8v3 v around vector i8v3 n assumed to be of unit length
+SL_header i8v3 SL_i8v3refl_u(i8v3 v, i8v3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i8v3subS(v, n, 2.0 * SL_i8v3dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of i8v4 v around vector i8v4 n assumed to be of unit length
+SL_header i8v4 SL_i8v4refl_u(i8v4 v, i8v4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i8v4subS(v, n, 2.0 * SL_i8v4dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i8v* by integer n
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8* SL_i8vmods_(i8* v, i8 n, i8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = v[i] % n;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i8v* by integer n
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8v* SL_i8vmods(i8v* v, i8 n, i8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i8vmods_(v->data, n, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i8v2 by integer n
+SL_header i8v2 SL_i8v2mods(i8v2 v, i8 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v2) {
+        .x = v.x % n,
+        .y = v.y % n
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i8v3 by integer n
+SL_header i8v3 SL_i8v3mods(i8v3 v, i8 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v3) {
+        .x = v.x % n,
+        .y = v.y % n,
+        .z = v.z % n
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i8v4 by integer n
+SL_header i8v4 SL_i8v4mods(i8v4 v, i8 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v4) {
+        .x = v.x % n,
+        .y = v.y % n,
+        .z = v.z % n,
+        .w = v.w % n
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i8v* by i8v* n
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8* SL_i8vmod_(i8* v, i8* n, i8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = v[i] % n[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i8v* by i8v* n
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i8v* SL_i8vmod(i8v* v, i8v* n, i8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i8vmod_(v->data, n->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i8v2 by i8v2 n
+SL_header i8v2 SL_i8v2mod(i8v2 v, i8v2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v2) {
+        .x = v.x % n.x,
+        .y = v.y % n.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i8v3 by i8v3 n
+SL_header i8v3 SL_i8v3mod(i8v3 v, i8v3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v3) {
+        .x = v.x % n.x,
+        .y = v.y % n.y,
+        .z = v.z % n.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i8v4 by i8v4 n
+SL_header i8v4 SL_i8v4mod(i8v4 v, i8v4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v4) {
+        .x = v.x % n.x,
+        .y = v.y % n.y,
+        .z = v.z % n.z,
+        .w = v.w % n.w
+    };
+}
+#else
+;
+#endif
+/// @brief Cross-product of two i8v2
+SL_header i64 SL_i8v2cross(i8v2 lhs, i8v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.y - lhs.y * rhs.x;
+}
+#else
+;
+#endif
+/// @brief Cross-product of two i8v3
+SL_header i8v3 SL_i8v3cross(i8v3 lhs, i8v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i8v3) {
+            .x = lhs.y * rhs.z - lhs.z * rhs.y,
+            .y = lhs.z * rhs.x - lhs.x * rhs.z,
+            .z = lhs.x * rhs.y - lhs.y * rhs.x
+        };
+
+}
+#else
+;
+#endif
+#pragma endregion I8
+#pragma region I16
+
+/// @brief Vector of i16 with arbitrary dimension
+typedef struct {
+    const usize count;
+    i16 data[];
+} i16v;
+
+/// @brief Vector of i16 with dimension 2
+typedef union {
+    i16 data[2];
+    struct {
+        union { i16 x, r, u; };
+        union { i16 y, g, v; };
+    };
+} i16v2;
+
+#define SL_i16v2_zero  ((i16v2){.x =  0, .y =  0})
+#define SL_i16v2_one   ((i16v2){.x =  1, .y =  1})
+#define SL_i16v2_right ((i16v2){.x =  1, .y =  0})
+#define SL_i16v2_up    ((i16v2){.x =  0, .y =  1})
+#define SL_i16v2_left  ((i16v2){.x = -1, .y =  0})
+#define SL_i16v2_down  ((i16v2){.x =  0, .y = -1})
+
+/// @brief Vector of i16 with dimension 3
+typedef union {
+    i16 data[3];
+    struct {
+        union { i16 x, r, u; };
+        union { i16 y, g, v; };
+        union { i16 z, b, s; };
+    };
+    struct {
+        union { i16 __x, __r, __u; };
+        union { i16v2 yz, gb, vs; };
+    };
+    struct {
+        union { i16v2 xy, rg, uv; };
+        union { i16 __z, __b, __s; };
+    };
+} i16v3;
+
+#define SL_i16v3_zero  ((i16v3){.x =  0, .y =  0, .z =  0})
+#define SL_i16v3_one   ((i16v3){.x =  1, .y =  1, .z =  1})
+#define SL_i16v3_right ((i16v3){.x =  1, .y =  0, .z =  0})
+#define SL_i16v3_up    ((i16v3){.x =  0, .y =  1, .z =  0})
+#define SL_i16v3_forw  ((i16v3){.x =  0, .y =  0, .z =  1})
+#define SL_i16v3_left  ((i16v3){.x = -1, .y =  0, .z =  0})
+#define SL_i16v3_down  ((i16v3){.x =  0, .y = -1, .z =  0})
+#define SL_i16v3_back  ((i16v3){.x =  0, .y =  0, .z = -1})
+
+/// @brief Vector of i16 with dimension 4
+typedef union {
+    i16 data[4];
+    struct {
+        union { i16 x, r, u; };
+        union { i16 y, g, v; };
+        union { i16 z, b, s; };
+        union { i16 w, a, t; };
+    };
+    struct {
+        union { i16 __x0, __r0, __u0; };
+        union { i16v2 yz, gb, vs; };
+        union { i16 __w0, __a0, __t0; };
+    };
+    struct {
+        union { i16v2 xy, rb, uv; };
+        union { i16v2 zw, ba, st; };
+    };
+    struct {
+        union { i16v3 xyz, rgb, uvs; };
+        union { i16 __w1, __a1, __t1; };
+    };
+    struct {
+        union { i16 __x1, __r1, __u1; };
+        union { i16v3 yzw, gba, vst; };
+    };
+} i16v4;
+
+#define SL_i16v4_zero  ((i16v4){.x = 0, .y = 0, .z = 0, .w = 0})
+#define SL_i16v4_one   ((i16v4){.x = 1, .y = 1, .z = 1, .w = 1})
+
+
+
+#define SL_i16v2_(X, Y)       ((i16v2){.x = X, .y = Y})
+#define SL_i16v3_(X, Y, Z)    ((i16v3){.x = X, .y = Y, .z = Z})
+#define SL_i16v4_(X, Y, Z, W) ((i16v4){.x = X, .y = Y, .z = Z, .w = W})
+
+#define SL_i16v2s(S)          ((i16v2){.x = S, .y = S})
+#define SL_i16v3s(S)          ((i16v3){.x = S, .y = S, .z = S})
+#define SL_i16v4s(S)          ((i16v4){.x = S, .y = S, .z = S, .w = S})
+
+#define SL_i16v2v(V, ...)     ((i16v2){.x = (V).x, .y = (V).y})
+#define SL_i16v3v(V, ...)     ((i16v3){.x = (V).x, .y = (V).y, .z = (SL_vsize(V) >= 2 ? (V).data[2] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[1]))})
+#define SL_i16v4v(V, ...)     ((i16v4){.x = (V).x, .y = (V).y, .z = (SL_vsize(V) >= 2 ? (V).data[2] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[1])), .w = (SL_vsize(V) >= 3 ? (V).data[3] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[2]))})
+
+
+
+/// @brief Addition of two i16v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16* SL_i16vadd_(i16* lhs, i16* rhs, i16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i16v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16v* SL_i16vadd(i16v* lhs, i16v* rhs, i16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i16vadd_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i16v2
+SL_header i16v2 SL_i16v2add(i16v2 lhs, i16v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v2) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i16v3
+SL_header i16v3 SL_i16v3add(i16v3 lhs, i16v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v3) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y,
+        .z = lhs.z + rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i16v4
+SL_header i16v4 SL_i16v4add(i16v4 lhs, i16v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v4) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y,
+        .z = lhs.z + rhs.z,
+        .w = lhs.w + rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i16v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16* SL_i16vsub_(i16* lhs, i16* rhs, i16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i16v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16v* SL_i16vsub(i16v* lhs, i16v* rhs, i16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i16vsub_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i16v2
+SL_header i16v2 SL_i16v2sub(i16v2 lhs, i16v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v2) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i16v3
+SL_header i16v3 SL_i16v3sub(i16v3 lhs, i16v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v3) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y,
+        .z = lhs.z - rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i16v4
+SL_header i16v4 SL_i16v4sub(i16v4 lhs, i16v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v4) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y,
+        .z = lhs.z - rhs.z,
+        .w = lhs.w - rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two i16v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16* SL_i16vmul_(i16* lhs, i16* rhs, i16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two i16v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16v* SL_i16vmul(i16v* lhs, i16v* rhs, i16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i16vmul_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two i16v2
+SL_header i16v2 SL_i16v2mul(i16v2 lhs, i16v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v2) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two i16v3
+SL_header i16v3 SL_i16v3mul(i16v3 lhs, i16v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v3) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y,
+        .z = lhs.z * rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two i16v4
+SL_header i16v4 SL_i16v4mul(i16v4 lhs, i16v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v4) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y,
+        .z = lhs.z * rhs.z,
+        .w = lhs.w * rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a i16v* with a scalar
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16* SL_i16vmuls_(i16* lhs, i16 rhs, i16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * rhs;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a i16v* with a scalar
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16v* SL_i16vmuls(i16v* lhs, i16 rhs, i16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i16vmuls_(lhs->data, rhs, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a i16v2 with a scalar
+SL_header i16v2 SL_i16v2muls(i16v2 lhs, i16 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v2) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a i16v3 with a scalar
+SL_header i16v3 SL_i16v3muls(i16v3 lhs, i16 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v3) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs,
+        .z = lhs.z * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a i16v4 with a scalar
+SL_header i16v4 SL_i16v4muls(i16v4 lhs, i16 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v4) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs,
+        .z = lhs.z * rhs,
+        .w = lhs.w * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two i16v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16* SL_i16vdiv_(i16* lhs, i16* rhs, i16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] / rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two i16v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16v* SL_i16vdiv(i16v* lhs, i16v* rhs, i16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i16vdiv_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two i16v2
+SL_header i16v2 SL_i16v2div(i16v2 lhs, i16v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v2) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two i16v3
+SL_header i16v3 SL_i16v3div(i16v3 lhs, i16v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v3) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y,
+        .z = lhs.z / rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two i16v4
+SL_header i16v4 SL_i16v4div(i16v4 lhs, i16v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v4) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y,
+        .z = lhs.z / rhs.z,
+        .w = lhs.w / rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a i16v* with a scalar
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16* SL_i16vdivs_(i16* lhs, i16 rhs, i16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] / rhs;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a i16v* with a scalar
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16v* SL_i16vdivs(i16v* lhs, i16 rhs, i16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i16vdivs_(lhs->data, rhs, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a i16v2 with a scalar
+SL_header i16v2 SL_i16v2divs(i16v2 lhs, i16 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v2) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a i16v3 with a scalar
+SL_header i16v3 SL_i16v3divs(i16v3 lhs, i16 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v3) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs,
+        .z = lhs.z / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a i16v4 with a scalar
+SL_header i16v4 SL_i16v4divs(i16v4 lhs, i16 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v4) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs,
+        .z = lhs.z / rhs,
+        .w = lhs.w / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i16v* with lhs scaled by a i16
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16* SL_i16vaddS_(i16* lhs, i16* rhs, i16 s, i16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * s;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i16v* with lhs scaled by a i16
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16v* SL_i16vaddS(i16v* lhs, i16v* rhs, i16 s, i16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i16vaddS_(lhs->data, rhs->data, s, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i16v2 with lhs scaled by a i16
+SL_header i16v2 SL_i16v2addS(i16v2 lhs, i16v2 rhs, i16 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v2) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i16v3 with lhs scaled by a i16
+SL_header i16v3 SL_i16v3addS(i16v3 lhs, i16v3 rhs, i16 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v3) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s,
+        .z = lhs.z + rhs.z * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i16v4 with lhs scaled by a i16
+SL_header i16v4 SL_i16v4addS(i16v4 lhs, i16v4 rhs, i16 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v4) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s,
+        .z = lhs.z + rhs.z * s,
+        .w = lhs.w + rhs.w * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i16v* with lhs scaled by a i16
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16* SL_i16vsubS_(i16* lhs, i16* rhs, i16 s, i16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * s;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i16v* with lhs scaled by a i16
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16v* SL_i16vsubS(i16v* lhs, i16v* rhs, i16 s, i16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i16vsubS_(lhs->data, rhs->data, s, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i16v2 with lhs scaled by a i16
+SL_header i16v2 SL_i16v2subS(i16v2 lhs, i16v2 rhs, i16 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v2) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i16v3 with lhs scaled by a i16
+SL_header i16v3 SL_i16v3subS(i16v3 lhs, i16v3 rhs, i16 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v3) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s,
+        .z = lhs.z - rhs.z * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i16v4 with lhs scaled by a i16
+SL_header i16v4 SL_i16v4subS(i16v4 lhs, i16v4 rhs, i16 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v4) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s,
+        .z = lhs.z - rhs.z * s,
+        .w = lhs.w - rhs.w * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i16v* with lhs multiplied with a i16
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16* SL_i16vaddM_(i16* lhs, i16* rhs, i16* m, i16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i16v* with lhs multiplied with a i16
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16v* SL_i16vaddM(i16v* lhs, i16v* rhs, i16v* m, i16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i16vaddM_(lhs->data, rhs->data, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i16v2 with lhs multiplied with a i16
+SL_header i16v2 SL_i16v2addM(i16v2 lhs, i16v2 rhs, i16v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v2) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i16v3 with lhs multiplied with a i16
+SL_header i16v3 SL_i16v3addM(i16v3 lhs, i16v3 rhs, i16v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v3) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y,
+        .z = lhs.z + rhs.z * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i16v4 with lhs multiplied with a i16
+SL_header i16v4 SL_i16v4addM(i16v4 lhs, i16v4 rhs, i16v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v4) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y,
+        .z = lhs.z + rhs.z * m.z,
+        .w = lhs.w + rhs.w * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i16v* with lhs multiplied with a i16
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16* SL_i16vsubM_(i16* lhs, i16* rhs, i16* m, i16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i16v* with lhs multiplied with a i16
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16v* SL_i16vsubM(i16v* lhs, i16v* rhs, i16v* m, i16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i16vsubM_(lhs->data, rhs->data, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i16v2 with lhs multiplied with a i16
+SL_header i16v2 SL_i16v2subM(i16v2 lhs, i16v2 rhs, i16v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v2) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i16v3 with lhs multiplied with a i16
+SL_header i16v3 SL_i16v3subM(i16v3 lhs, i16v3 rhs, i16v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v3) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y,
+        .z = lhs.z - rhs.z * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i16v4 with lhs multiplied with a i16
+SL_header i16v4 SL_i16v4subM(i16v4 lhs, i16v4 rhs, i16v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v4) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y,
+        .z = lhs.z - rhs.z * m.z,
+        .w = lhs.w - rhs.w * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i16v* with lhs scaled by i16 and multiplied with a i16
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16* SL_i16vaddSM_(i16* lhs, i16* rhs, i16 s, i16* m, i16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * s * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i16v* with lhs scaled by i16 and multiplied with a i16
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16v* SL_i16vaddSM(i16v* lhs, i16v* rhs, i16 s, i16v* m, i16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i16vaddSM_(lhs->data, rhs->data, s, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i16v2 with lhs scaled by i16 and multiplied with a i16
+SL_header i16v2 SL_i16v2addSM(i16v2 lhs, i16v2 rhs, i16 s, i16v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v2) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i16v3 with lhs scaled by i16 and multiplied with a i16
+SL_header i16v3 SL_i16v3addSM(i16v3 lhs, i16v3 rhs, i16 s, i16v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v3) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y,
+        .z = lhs.z + rhs.z * s * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i16v4 with lhs scaled by i16 and multiplied with a i16
+SL_header i16v4 SL_i16v4addSM(i16v4 lhs, i16v4 rhs, i16 s, i16v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v4) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y,
+        .z = lhs.z + rhs.z * s * m.z,
+        .w = lhs.w + rhs.w * s * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i16v* with lhs scaled by i16 and multiplied with a i16
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16* SL_i16vsubSM_(i16* lhs, i16* rhs, i16 s, i16* m, i16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * s * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i16v* with lhs scaled by i16 and multiplied with a i16
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16v* SL_i16vsubSM(i16v* lhs, i16v* rhs, i16 s, i16v* m, i16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i16vsubSM_(lhs->data, rhs->data, s, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i16v2 with lhs scaled by i16 and multiplied with a i16
+SL_header i16v2 SL_i16v2subSM(i16v2 lhs, i16v2 rhs, i16 s, i16v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v2) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i16v3 with lhs scaled by i16 and multiplied with a i16
+SL_header i16v3 SL_i16v3subSM(i16v3 lhs, i16v3 rhs, i16 s, i16v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v3) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y,
+        .z = lhs.z - rhs.z * s * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i16v4 with lhs scaled by i16 and multiplied with a i16
+SL_header i16v4 SL_i16v4subSM(i16v4 lhs, i16v4 rhs, i16 s, i16v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v4) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y,
+        .z = lhs.z - rhs.z * s * m.z,
+        .w = lhs.w - rhs.w * s * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i16v* with rhs scaled by a i16
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16* SL_i16vSadd_(i16* lhs, i16 s, i16* rhs, i16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * s + rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i16v* with rhs scaled by a i16
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16v* SL_i16vSadd(i16v* lhs, i16 s, i16v* rhs, i16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i16vSadd_(lhs->data, s, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i16v2 with rhs scaled by a i16
+SL_header i16v2 SL_i16v2Sadd(i16v2 lhs, i16 s, i16v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v2) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i16v3 with rhs scaled by a i16
+SL_header i16v3 SL_i16v3Sadd(i16v3 lhs, i16 s, i16v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v3) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y,
+        .z = lhs.z * s + rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i16v4 with rhs scaled by a i16
+SL_header i16v4 SL_i16v4Sadd(i16v4 lhs, i16 s, i16v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v4) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y,
+        .z = lhs.z * s + rhs.z,
+        .w = lhs.w * s + rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i16v* with rhs scaled by a i16
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16* SL_i16vSsub_(i16* lhs, i16 s, i16* rhs, i16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * s - rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i16v* with rhs scaled by a i16
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16v* SL_i16vSsub(i16v* lhs, i16 s, i16v* rhs, i16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i16vSsub_(lhs->data, s, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i16v2 with rhs scaled by a i16
+SL_header i16v2 SL_i16v2Ssub(i16v2 lhs, i16 s, i16v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v2) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i16v3 with rhs scaled by a i16
+SL_header i16v3 SL_i16v3Ssub(i16v3 lhs, i16 s, i16v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v3) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y,
+        .z = lhs.z * s - rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i16v4 with rhs scaled by a i16
+SL_header i16v4 SL_i16v4Ssub(i16v4 lhs, i16 s, i16v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v4) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y,
+        .z = lhs.z * s - rhs.z,
+        .w = lhs.w * s - rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a i16v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16* SL_i16vneg_(i16* v, i16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = -v[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Negation of a i16v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16v* SL_i16vneg(i16v* v, i16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i16vneg_(v->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Negation of a i16v2
+SL_header i16v2 SL_i16v2neg(i16v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v2) {
+        .x = -v.x,
+        .y = -v.y
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a i16v3
+SL_header i16v3 SL_i16v3neg(i16v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v3) {
+        .x = -v.x,
+        .y = -v.y,
+        .z = -v.z
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a i16v4
+SL_header i16v4 SL_i16v4neg(i16v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v4) {
+        .x = -v.x,
+        .y = -v.y,
+        .z = -v.z,
+        .w = -v.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a i16v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16* SL_i16vabs_(i16* v, i16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = v[i] < 0 ? -v[i] : v[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a i16v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16v* SL_i16vabs(i16v* v, i16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i16vabs_(v->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a i16v2
+SL_header i16v2 SL_i16v2abs(i16v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v2) {
+        .x = v.x < 0 ? -v.x : v.x,
+        .y = v.y < 0 ? -v.y : v.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a i16v3
+SL_header i16v3 SL_i16v3abs(i16v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v3) {
+        .x = v.x < 0 ? -v.x : v.x,
+        .y = v.y < 0 ? -v.y : v.y,
+        .z = v.z < 0 ? -v.z : v.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a i16v4
+SL_header i16v4 SL_i16v4abs(i16v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v4) {
+        .x = v.x < 0 ? -v.x : v.x,
+        .y = v.y < 0 ? -v.y : v.y,
+        .z = v.z < 0 ? -v.z : v.z,
+        .w = v.w < 0 ? -v.w : v.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two i16v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16* SL_i16vmin_(i16* lhs, i16* rhs, i16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] < rhs[i] ? lhs[i] : rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two i16v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16v* SL_i16vmin(i16v* lhs, i16v* rhs, i16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i16vmin_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two i16v2
+SL_header i16v2 SL_i16v2min(i16v2 lhs, i16v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v2) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two i16v3
+SL_header i16v3 SL_i16v3min(i16v3 lhs, i16v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v3) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z < rhs.z ? lhs.z : rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two i16v4
+SL_header i16v4 SL_i16v4min(i16v4 lhs, i16v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v4) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z < rhs.z ? lhs.z : rhs.z,
+        .w = lhs.w < rhs.w ? lhs.w : rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two i16v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16* SL_i16vmax_(i16* lhs, i16* rhs, i16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] > rhs[i] ? lhs[i] : rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two i16v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16v* SL_i16vmax(i16v* lhs, i16v* rhs, i16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i16vmax_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two i16v2
+SL_header i16v2 SL_i16v2max(i16v2 lhs, i16v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v2) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two i16v3
+SL_header i16v3 SL_i16v3max(i16v3 lhs, i16v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v3) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z > rhs.z ? lhs.z : rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two i16v4
+SL_header i16v4 SL_i16v4max(i16v4 lhs, i16v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v4) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z > rhs.z ? lhs.z : rhs.z,
+        .w = lhs.w > rhs.w ? lhs.w : rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Dot product of two i16v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i16vdot_(i16* lhs, i16* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    i64 dest = 0;
+    for (usize i = 0; i < count; ++i) dest += lhs[i] * rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Dot product of two i16v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i16vdot(i16v* lhs, i16v* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i16vdot_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Dot product of two i16v2
+SL_header i64 SL_i16v2dot(i16v2 lhs, i16v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y;
+}
+#else
+;
+#endif
+/// @brief Dot product of two i16v3
+SL_header i64 SL_i16v3dot(i16v3 lhs, i16v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
+}
+#else
+;
+#endif
+/// @brief Dot product of two i16v4
+SL_header i64 SL_i16v4dot(i16v4 lhs, i16v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z + lhs.w * rhs.w;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a i16v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i16vlen_max_(i16* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    i64 dest = 0;
+    for (usize i = 0; i < count; ++i) dest = dest < llabs(v[i]) ? llabs(v[i]) : dest;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a i16v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i16vlen_max(i16v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i16vlen_max_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Maximum component of a i16v2
+SL_header i64 SL_i16v2len_max(i16v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    i16v2 av = SL_i16v2_(llabs(v.x), llabs(v.y));
+    return av.x > av.y ? av.x : av.y;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a i16v3
+SL_header i64 SL_i16v3len_max(i16v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    i16v3 av = SL_i16v3_(llabs(v.x), llabs(v.y), llabs(v.z));
+    return av.x > av.y ? (av.x > av.z ? av.x : av.z) : (av.y > av.z ? av.y : av.z);
+}
+#else
+;
+#endif
+/// @brief Maximum component of a i16v4
+SL_header i64 SL_i16v4len_max(i16v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    i16v4 av = SL_i16v4_(llabs(v.x), llabs(v.y), llabs(v.z), llabs(v.w));
+    return av.x > av.y ? (av.x > av.z ? (av.x > av.w ? av.x : av.w) : (av.z > av.w ? av.z : av.w)) : (av.y > av.z ? (av.y > av.w ? av.y : av.w) : (av.z > av.w ? av.z : av.w));
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a i16v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i16vlen_manh_(i16* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    i64 dest = 0;
+    for (usize i = 0; i < count; ++i) dest += llabs(v[i]);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a i16v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i16vlen_manh(i16v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i16vlen_manh_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a i16v2
+SL_header i64 SL_i16v2len_manh(i16v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return llabs(v.x) + llabs(v.y);
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a i16v3
+SL_header i64 SL_i16v3len_manh(i16v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return llabs(v.x) + llabs(v.y) + llabs(v.z);
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a i16v4
+SL_header i64 SL_i16v4len_manh(i16v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return llabs(v.x) + llabs(v.y) + llabs(v.z) + llabs(v.w);
+}
+#else
+;
+#endif
+/// @brief Squared euclidean length of a i16v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i16vlen_srq_(i16* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i16vdot_(v, v, count);
+}
+#else
+;
+#endif
+/// @brief Squared euclidean length of a i16v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i16vlen_srq(i16v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i16vlen_srq_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Square length of a i16v2
+SL_header i64 SL_i16v2len_sqr(i16v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i16v2dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Square length of a i16v3
+SL_header i64 SL_i16v3len_sqr(i16v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i16v3dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Square length of a i16v4
+SL_header i64 SL_i16v4len_sqr(i16v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i16v4dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a i16v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_i16vlen_(i16* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_i16vdot_(v, v, count));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a i16v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_i16vlen(i16v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i16vlen_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a i16v2
+SL_header double SL_i16v2len(i16v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_i16v2dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a i16v3
+SL_header double SL_i16v3len(i16v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_i16v3dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a i16v4
+SL_header double SL_i16v4len(i16v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_i16v4dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance bewteen two i16v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_i16vdist_(i16* lhs, i16* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    double accum = 0;
+    for (int i = 0; i < count; ++i) accum += (lhs[i] - rhs[i]) * (lhs[i] - rhs[i]);
+    return sqrt(accum);
+}
+#else
+;
+#endif
+/// @brief Euclidean distance bewteen two i16v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_i16vdist(i16v* lhs, i16v* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i16vdist_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two i16v2
+SL_header double SL_i16v2dist(i16v2 lhs, i16v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i16v2len(SL_i16v2sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two i16v3
+SL_header double SL_i16v3dist(i16v3 lhs, i16v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i16v3len(SL_i16v3sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two i16v4
+SL_header double SL_i16v4dist(i16v4 lhs, i16v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i16v4len(SL_i16v4sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Reflection of i16v2 v around vector i16v2 n
+SL_header i16v2 SL_i16v2refl(i16v2 v, i16v2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i16v2subS(v, n, 2.0 * SL_i16v2dot(v, n) / SL_i16v2dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of i16v3 v around vector i16v3 n
+SL_header i16v3 SL_i16v3refl(i16v3 v, i16v3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i16v3subS(v, n, 2.0 * SL_i16v3dot(v, n) / SL_i16v3dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of i16v4 v around vector i16v4 n
+SL_header i16v4 SL_i16v4refl(i16v4 v, i16v4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i16v4subS(v, n, 2.0 * SL_i16v4dot(v, n) / SL_i16v4dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of i16v2 v around vector i16v2 n assumed to be of unit length
+SL_header i16v2 SL_i16v2refl_u(i16v2 v, i16v2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i16v2subS(v, n, 2.0 * SL_i16v2dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of i16v3 v around vector i16v3 n assumed to be of unit length
+SL_header i16v3 SL_i16v3refl_u(i16v3 v, i16v3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i16v3subS(v, n, 2.0 * SL_i16v3dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of i16v4 v around vector i16v4 n assumed to be of unit length
+SL_header i16v4 SL_i16v4refl_u(i16v4 v, i16v4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i16v4subS(v, n, 2.0 * SL_i16v4dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i16v* by integer n
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16* SL_i16vmods_(i16* v, i16 n, i16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = v[i] % n;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i16v* by integer n
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16v* SL_i16vmods(i16v* v, i16 n, i16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i16vmods_(v->data, n, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i16v2 by integer n
+SL_header i16v2 SL_i16v2mods(i16v2 v, i16 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v2) {
+        .x = v.x % n,
+        .y = v.y % n
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i16v3 by integer n
+SL_header i16v3 SL_i16v3mods(i16v3 v, i16 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v3) {
+        .x = v.x % n,
+        .y = v.y % n,
+        .z = v.z % n
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i16v4 by integer n
+SL_header i16v4 SL_i16v4mods(i16v4 v, i16 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v4) {
+        .x = v.x % n,
+        .y = v.y % n,
+        .z = v.z % n,
+        .w = v.w % n
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i16v* by i16v* n
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16* SL_i16vmod_(i16* v, i16* n, i16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = v[i] % n[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i16v* by i16v* n
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i16v* SL_i16vmod(i16v* v, i16v* n, i16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i16vmod_(v->data, n->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i16v2 by i16v2 n
+SL_header i16v2 SL_i16v2mod(i16v2 v, i16v2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v2) {
+        .x = v.x % n.x,
+        .y = v.y % n.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i16v3 by i16v3 n
+SL_header i16v3 SL_i16v3mod(i16v3 v, i16v3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v3) {
+        .x = v.x % n.x,
+        .y = v.y % n.y,
+        .z = v.z % n.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i16v4 by i16v4 n
+SL_header i16v4 SL_i16v4mod(i16v4 v, i16v4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v4) {
+        .x = v.x % n.x,
+        .y = v.y % n.y,
+        .z = v.z % n.z,
+        .w = v.w % n.w
+    };
+}
+#else
+;
+#endif
+/// @brief Cross-product of two i16v2
+SL_header i64 SL_i16v2cross(i16v2 lhs, i16v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.y - lhs.y * rhs.x;
+}
+#else
+;
+#endif
+/// @brief Cross-product of two i16v3
+SL_header i16v3 SL_i16v3cross(i16v3 lhs, i16v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i16v3) {
+            .x = lhs.y * rhs.z - lhs.z * rhs.y,
+            .y = lhs.z * rhs.x - lhs.x * rhs.z,
+            .z = lhs.x * rhs.y - lhs.y * rhs.x
+        };
+
+}
+#else
+;
+#endif
+#pragma endregion I16
+#pragma region I32
+
+/// @brief Vector of i32 with arbitrary dimension
+typedef struct {
+    const usize count;
+    i32 data[];
+} i32v;
+
+/// @brief Vector of i32 with dimension 2
+typedef union {
+    i32 data[2];
+    struct {
+        union { i32 x, r, u; };
+        union { i32 y, g, v; };
+    };
+} i32v2;
+
+#define SL_i32v2_zero  ((i32v2){.x =  0, .y =  0})
+#define SL_i32v2_one   ((i32v2){.x =  1, .y =  1})
+#define SL_i32v2_right ((i32v2){.x =  1, .y =  0})
+#define SL_i32v2_up    ((i32v2){.x =  0, .y =  1})
+#define SL_i32v2_left  ((i32v2){.x = -1, .y =  0})
+#define SL_i32v2_down  ((i32v2){.x =  0, .y = -1})
+
+/// @brief Vector of i32 with dimension 3
+typedef union {
+    i32 data[3];
+    struct {
+        union { i32 x, r, u; };
+        union { i32 y, g, v; };
+        union { i32 z, b, s; };
+    };
+    struct {
+        union { i32 __x, __r, __u; };
+        union { i32v2 yz, gb, vs; };
+    };
+    struct {
+        union { i32v2 xy, rg, uv; };
+        union { i32 __z, __b, __s; };
+    };
+} i32v3;
+
+#define SL_i32v3_zero  ((i32v3){.x =  0, .y =  0, .z =  0})
+#define SL_i32v3_one   ((i32v3){.x =  1, .y =  1, .z =  1})
+#define SL_i32v3_right ((i32v3){.x =  1, .y =  0, .z =  0})
+#define SL_i32v3_up    ((i32v3){.x =  0, .y =  1, .z =  0})
+#define SL_i32v3_forw  ((i32v3){.x =  0, .y =  0, .z =  1})
+#define SL_i32v3_left  ((i32v3){.x = -1, .y =  0, .z =  0})
+#define SL_i32v3_down  ((i32v3){.x =  0, .y = -1, .z =  0})
+#define SL_i32v3_back  ((i32v3){.x =  0, .y =  0, .z = -1})
+
+/// @brief Vector of i32 with dimension 4
+typedef union {
+    i32 data[4];
+    struct {
+        union { i32 x, r, u; };
+        union { i32 y, g, v; };
+        union { i32 z, b, s; };
+        union { i32 w, a, t; };
+    };
+    struct {
+        union { i32 __x0, __r0, __u0; };
+        union { i32v2 yz, gb, vs; };
+        union { i32 __w0, __a0, __t0; };
+    };
+    struct {
+        union { i32v2 xy, rb, uv; };
+        union { i32v2 zw, ba, st; };
+    };
+    struct {
+        union { i32v3 xyz, rgb, uvs; };
+        union { i32 __w1, __a1, __t1; };
+    };
+    struct {
+        union { i32 __x1, __r1, __u1; };
+        union { i32v3 yzw, gba, vst; };
+    };
+} i32v4;
+
+#define SL_i32v4_zero  ((i32v4){.x = 0, .y = 0, .z = 0, .w = 0})
+#define SL_i32v4_one   ((i32v4){.x = 1, .y = 1, .z = 1, .w = 1})
+
+
+
+#define SL_i32v2_(X, Y)       ((i32v2){.x = X, .y = Y})
+#define SL_i32v3_(X, Y, Z)    ((i32v3){.x = X, .y = Y, .z = Z})
+#define SL_i32v4_(X, Y, Z, W) ((i32v4){.x = X, .y = Y, .z = Z, .w = W})
+
+#define SL_i32v2s(S)          ((i32v2){.x = S, .y = S})
+#define SL_i32v3s(S)          ((i32v3){.x = S, .y = S, .z = S})
+#define SL_i32v4s(S)          ((i32v4){.x = S, .y = S, .z = S, .w = S})
+
+#define SL_i32v2v(V, ...)     ((i32v2){.x = (V).x, .y = (V).y})
+#define SL_i32v3v(V, ...)     ((i32v3){.x = (V).x, .y = (V).y, .z = (SL_vsize(V) >= 2 ? (V).data[2] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[1]))})
+#define SL_i32v4v(V, ...)     ((i32v4){.x = (V).x, .y = (V).y, .z = (SL_vsize(V) >= 2 ? (V).data[2] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[1])), .w = (SL_vsize(V) >= 3 ? (V).data[3] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[2]))})
+
+
+
+/// @brief Addition of two i32v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32* SL_i32vadd_(i32* lhs, i32* rhs, i32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i32v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32v* SL_i32vadd(i32v* lhs, i32v* rhs, i32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i32vadd_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i32v2
+SL_header i32v2 SL_i32v2add(i32v2 lhs, i32v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v2) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i32v3
+SL_header i32v3 SL_i32v3add(i32v3 lhs, i32v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v3) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y,
+        .z = lhs.z + rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i32v4
+SL_header i32v4 SL_i32v4add(i32v4 lhs, i32v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v4) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y,
+        .z = lhs.z + rhs.z,
+        .w = lhs.w + rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i32v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32* SL_i32vsub_(i32* lhs, i32* rhs, i32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i32v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32v* SL_i32vsub(i32v* lhs, i32v* rhs, i32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i32vsub_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i32v2
+SL_header i32v2 SL_i32v2sub(i32v2 lhs, i32v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v2) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i32v3
+SL_header i32v3 SL_i32v3sub(i32v3 lhs, i32v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v3) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y,
+        .z = lhs.z - rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i32v4
+SL_header i32v4 SL_i32v4sub(i32v4 lhs, i32v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v4) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y,
+        .z = lhs.z - rhs.z,
+        .w = lhs.w - rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two i32v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32* SL_i32vmul_(i32* lhs, i32* rhs, i32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two i32v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32v* SL_i32vmul(i32v* lhs, i32v* rhs, i32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i32vmul_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two i32v2
+SL_header i32v2 SL_i32v2mul(i32v2 lhs, i32v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v2) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two i32v3
+SL_header i32v3 SL_i32v3mul(i32v3 lhs, i32v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v3) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y,
+        .z = lhs.z * rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two i32v4
+SL_header i32v4 SL_i32v4mul(i32v4 lhs, i32v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v4) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y,
+        .z = lhs.z * rhs.z,
+        .w = lhs.w * rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a i32v* with a scalar
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32* SL_i32vmuls_(i32* lhs, i32 rhs, i32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * rhs;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a i32v* with a scalar
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32v* SL_i32vmuls(i32v* lhs, i32 rhs, i32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i32vmuls_(lhs->data, rhs, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a i32v2 with a scalar
+SL_header i32v2 SL_i32v2muls(i32v2 lhs, i32 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v2) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a i32v3 with a scalar
+SL_header i32v3 SL_i32v3muls(i32v3 lhs, i32 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v3) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs,
+        .z = lhs.z * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a i32v4 with a scalar
+SL_header i32v4 SL_i32v4muls(i32v4 lhs, i32 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v4) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs,
+        .z = lhs.z * rhs,
+        .w = lhs.w * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two i32v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32* SL_i32vdiv_(i32* lhs, i32* rhs, i32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] / rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two i32v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32v* SL_i32vdiv(i32v* lhs, i32v* rhs, i32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i32vdiv_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two i32v2
+SL_header i32v2 SL_i32v2div(i32v2 lhs, i32v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v2) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two i32v3
+SL_header i32v3 SL_i32v3div(i32v3 lhs, i32v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v3) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y,
+        .z = lhs.z / rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two i32v4
+SL_header i32v4 SL_i32v4div(i32v4 lhs, i32v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v4) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y,
+        .z = lhs.z / rhs.z,
+        .w = lhs.w / rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a i32v* with a scalar
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32* SL_i32vdivs_(i32* lhs, i32 rhs, i32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] / rhs;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a i32v* with a scalar
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32v* SL_i32vdivs(i32v* lhs, i32 rhs, i32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i32vdivs_(lhs->data, rhs, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a i32v2 with a scalar
+SL_header i32v2 SL_i32v2divs(i32v2 lhs, i32 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v2) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a i32v3 with a scalar
+SL_header i32v3 SL_i32v3divs(i32v3 lhs, i32 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v3) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs,
+        .z = lhs.z / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a i32v4 with a scalar
+SL_header i32v4 SL_i32v4divs(i32v4 lhs, i32 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v4) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs,
+        .z = lhs.z / rhs,
+        .w = lhs.w / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i32v* with lhs scaled by a i32
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32* SL_i32vaddS_(i32* lhs, i32* rhs, i32 s, i32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * s;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i32v* with lhs scaled by a i32
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32v* SL_i32vaddS(i32v* lhs, i32v* rhs, i32 s, i32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i32vaddS_(lhs->data, rhs->data, s, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i32v2 with lhs scaled by a i32
+SL_header i32v2 SL_i32v2addS(i32v2 lhs, i32v2 rhs, i32 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v2) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i32v3 with lhs scaled by a i32
+SL_header i32v3 SL_i32v3addS(i32v3 lhs, i32v3 rhs, i32 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v3) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s,
+        .z = lhs.z + rhs.z * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i32v4 with lhs scaled by a i32
+SL_header i32v4 SL_i32v4addS(i32v4 lhs, i32v4 rhs, i32 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v4) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s,
+        .z = lhs.z + rhs.z * s,
+        .w = lhs.w + rhs.w * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i32v* with lhs scaled by a i32
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32* SL_i32vsubS_(i32* lhs, i32* rhs, i32 s, i32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * s;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i32v* with lhs scaled by a i32
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32v* SL_i32vsubS(i32v* lhs, i32v* rhs, i32 s, i32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i32vsubS_(lhs->data, rhs->data, s, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i32v2 with lhs scaled by a i32
+SL_header i32v2 SL_i32v2subS(i32v2 lhs, i32v2 rhs, i32 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v2) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i32v3 with lhs scaled by a i32
+SL_header i32v3 SL_i32v3subS(i32v3 lhs, i32v3 rhs, i32 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v3) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s,
+        .z = lhs.z - rhs.z * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i32v4 with lhs scaled by a i32
+SL_header i32v4 SL_i32v4subS(i32v4 lhs, i32v4 rhs, i32 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v4) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s,
+        .z = lhs.z - rhs.z * s,
+        .w = lhs.w - rhs.w * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i32v* with lhs multiplied with a i32
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32* SL_i32vaddM_(i32* lhs, i32* rhs, i32* m, i32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i32v* with lhs multiplied with a i32
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32v* SL_i32vaddM(i32v* lhs, i32v* rhs, i32v* m, i32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i32vaddM_(lhs->data, rhs->data, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i32v2 with lhs multiplied with a i32
+SL_header i32v2 SL_i32v2addM(i32v2 lhs, i32v2 rhs, i32v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v2) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i32v3 with lhs multiplied with a i32
+SL_header i32v3 SL_i32v3addM(i32v3 lhs, i32v3 rhs, i32v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v3) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y,
+        .z = lhs.z + rhs.z * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i32v4 with lhs multiplied with a i32
+SL_header i32v4 SL_i32v4addM(i32v4 lhs, i32v4 rhs, i32v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v4) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y,
+        .z = lhs.z + rhs.z * m.z,
+        .w = lhs.w + rhs.w * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i32v* with lhs multiplied with a i32
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32* SL_i32vsubM_(i32* lhs, i32* rhs, i32* m, i32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i32v* with lhs multiplied with a i32
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32v* SL_i32vsubM(i32v* lhs, i32v* rhs, i32v* m, i32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i32vsubM_(lhs->data, rhs->data, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i32v2 with lhs multiplied with a i32
+SL_header i32v2 SL_i32v2subM(i32v2 lhs, i32v2 rhs, i32v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v2) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i32v3 with lhs multiplied with a i32
+SL_header i32v3 SL_i32v3subM(i32v3 lhs, i32v3 rhs, i32v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v3) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y,
+        .z = lhs.z - rhs.z * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i32v4 with lhs multiplied with a i32
+SL_header i32v4 SL_i32v4subM(i32v4 lhs, i32v4 rhs, i32v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v4) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y,
+        .z = lhs.z - rhs.z * m.z,
+        .w = lhs.w - rhs.w * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i32v* with lhs scaled by i32 and multiplied with a i32
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32* SL_i32vaddSM_(i32* lhs, i32* rhs, i32 s, i32* m, i32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * s * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i32v* with lhs scaled by i32 and multiplied with a i32
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32v* SL_i32vaddSM(i32v* lhs, i32v* rhs, i32 s, i32v* m, i32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i32vaddSM_(lhs->data, rhs->data, s, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i32v2 with lhs scaled by i32 and multiplied with a i32
+SL_header i32v2 SL_i32v2addSM(i32v2 lhs, i32v2 rhs, i32 s, i32v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v2) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i32v3 with lhs scaled by i32 and multiplied with a i32
+SL_header i32v3 SL_i32v3addSM(i32v3 lhs, i32v3 rhs, i32 s, i32v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v3) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y,
+        .z = lhs.z + rhs.z * s * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i32v4 with lhs scaled by i32 and multiplied with a i32
+SL_header i32v4 SL_i32v4addSM(i32v4 lhs, i32v4 rhs, i32 s, i32v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v4) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y,
+        .z = lhs.z + rhs.z * s * m.z,
+        .w = lhs.w + rhs.w * s * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i32v* with lhs scaled by i32 and multiplied with a i32
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32* SL_i32vsubSM_(i32* lhs, i32* rhs, i32 s, i32* m, i32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * s * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i32v* with lhs scaled by i32 and multiplied with a i32
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32v* SL_i32vsubSM(i32v* lhs, i32v* rhs, i32 s, i32v* m, i32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i32vsubSM_(lhs->data, rhs->data, s, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i32v2 with lhs scaled by i32 and multiplied with a i32
+SL_header i32v2 SL_i32v2subSM(i32v2 lhs, i32v2 rhs, i32 s, i32v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v2) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i32v3 with lhs scaled by i32 and multiplied with a i32
+SL_header i32v3 SL_i32v3subSM(i32v3 lhs, i32v3 rhs, i32 s, i32v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v3) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y,
+        .z = lhs.z - rhs.z * s * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i32v4 with lhs scaled by i32 and multiplied with a i32
+SL_header i32v4 SL_i32v4subSM(i32v4 lhs, i32v4 rhs, i32 s, i32v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v4) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y,
+        .z = lhs.z - rhs.z * s * m.z,
+        .w = lhs.w - rhs.w * s * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i32v* with rhs scaled by a i32
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32* SL_i32vSadd_(i32* lhs, i32 s, i32* rhs, i32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * s + rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i32v* with rhs scaled by a i32
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32v* SL_i32vSadd(i32v* lhs, i32 s, i32v* rhs, i32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i32vSadd_(lhs->data, s, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i32v2 with rhs scaled by a i32
+SL_header i32v2 SL_i32v2Sadd(i32v2 lhs, i32 s, i32v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v2) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i32v3 with rhs scaled by a i32
+SL_header i32v3 SL_i32v3Sadd(i32v3 lhs, i32 s, i32v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v3) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y,
+        .z = lhs.z * s + rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i32v4 with rhs scaled by a i32
+SL_header i32v4 SL_i32v4Sadd(i32v4 lhs, i32 s, i32v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v4) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y,
+        .z = lhs.z * s + rhs.z,
+        .w = lhs.w * s + rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i32v* with rhs scaled by a i32
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32* SL_i32vSsub_(i32* lhs, i32 s, i32* rhs, i32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * s - rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i32v* with rhs scaled by a i32
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32v* SL_i32vSsub(i32v* lhs, i32 s, i32v* rhs, i32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i32vSsub_(lhs->data, s, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i32v2 with rhs scaled by a i32
+SL_header i32v2 SL_i32v2Ssub(i32v2 lhs, i32 s, i32v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v2) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i32v3 with rhs scaled by a i32
+SL_header i32v3 SL_i32v3Ssub(i32v3 lhs, i32 s, i32v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v3) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y,
+        .z = lhs.z * s - rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i32v4 with rhs scaled by a i32
+SL_header i32v4 SL_i32v4Ssub(i32v4 lhs, i32 s, i32v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v4) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y,
+        .z = lhs.z * s - rhs.z,
+        .w = lhs.w * s - rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a i32v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32* SL_i32vneg_(i32* v, i32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = -v[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Negation of a i32v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32v* SL_i32vneg(i32v* v, i32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i32vneg_(v->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Negation of a i32v2
+SL_header i32v2 SL_i32v2neg(i32v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v2) {
+        .x = -v.x,
+        .y = -v.y
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a i32v3
+SL_header i32v3 SL_i32v3neg(i32v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v3) {
+        .x = -v.x,
+        .y = -v.y,
+        .z = -v.z
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a i32v4
+SL_header i32v4 SL_i32v4neg(i32v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v4) {
+        .x = -v.x,
+        .y = -v.y,
+        .z = -v.z,
+        .w = -v.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a i32v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32* SL_i32vabs_(i32* v, i32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = v[i] < 0 ? -v[i] : v[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a i32v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32v* SL_i32vabs(i32v* v, i32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i32vabs_(v->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a i32v2
+SL_header i32v2 SL_i32v2abs(i32v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v2) {
+        .x = v.x < 0 ? -v.x : v.x,
+        .y = v.y < 0 ? -v.y : v.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a i32v3
+SL_header i32v3 SL_i32v3abs(i32v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v3) {
+        .x = v.x < 0 ? -v.x : v.x,
+        .y = v.y < 0 ? -v.y : v.y,
+        .z = v.z < 0 ? -v.z : v.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a i32v4
+SL_header i32v4 SL_i32v4abs(i32v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v4) {
+        .x = v.x < 0 ? -v.x : v.x,
+        .y = v.y < 0 ? -v.y : v.y,
+        .z = v.z < 0 ? -v.z : v.z,
+        .w = v.w < 0 ? -v.w : v.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two i32v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32* SL_i32vmin_(i32* lhs, i32* rhs, i32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] < rhs[i] ? lhs[i] : rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two i32v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32v* SL_i32vmin(i32v* lhs, i32v* rhs, i32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i32vmin_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two i32v2
+SL_header i32v2 SL_i32v2min(i32v2 lhs, i32v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v2) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two i32v3
+SL_header i32v3 SL_i32v3min(i32v3 lhs, i32v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v3) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z < rhs.z ? lhs.z : rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two i32v4
+SL_header i32v4 SL_i32v4min(i32v4 lhs, i32v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v4) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z < rhs.z ? lhs.z : rhs.z,
+        .w = lhs.w < rhs.w ? lhs.w : rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two i32v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32* SL_i32vmax_(i32* lhs, i32* rhs, i32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] > rhs[i] ? lhs[i] : rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two i32v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32v* SL_i32vmax(i32v* lhs, i32v* rhs, i32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i32vmax_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two i32v2
+SL_header i32v2 SL_i32v2max(i32v2 lhs, i32v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v2) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two i32v3
+SL_header i32v3 SL_i32v3max(i32v3 lhs, i32v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v3) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z > rhs.z ? lhs.z : rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two i32v4
+SL_header i32v4 SL_i32v4max(i32v4 lhs, i32v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v4) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z > rhs.z ? lhs.z : rhs.z,
+        .w = lhs.w > rhs.w ? lhs.w : rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Dot product of two i32v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i32vdot_(i32* lhs, i32* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    i64 dest = 0;
+    for (usize i = 0; i < count; ++i) dest += lhs[i] * rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Dot product of two i32v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i32vdot(i32v* lhs, i32v* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i32vdot_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Dot product of two i32v2
+SL_header i64 SL_i32v2dot(i32v2 lhs, i32v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y;
+}
+#else
+;
+#endif
+/// @brief Dot product of two i32v3
+SL_header i64 SL_i32v3dot(i32v3 lhs, i32v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
+}
+#else
+;
+#endif
+/// @brief Dot product of two i32v4
+SL_header i64 SL_i32v4dot(i32v4 lhs, i32v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z + lhs.w * rhs.w;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a i32v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i32vlen_max_(i32* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    i64 dest = 0;
+    for (usize i = 0; i < count; ++i) dest = dest < llabs(v[i]) ? llabs(v[i]) : dest;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a i32v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i32vlen_max(i32v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i32vlen_max_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Maximum component of a i32v2
+SL_header i64 SL_i32v2len_max(i32v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    i32v2 av = SL_i32v2_(llabs(v.x), llabs(v.y));
+    return av.x > av.y ? av.x : av.y;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a i32v3
+SL_header i64 SL_i32v3len_max(i32v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    i32v3 av = SL_i32v3_(llabs(v.x), llabs(v.y), llabs(v.z));
+    return av.x > av.y ? (av.x > av.z ? av.x : av.z) : (av.y > av.z ? av.y : av.z);
+}
+#else
+;
+#endif
+/// @brief Maximum component of a i32v4
+SL_header i64 SL_i32v4len_max(i32v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    i32v4 av = SL_i32v4_(llabs(v.x), llabs(v.y), llabs(v.z), llabs(v.w));
+    return av.x > av.y ? (av.x > av.z ? (av.x > av.w ? av.x : av.w) : (av.z > av.w ? av.z : av.w)) : (av.y > av.z ? (av.y > av.w ? av.y : av.w) : (av.z > av.w ? av.z : av.w));
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a i32v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i32vlen_manh_(i32* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    i64 dest = 0;
+    for (usize i = 0; i < count; ++i) dest += llabs(v[i]);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a i32v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i32vlen_manh(i32v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i32vlen_manh_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a i32v2
+SL_header i64 SL_i32v2len_manh(i32v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return llabs(v.x) + llabs(v.y);
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a i32v3
+SL_header i64 SL_i32v3len_manh(i32v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return llabs(v.x) + llabs(v.y) + llabs(v.z);
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a i32v4
+SL_header i64 SL_i32v4len_manh(i32v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return llabs(v.x) + llabs(v.y) + llabs(v.z) + llabs(v.w);
+}
+#else
+;
+#endif
+/// @brief Squared euclidean length of a i32v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i32vlen_srq_(i32* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i32vdot_(v, v, count);
+}
+#else
+;
+#endif
+/// @brief Squared euclidean length of a i32v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i32vlen_srq(i32v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i32vlen_srq_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Square length of a i32v2
+SL_header i64 SL_i32v2len_sqr(i32v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i32v2dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Square length of a i32v3
+SL_header i64 SL_i32v3len_sqr(i32v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i32v3dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Square length of a i32v4
+SL_header i64 SL_i32v4len_sqr(i32v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i32v4dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a i32v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_i32vlen_(i32* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_i32vdot_(v, v, count));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a i32v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_i32vlen(i32v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i32vlen_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a i32v2
+SL_header double SL_i32v2len(i32v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_i32v2dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a i32v3
+SL_header double SL_i32v3len(i32v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_i32v3dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a i32v4
+SL_header double SL_i32v4len(i32v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_i32v4dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance bewteen two i32v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_i32vdist_(i32* lhs, i32* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    double accum = 0;
+    for (int i = 0; i < count; ++i) accum += (lhs[i] - rhs[i]) * (lhs[i] - rhs[i]);
+    return sqrt(accum);
+}
+#else
+;
+#endif
+/// @brief Euclidean distance bewteen two i32v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_i32vdist(i32v* lhs, i32v* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i32vdist_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two i32v2
+SL_header double SL_i32v2dist(i32v2 lhs, i32v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i32v2len(SL_i32v2sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two i32v3
+SL_header double SL_i32v3dist(i32v3 lhs, i32v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i32v3len(SL_i32v3sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two i32v4
+SL_header double SL_i32v4dist(i32v4 lhs, i32v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i32v4len(SL_i32v4sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Reflection of i32v2 v around vector i32v2 n
+SL_header i32v2 SL_i32v2refl(i32v2 v, i32v2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i32v2subS(v, n, 2.0 * SL_i32v2dot(v, n) / SL_i32v2dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of i32v3 v around vector i32v3 n
+SL_header i32v3 SL_i32v3refl(i32v3 v, i32v3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i32v3subS(v, n, 2.0 * SL_i32v3dot(v, n) / SL_i32v3dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of i32v4 v around vector i32v4 n
+SL_header i32v4 SL_i32v4refl(i32v4 v, i32v4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i32v4subS(v, n, 2.0 * SL_i32v4dot(v, n) / SL_i32v4dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of i32v2 v around vector i32v2 n assumed to be of unit length
+SL_header i32v2 SL_i32v2refl_u(i32v2 v, i32v2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i32v2subS(v, n, 2.0 * SL_i32v2dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of i32v3 v around vector i32v3 n assumed to be of unit length
+SL_header i32v3 SL_i32v3refl_u(i32v3 v, i32v3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i32v3subS(v, n, 2.0 * SL_i32v3dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of i32v4 v around vector i32v4 n assumed to be of unit length
+SL_header i32v4 SL_i32v4refl_u(i32v4 v, i32v4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i32v4subS(v, n, 2.0 * SL_i32v4dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i32v* by integer n
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32* SL_i32vmods_(i32* v, i32 n, i32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = v[i] % n;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i32v* by integer n
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32v* SL_i32vmods(i32v* v, i32 n, i32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i32vmods_(v->data, n, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i32v2 by integer n
+SL_header i32v2 SL_i32v2mods(i32v2 v, i32 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v2) {
+        .x = v.x % n,
+        .y = v.y % n
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i32v3 by integer n
+SL_header i32v3 SL_i32v3mods(i32v3 v, i32 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v3) {
+        .x = v.x % n,
+        .y = v.y % n,
+        .z = v.z % n
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i32v4 by integer n
+SL_header i32v4 SL_i32v4mods(i32v4 v, i32 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v4) {
+        .x = v.x % n,
+        .y = v.y % n,
+        .z = v.z % n,
+        .w = v.w % n
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i32v* by i32v* n
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32* SL_i32vmod_(i32* v, i32* n, i32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = v[i] % n[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i32v* by i32v* n
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i32v* SL_i32vmod(i32v* v, i32v* n, i32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i32vmod_(v->data, n->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i32v2 by i32v2 n
+SL_header i32v2 SL_i32v2mod(i32v2 v, i32v2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v2) {
+        .x = v.x % n.x,
+        .y = v.y % n.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i32v3 by i32v3 n
+SL_header i32v3 SL_i32v3mod(i32v3 v, i32v3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v3) {
+        .x = v.x % n.x,
+        .y = v.y % n.y,
+        .z = v.z % n.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i32v4 by i32v4 n
+SL_header i32v4 SL_i32v4mod(i32v4 v, i32v4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v4) {
+        .x = v.x % n.x,
+        .y = v.y % n.y,
+        .z = v.z % n.z,
+        .w = v.w % n.w
+    };
+}
+#else
+;
+#endif
+/// @brief Cross-product of two i32v2
+SL_header i64 SL_i32v2cross(i32v2 lhs, i32v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.y - lhs.y * rhs.x;
+}
+#else
+;
+#endif
+/// @brief Cross-product of two i32v3
+SL_header i32v3 SL_i32v3cross(i32v3 lhs, i32v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32v3) {
+            .x = lhs.y * rhs.z - lhs.z * rhs.y,
+            .y = lhs.z * rhs.x - lhs.x * rhs.z,
+            .z = lhs.x * rhs.y - lhs.y * rhs.x
+        };
+
+}
+#else
+;
+#endif
+#pragma endregion I32
+#pragma region I64
+
+/// @brief Vector of i64 with arbitrary dimension
+typedef struct {
+    const usize count;
+    i64 data[];
+} i64v;
+
+/// @brief Vector of i64 with dimension 2
+typedef union {
+    i64 data[2];
+    struct {
+        union { i64 x, r, u; };
+        union { i64 y, g, v; };
+    };
+} i64v2;
+
+#define SL_i64v2_zero  ((i64v2){.x =  0, .y =  0})
+#define SL_i64v2_one   ((i64v2){.x =  1, .y =  1})
+#define SL_i64v2_right ((i64v2){.x =  1, .y =  0})
+#define SL_i64v2_up    ((i64v2){.x =  0, .y =  1})
+#define SL_i64v2_left  ((i64v2){.x = -1, .y =  0})
+#define SL_i64v2_down  ((i64v2){.x =  0, .y = -1})
+
+/// @brief Vector of i64 with dimension 3
+typedef union {
+    i64 data[3];
+    struct {
+        union { i64 x, r, u; };
+        union { i64 y, g, v; };
+        union { i64 z, b, s; };
+    };
+    struct {
+        union { i64 __x, __r, __u; };
+        union { i64v2 yz, gb, vs; };
+    };
+    struct {
+        union { i64v2 xy, rg, uv; };
+        union { i64 __z, __b, __s; };
+    };
+} i64v3;
+
+#define SL_i64v3_zero  ((i64v3){.x =  0, .y =  0, .z =  0})
+#define SL_i64v3_one   ((i64v3){.x =  1, .y =  1, .z =  1})
+#define SL_i64v3_right ((i64v3){.x =  1, .y =  0, .z =  0})
+#define SL_i64v3_up    ((i64v3){.x =  0, .y =  1, .z =  0})
+#define SL_i64v3_forw  ((i64v3){.x =  0, .y =  0, .z =  1})
+#define SL_i64v3_left  ((i64v3){.x = -1, .y =  0, .z =  0})
+#define SL_i64v3_down  ((i64v3){.x =  0, .y = -1, .z =  0})
+#define SL_i64v3_back  ((i64v3){.x =  0, .y =  0, .z = -1})
+
+/// @brief Vector of i64 with dimension 4
+typedef union {
+    i64 data[4];
+    struct {
+        union { i64 x, r, u; };
+        union { i64 y, g, v; };
+        union { i64 z, b, s; };
+        union { i64 w, a, t; };
+    };
+    struct {
+        union { i64 __x0, __r0, __u0; };
+        union { i64v2 yz, gb, vs; };
+        union { i64 __w0, __a0, __t0; };
+    };
+    struct {
+        union { i64v2 xy, rb, uv; };
+        union { i64v2 zw, ba, st; };
+    };
+    struct {
+        union { i64v3 xyz, rgb, uvs; };
+        union { i64 __w1, __a1, __t1; };
+    };
+    struct {
+        union { i64 __x1, __r1, __u1; };
+        union { i64v3 yzw, gba, vst; };
+    };
+} i64v4;
+
+#define SL_i64v4_zero  ((i64v4){.x = 0, .y = 0, .z = 0, .w = 0})
+#define SL_i64v4_one   ((i64v4){.x = 1, .y = 1, .z = 1, .w = 1})
+
+
+
+#define SL_i64v2_(X, Y)       ((i64v2){.x = X, .y = Y})
+#define SL_i64v3_(X, Y, Z)    ((i64v3){.x = X, .y = Y, .z = Z})
+#define SL_i64v4_(X, Y, Z, W) ((i64v4){.x = X, .y = Y, .z = Z, .w = W})
+
+#define SL_i64v2s(S)          ((i64v2){.x = S, .y = S})
+#define SL_i64v3s(S)          ((i64v3){.x = S, .y = S, .z = S})
+#define SL_i64v4s(S)          ((i64v4){.x = S, .y = S, .z = S, .w = S})
+
+#define SL_i64v2v(V, ...)     ((i64v2){.x = (V).x, .y = (V).y})
+#define SL_i64v3v(V, ...)     ((i64v3){.x = (V).x, .y = (V).y, .z = (SL_vsize(V) >= 2 ? (V).data[2] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[1]))})
+#define SL_i64v4v(V, ...)     ((i64v4){.x = (V).x, .y = (V).y, .z = (SL_vsize(V) >= 2 ? (V).data[2] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[1])), .w = (SL_vsize(V) >= 3 ? (V).data[3] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[2]))})
+
+
+
+/// @brief Addition of two i64v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64* SL_i64vadd_(i64* lhs, i64* rhs, i64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i64v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64v* SL_i64vadd(i64v* lhs, i64v* rhs, i64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i64vadd_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i64v2
+SL_header i64v2 SL_i64v2add(i64v2 lhs, i64v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v2) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i64v3
+SL_header i64v3 SL_i64v3add(i64v3 lhs, i64v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v3) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y,
+        .z = lhs.z + rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i64v4
+SL_header i64v4 SL_i64v4add(i64v4 lhs, i64v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v4) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y,
+        .z = lhs.z + rhs.z,
+        .w = lhs.w + rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i64v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64* SL_i64vsub_(i64* lhs, i64* rhs, i64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i64v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64v* SL_i64vsub(i64v* lhs, i64v* rhs, i64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i64vsub_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i64v2
+SL_header i64v2 SL_i64v2sub(i64v2 lhs, i64v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v2) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i64v3
+SL_header i64v3 SL_i64v3sub(i64v3 lhs, i64v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v3) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y,
+        .z = lhs.z - rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i64v4
+SL_header i64v4 SL_i64v4sub(i64v4 lhs, i64v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v4) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y,
+        .z = lhs.z - rhs.z,
+        .w = lhs.w - rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two i64v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64* SL_i64vmul_(i64* lhs, i64* rhs, i64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two i64v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64v* SL_i64vmul(i64v* lhs, i64v* rhs, i64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i64vmul_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two i64v2
+SL_header i64v2 SL_i64v2mul(i64v2 lhs, i64v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v2) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two i64v3
+SL_header i64v3 SL_i64v3mul(i64v3 lhs, i64v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v3) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y,
+        .z = lhs.z * rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two i64v4
+SL_header i64v4 SL_i64v4mul(i64v4 lhs, i64v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v4) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y,
+        .z = lhs.z * rhs.z,
+        .w = lhs.w * rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a i64v* with a scalar
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64* SL_i64vmuls_(i64* lhs, i64 rhs, i64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * rhs;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a i64v* with a scalar
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64v* SL_i64vmuls(i64v* lhs, i64 rhs, i64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i64vmuls_(lhs->data, rhs, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a i64v2 with a scalar
+SL_header i64v2 SL_i64v2muls(i64v2 lhs, i64 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v2) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a i64v3 with a scalar
+SL_header i64v3 SL_i64v3muls(i64v3 lhs, i64 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v3) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs,
+        .z = lhs.z * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a i64v4 with a scalar
+SL_header i64v4 SL_i64v4muls(i64v4 lhs, i64 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v4) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs,
+        .z = lhs.z * rhs,
+        .w = lhs.w * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two i64v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64* SL_i64vdiv_(i64* lhs, i64* rhs, i64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] / rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two i64v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64v* SL_i64vdiv(i64v* lhs, i64v* rhs, i64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i64vdiv_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two i64v2
+SL_header i64v2 SL_i64v2div(i64v2 lhs, i64v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v2) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two i64v3
+SL_header i64v3 SL_i64v3div(i64v3 lhs, i64v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v3) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y,
+        .z = lhs.z / rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two i64v4
+SL_header i64v4 SL_i64v4div(i64v4 lhs, i64v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v4) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y,
+        .z = lhs.z / rhs.z,
+        .w = lhs.w / rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a i64v* with a scalar
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64* SL_i64vdivs_(i64* lhs, i64 rhs, i64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] / rhs;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a i64v* with a scalar
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64v* SL_i64vdivs(i64v* lhs, i64 rhs, i64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i64vdivs_(lhs->data, rhs, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a i64v2 with a scalar
+SL_header i64v2 SL_i64v2divs(i64v2 lhs, i64 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v2) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a i64v3 with a scalar
+SL_header i64v3 SL_i64v3divs(i64v3 lhs, i64 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v3) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs,
+        .z = lhs.z / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a i64v4 with a scalar
+SL_header i64v4 SL_i64v4divs(i64v4 lhs, i64 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v4) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs,
+        .z = lhs.z / rhs,
+        .w = lhs.w / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i64v* with lhs scaled by a i64
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64* SL_i64vaddS_(i64* lhs, i64* rhs, i64 s, i64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * s;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i64v* with lhs scaled by a i64
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64v* SL_i64vaddS(i64v* lhs, i64v* rhs, i64 s, i64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i64vaddS_(lhs->data, rhs->data, s, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i64v2 with lhs scaled by a i64
+SL_header i64v2 SL_i64v2addS(i64v2 lhs, i64v2 rhs, i64 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v2) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i64v3 with lhs scaled by a i64
+SL_header i64v3 SL_i64v3addS(i64v3 lhs, i64v3 rhs, i64 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v3) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s,
+        .z = lhs.z + rhs.z * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i64v4 with lhs scaled by a i64
+SL_header i64v4 SL_i64v4addS(i64v4 lhs, i64v4 rhs, i64 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v4) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s,
+        .z = lhs.z + rhs.z * s,
+        .w = lhs.w + rhs.w * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i64v* with lhs scaled by a i64
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64* SL_i64vsubS_(i64* lhs, i64* rhs, i64 s, i64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * s;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i64v* with lhs scaled by a i64
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64v* SL_i64vsubS(i64v* lhs, i64v* rhs, i64 s, i64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i64vsubS_(lhs->data, rhs->data, s, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i64v2 with lhs scaled by a i64
+SL_header i64v2 SL_i64v2subS(i64v2 lhs, i64v2 rhs, i64 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v2) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i64v3 with lhs scaled by a i64
+SL_header i64v3 SL_i64v3subS(i64v3 lhs, i64v3 rhs, i64 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v3) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s,
+        .z = lhs.z - rhs.z * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i64v4 with lhs scaled by a i64
+SL_header i64v4 SL_i64v4subS(i64v4 lhs, i64v4 rhs, i64 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v4) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s,
+        .z = lhs.z - rhs.z * s,
+        .w = lhs.w - rhs.w * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i64v* with lhs multiplied with a i64
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64* SL_i64vaddM_(i64* lhs, i64* rhs, i64* m, i64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i64v* with lhs multiplied with a i64
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64v* SL_i64vaddM(i64v* lhs, i64v* rhs, i64v* m, i64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i64vaddM_(lhs->data, rhs->data, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i64v2 with lhs multiplied with a i64
+SL_header i64v2 SL_i64v2addM(i64v2 lhs, i64v2 rhs, i64v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v2) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i64v3 with lhs multiplied with a i64
+SL_header i64v3 SL_i64v3addM(i64v3 lhs, i64v3 rhs, i64v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v3) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y,
+        .z = lhs.z + rhs.z * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i64v4 with lhs multiplied with a i64
+SL_header i64v4 SL_i64v4addM(i64v4 lhs, i64v4 rhs, i64v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v4) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y,
+        .z = lhs.z + rhs.z * m.z,
+        .w = lhs.w + rhs.w * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i64v* with lhs multiplied with a i64
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64* SL_i64vsubM_(i64* lhs, i64* rhs, i64* m, i64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i64v* with lhs multiplied with a i64
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64v* SL_i64vsubM(i64v* lhs, i64v* rhs, i64v* m, i64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i64vsubM_(lhs->data, rhs->data, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i64v2 with lhs multiplied with a i64
+SL_header i64v2 SL_i64v2subM(i64v2 lhs, i64v2 rhs, i64v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v2) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i64v3 with lhs multiplied with a i64
+SL_header i64v3 SL_i64v3subM(i64v3 lhs, i64v3 rhs, i64v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v3) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y,
+        .z = lhs.z - rhs.z * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i64v4 with lhs multiplied with a i64
+SL_header i64v4 SL_i64v4subM(i64v4 lhs, i64v4 rhs, i64v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v4) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y,
+        .z = lhs.z - rhs.z * m.z,
+        .w = lhs.w - rhs.w * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i64v* with lhs scaled by i64 and multiplied with a i64
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64* SL_i64vaddSM_(i64* lhs, i64* rhs, i64 s, i64* m, i64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * s * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i64v* with lhs scaled by i64 and multiplied with a i64
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64v* SL_i64vaddSM(i64v* lhs, i64v* rhs, i64 s, i64v* m, i64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i64vaddSM_(lhs->data, rhs->data, s, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i64v2 with lhs scaled by i64 and multiplied with a i64
+SL_header i64v2 SL_i64v2addSM(i64v2 lhs, i64v2 rhs, i64 s, i64v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v2) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i64v3 with lhs scaled by i64 and multiplied with a i64
+SL_header i64v3 SL_i64v3addSM(i64v3 lhs, i64v3 rhs, i64 s, i64v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v3) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y,
+        .z = lhs.z + rhs.z * s * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i64v4 with lhs scaled by i64 and multiplied with a i64
+SL_header i64v4 SL_i64v4addSM(i64v4 lhs, i64v4 rhs, i64 s, i64v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v4) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y,
+        .z = lhs.z + rhs.z * s * m.z,
+        .w = lhs.w + rhs.w * s * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i64v* with lhs scaled by i64 and multiplied with a i64
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64* SL_i64vsubSM_(i64* lhs, i64* rhs, i64 s, i64* m, i64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * s * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i64v* with lhs scaled by i64 and multiplied with a i64
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64v* SL_i64vsubSM(i64v* lhs, i64v* rhs, i64 s, i64v* m, i64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i64vsubSM_(lhs->data, rhs->data, s, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i64v2 with lhs scaled by i64 and multiplied with a i64
+SL_header i64v2 SL_i64v2subSM(i64v2 lhs, i64v2 rhs, i64 s, i64v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v2) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i64v3 with lhs scaled by i64 and multiplied with a i64
+SL_header i64v3 SL_i64v3subSM(i64v3 lhs, i64v3 rhs, i64 s, i64v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v3) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y,
+        .z = lhs.z - rhs.z * s * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i64v4 with lhs scaled by i64 and multiplied with a i64
+SL_header i64v4 SL_i64v4subSM(i64v4 lhs, i64v4 rhs, i64 s, i64v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v4) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y,
+        .z = lhs.z - rhs.z * s * m.z,
+        .w = lhs.w - rhs.w * s * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i64v* with rhs scaled by a i64
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64* SL_i64vSadd_(i64* lhs, i64 s, i64* rhs, i64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * s + rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i64v* with rhs scaled by a i64
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64v* SL_i64vSadd(i64v* lhs, i64 s, i64v* rhs, i64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i64vSadd_(lhs->data, s, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two i64v2 with rhs scaled by a i64
+SL_header i64v2 SL_i64v2Sadd(i64v2 lhs, i64 s, i64v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v2) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i64v3 with rhs scaled by a i64
+SL_header i64v3 SL_i64v3Sadd(i64v3 lhs, i64 s, i64v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v3) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y,
+        .z = lhs.z * s + rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i64v4 with rhs scaled by a i64
+SL_header i64v4 SL_i64v4Sadd(i64v4 lhs, i64 s, i64v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v4) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y,
+        .z = lhs.z * s + rhs.z,
+        .w = lhs.w * s + rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i64v* with rhs scaled by a i64
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64* SL_i64vSsub_(i64* lhs, i64 s, i64* rhs, i64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * s - rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i64v* with rhs scaled by a i64
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64v* SL_i64vSsub(i64v* lhs, i64 s, i64v* rhs, i64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i64vSsub_(lhs->data, s, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two i64v2 with rhs scaled by a i64
+SL_header i64v2 SL_i64v2Ssub(i64v2 lhs, i64 s, i64v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v2) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i64v3 with rhs scaled by a i64
+SL_header i64v3 SL_i64v3Ssub(i64v3 lhs, i64 s, i64v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v3) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y,
+        .z = lhs.z * s - rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i64v4 with rhs scaled by a i64
+SL_header i64v4 SL_i64v4Ssub(i64v4 lhs, i64 s, i64v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v4) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y,
+        .z = lhs.z * s - rhs.z,
+        .w = lhs.w * s - rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a i64v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64* SL_i64vneg_(i64* v, i64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = -v[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Negation of a i64v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64v* SL_i64vneg(i64v* v, i64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i64vneg_(v->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Negation of a i64v2
+SL_header i64v2 SL_i64v2neg(i64v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v2) {
+        .x = -v.x,
+        .y = -v.y
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a i64v3
+SL_header i64v3 SL_i64v3neg(i64v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v3) {
+        .x = -v.x,
+        .y = -v.y,
+        .z = -v.z
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a i64v4
+SL_header i64v4 SL_i64v4neg(i64v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v4) {
+        .x = -v.x,
+        .y = -v.y,
+        .z = -v.z,
+        .w = -v.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a i64v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64* SL_i64vabs_(i64* v, i64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = v[i] < 0 ? -v[i] : v[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a i64v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64v* SL_i64vabs(i64v* v, i64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i64vabs_(v->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a i64v2
+SL_header i64v2 SL_i64v2abs(i64v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v2) {
+        .x = v.x < 0 ? -v.x : v.x,
+        .y = v.y < 0 ? -v.y : v.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a i64v3
+SL_header i64v3 SL_i64v3abs(i64v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v3) {
+        .x = v.x < 0 ? -v.x : v.x,
+        .y = v.y < 0 ? -v.y : v.y,
+        .z = v.z < 0 ? -v.z : v.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a i64v4
+SL_header i64v4 SL_i64v4abs(i64v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v4) {
+        .x = v.x < 0 ? -v.x : v.x,
+        .y = v.y < 0 ? -v.y : v.y,
+        .z = v.z < 0 ? -v.z : v.z,
+        .w = v.w < 0 ? -v.w : v.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two i64v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64* SL_i64vmin_(i64* lhs, i64* rhs, i64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] < rhs[i] ? lhs[i] : rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two i64v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64v* SL_i64vmin(i64v* lhs, i64v* rhs, i64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i64vmin_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two i64v2
+SL_header i64v2 SL_i64v2min(i64v2 lhs, i64v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v2) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two i64v3
+SL_header i64v3 SL_i64v3min(i64v3 lhs, i64v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v3) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z < rhs.z ? lhs.z : rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two i64v4
+SL_header i64v4 SL_i64v4min(i64v4 lhs, i64v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v4) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z < rhs.z ? lhs.z : rhs.z,
+        .w = lhs.w < rhs.w ? lhs.w : rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two i64v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64* SL_i64vmax_(i64* lhs, i64* rhs, i64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] > rhs[i] ? lhs[i] : rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two i64v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64v* SL_i64vmax(i64v* lhs, i64v* rhs, i64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i64vmax_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two i64v2
+SL_header i64v2 SL_i64v2max(i64v2 lhs, i64v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v2) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two i64v3
+SL_header i64v3 SL_i64v3max(i64v3 lhs, i64v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v3) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z > rhs.z ? lhs.z : rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two i64v4
+SL_header i64v4 SL_i64v4max(i64v4 lhs, i64v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v4) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z > rhs.z ? lhs.z : rhs.z,
+        .w = lhs.w > rhs.w ? lhs.w : rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Dot product of two i64v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i64vdot_(i64* lhs, i64* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    i64 dest = 0;
+    for (usize i = 0; i < count; ++i) dest += lhs[i] * rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Dot product of two i64v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i64vdot(i64v* lhs, i64v* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i64vdot_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Dot product of two i64v2
+SL_header i64 SL_i64v2dot(i64v2 lhs, i64v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y;
+}
+#else
+;
+#endif
+/// @brief Dot product of two i64v3
+SL_header i64 SL_i64v3dot(i64v3 lhs, i64v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
+}
+#else
+;
+#endif
+/// @brief Dot product of two i64v4
+SL_header i64 SL_i64v4dot(i64v4 lhs, i64v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z + lhs.w * rhs.w;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a i64v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i64vlen_max_(i64* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    i64 dest = 0;
+    for (usize i = 0; i < count; ++i) dest = dest < llabs(v[i]) ? llabs(v[i]) : dest;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a i64v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i64vlen_max(i64v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i64vlen_max_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Maximum component of a i64v2
+SL_header i64 SL_i64v2len_max(i64v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    i64v2 av = SL_i64v2_(llabs(v.x), llabs(v.y));
+    return av.x > av.y ? av.x : av.y;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a i64v3
+SL_header i64 SL_i64v3len_max(i64v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    i64v3 av = SL_i64v3_(llabs(v.x), llabs(v.y), llabs(v.z));
+    return av.x > av.y ? (av.x > av.z ? av.x : av.z) : (av.y > av.z ? av.y : av.z);
+}
+#else
+;
+#endif
+/// @brief Maximum component of a i64v4
+SL_header i64 SL_i64v4len_max(i64v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    i64v4 av = SL_i64v4_(llabs(v.x), llabs(v.y), llabs(v.z), llabs(v.w));
+    return av.x > av.y ? (av.x > av.z ? (av.x > av.w ? av.x : av.w) : (av.z > av.w ? av.z : av.w)) : (av.y > av.z ? (av.y > av.w ? av.y : av.w) : (av.z > av.w ? av.z : av.w));
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a i64v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i64vlen_manh_(i64* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    i64 dest = 0;
+    for (usize i = 0; i < count; ++i) dest += llabs(v[i]);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a i64v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i64vlen_manh(i64v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i64vlen_manh_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a i64v2
+SL_header i64 SL_i64v2len_manh(i64v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return llabs(v.x) + llabs(v.y);
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a i64v3
+SL_header i64 SL_i64v3len_manh(i64v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return llabs(v.x) + llabs(v.y) + llabs(v.z);
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a i64v4
+SL_header i64 SL_i64v4len_manh(i64v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return llabs(v.x) + llabs(v.y) + llabs(v.z) + llabs(v.w);
+}
+#else
+;
+#endif
+/// @brief Squared euclidean length of a i64v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i64vlen_srq_(i64* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i64vdot_(v, v, count);
+}
+#else
+;
+#endif
+/// @brief Squared euclidean length of a i64v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header i64 SL_i64vlen_srq(i64v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i64vlen_srq_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Square length of a i64v2
+SL_header i64 SL_i64v2len_sqr(i64v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i64v2dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Square length of a i64v3
+SL_header i64 SL_i64v3len_sqr(i64v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i64v3dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Square length of a i64v4
+SL_header i64 SL_i64v4len_sqr(i64v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i64v4dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a i64v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_i64vlen_(i64* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_i64vdot_(v, v, count));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a i64v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_i64vlen(i64v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i64vlen_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a i64v2
+SL_header double SL_i64v2len(i64v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_i64v2dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a i64v3
+SL_header double SL_i64v3len(i64v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_i64v3dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a i64v4
+SL_header double SL_i64v4len(i64v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_i64v4dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance bewteen two i64v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_i64vdist_(i64* lhs, i64* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    double accum = 0;
+    for (int i = 0; i < count; ++i) accum += (lhs[i] - rhs[i]) * (lhs[i] - rhs[i]);
+    return sqrt(accum);
+}
+#else
+;
+#endif
+/// @brief Euclidean distance bewteen two i64v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_i64vdist(i64v* lhs, i64v* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i64vdist_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two i64v2
+SL_header double SL_i64v2dist(i64v2 lhs, i64v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i64v2len(SL_i64v2sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two i64v3
+SL_header double SL_i64v3dist(i64v3 lhs, i64v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i64v3len(SL_i64v3sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two i64v4
+SL_header double SL_i64v4dist(i64v4 lhs, i64v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i64v4len(SL_i64v4sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Reflection of i64v2 v around vector i64v2 n
+SL_header i64v2 SL_i64v2refl(i64v2 v, i64v2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i64v2subS(v, n, 2.0 * SL_i64v2dot(v, n) / SL_i64v2dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of i64v3 v around vector i64v3 n
+SL_header i64v3 SL_i64v3refl(i64v3 v, i64v3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i64v3subS(v, n, 2.0 * SL_i64v3dot(v, n) / SL_i64v3dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of i64v4 v around vector i64v4 n
+SL_header i64v4 SL_i64v4refl(i64v4 v, i64v4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i64v4subS(v, n, 2.0 * SL_i64v4dot(v, n) / SL_i64v4dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of i64v2 v around vector i64v2 n assumed to be of unit length
+SL_header i64v2 SL_i64v2refl_u(i64v2 v, i64v2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i64v2subS(v, n, 2.0 * SL_i64v2dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of i64v3 v around vector i64v3 n assumed to be of unit length
+SL_header i64v3 SL_i64v3refl_u(i64v3 v, i64v3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i64v3subS(v, n, 2.0 * SL_i64v3dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of i64v4 v around vector i64v4 n assumed to be of unit length
+SL_header i64v4 SL_i64v4refl_u(i64v4 v, i64v4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i64v4subS(v, n, 2.0 * SL_i64v4dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i64v* by integer n
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64* SL_i64vmods_(i64* v, i64 n, i64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = v[i] % n;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i64v* by integer n
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64v* SL_i64vmods(i64v* v, i64 n, i64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i64vmods_(v->data, n, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i64v2 by integer n
+SL_header i64v2 SL_i64v2mods(i64v2 v, i64 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v2) {
+        .x = v.x % n,
+        .y = v.y % n
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i64v3 by integer n
+SL_header i64v3 SL_i64v3mods(i64v3 v, i64 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v3) {
+        .x = v.x % n,
+        .y = v.y % n,
+        .z = v.z % n
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i64v4 by integer n
+SL_header i64v4 SL_i64v4mods(i64v4 v, i64 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v4) {
+        .x = v.x % n,
+        .y = v.y % n,
+        .z = v.z % n,
+        .w = v.w % n
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i64v* by i64v* n
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64* SL_i64vmod_(i64* v, i64* n, i64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = v[i] % n[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i64v* by i64v* n
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header i64v* SL_i64vmod(i64v* v, i64v* n, i64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_i64vmod_(v->data, n->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i64v2 by i64v2 n
+SL_header i64v2 SL_i64v2mod(i64v2 v, i64v2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v2) {
+        .x = v.x % n.x,
+        .y = v.y % n.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i64v3 by i64v3 n
+SL_header i64v3 SL_i64v3mod(i64v3 v, i64v3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v3) {
+        .x = v.x % n.x,
+        .y = v.y % n.y,
+        .z = v.z % n.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a i64v4 by i64v4 n
+SL_header i64v4 SL_i64v4mod(i64v4 v, i64v4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v4) {
+        .x = v.x % n.x,
+        .y = v.y % n.y,
+        .z = v.z % n.z,
+        .w = v.w % n.w
+    };
+}
+#else
+;
+#endif
+/// @brief Cross-product of two i64v2
+SL_header i64 SL_i64v2cross(i64v2 lhs, i64v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.y - lhs.y * rhs.x;
+}
+#else
+;
+#endif
+/// @brief Cross-product of two i64v3
+SL_header i64v3 SL_i64v3cross(i64v3 lhs, i64v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64v3) {
+            .x = lhs.y * rhs.z - lhs.z * rhs.y,
+            .y = lhs.z * rhs.x - lhs.x * rhs.z,
+            .z = lhs.x * rhs.y - lhs.y * rhs.x
+        };
+
+}
+#else
+;
+#endif
+#pragma endregion I64
+#pragma region U8
+
+/// @brief Vector of u8 with arbitrary dimension
+typedef struct {
+    const usize count;
+    u8 data[];
+} u8v;
+
+/// @brief Vector of u8 with dimension 2
+typedef union {
+    u8 data[2];
+    struct {
+        union { u8 x, r, u; };
+        union { u8 y, g, v; };
+    };
+} u8v2;
+
+#define SL_u8v2_zero  ((u8v2){.x =  0, .y =  0})
+#define SL_u8v2_one   ((u8v2){.x =  1, .y =  1})
+#define SL_u8v2_right ((u8v2){.x =  1, .y =  0})
+#define SL_u8v2_up    ((u8v2){.x =  0, .y =  1})
+
+/// @brief Vector of u8 with dimension 3
+typedef union {
+    u8 data[3];
+    struct {
+        union { u8 x, r, u; };
+        union { u8 y, g, v; };
+        union { u8 z, b, s; };
+    };
+    struct {
+        union { u8 __x, __r, __u; };
+        union { u8v2 yz, gb, vs; };
+    };
+    struct {
+        union { u8v2 xy, rg, uv; };
+        union { u8 __z, __b, __s; };
+    };
+} u8v3;
+
+#define SL_u8v3_zero  ((u8v3){.x =  0, .y =  0, .z =  0})
+#define SL_u8v3_one   ((u8v3){.x =  1, .y =  1, .z =  1})
+#define SL_u8v3_right ((u8v3){.x =  1, .y =  0, .z =  0})
+#define SL_u8v3_up    ((u8v3){.x =  0, .y =  1, .z =  0})
+#define SL_u8v3_forw  ((u8v3){.x =  0, .y =  0, .z =  1})
+
+/// @brief Vector of u8 with dimension 4
+typedef union {
+    u8 data[4];
+    struct {
+        union { u8 x, r, u; };
+        union { u8 y, g, v; };
+        union { u8 z, b, s; };
+        union { u8 w, a, t; };
+    };
+    struct {
+        union { u8 __x0, __r0, __u0; };
+        union { u8v2 yz, gb, vs; };
+        union { u8 __w0, __a0, __t0; };
+    };
+    struct {
+        union { u8v2 xy, rb, uv; };
+        union { u8v2 zw, ba, st; };
+    };
+    struct {
+        union { u8v3 xyz, rgb, uvs; };
+        union { u8 __w1, __a1, __t1; };
+    };
+    struct {
+        union { u8 __x1, __r1, __u1; };
+        union { u8v3 yzw, gba, vst; };
+    };
+} u8v4;
+
+#define SL_u8v4_zero  ((u8v4){.x = 0, .y = 0, .z = 0, .w = 0})
+#define SL_u8v4_one   ((u8v4){.x = 1, .y = 1, .z = 1, .w = 1})
+
+
+
+#define SL_u8v2_(X, Y)       ((u8v2){.x = X, .y = Y})
+#define SL_u8v3_(X, Y, Z)    ((u8v3){.x = X, .y = Y, .z = Z})
+#define SL_u8v4_(X, Y, Z, W) ((u8v4){.x = X, .y = Y, .z = Z, .w = W})
+
+#define SL_u8v2s(S)          ((u8v2){.x = S, .y = S})
+#define SL_u8v3s(S)          ((u8v3){.x = S, .y = S, .z = S})
+#define SL_u8v4s(S)          ((u8v4){.x = S, .y = S, .z = S, .w = S})
+
+#define SL_u8v2v(V, ...)     ((u8v2){.x = (V).x, .y = (V).y})
+#define SL_u8v3v(V, ...)     ((u8v3){.x = (V).x, .y = (V).y, .z = (SL_vsize(V) >= 2 ? (V).data[2] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[1]))})
+#define SL_u8v4v(V, ...)     ((u8v4){.x = (V).x, .y = (V).y, .z = (SL_vsize(V) >= 2 ? (V).data[2] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[1])), .w = (SL_vsize(V) >= 3 ? (V).data[3] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[2]))})
+
+
+
+/// @brief Addition of two u8v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8* SL_u8vadd_(u8* lhs, u8* rhs, u8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u8v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8v* SL_u8vadd(u8v* lhs, u8v* rhs, u8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u8vadd_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u8v2
+SL_header u8v2 SL_u8v2add(u8v2 lhs, u8v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v2) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u8v3
+SL_header u8v3 SL_u8v3add(u8v3 lhs, u8v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v3) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y,
+        .z = lhs.z + rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u8v4
+SL_header u8v4 SL_u8v4add(u8v4 lhs, u8v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v4) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y,
+        .z = lhs.z + rhs.z,
+        .w = lhs.w + rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u8v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8* SL_u8vsub_(u8* lhs, u8* rhs, u8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u8v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8v* SL_u8vsub(u8v* lhs, u8v* rhs, u8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u8vsub_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u8v2
+SL_header u8v2 SL_u8v2sub(u8v2 lhs, u8v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v2) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u8v3
+SL_header u8v3 SL_u8v3sub(u8v3 lhs, u8v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v3) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y,
+        .z = lhs.z - rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u8v4
+SL_header u8v4 SL_u8v4sub(u8v4 lhs, u8v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v4) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y,
+        .z = lhs.z - rhs.z,
+        .w = lhs.w - rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two u8v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8* SL_u8vmul_(u8* lhs, u8* rhs, u8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two u8v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8v* SL_u8vmul(u8v* lhs, u8v* rhs, u8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u8vmul_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two u8v2
+SL_header u8v2 SL_u8v2mul(u8v2 lhs, u8v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v2) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two u8v3
+SL_header u8v3 SL_u8v3mul(u8v3 lhs, u8v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v3) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y,
+        .z = lhs.z * rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two u8v4
+SL_header u8v4 SL_u8v4mul(u8v4 lhs, u8v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v4) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y,
+        .z = lhs.z * rhs.z,
+        .w = lhs.w * rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a u8v* with a scalar
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8* SL_u8vmuls_(u8* lhs, u8 rhs, u8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * rhs;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a u8v* with a scalar
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8v* SL_u8vmuls(u8v* lhs, u8 rhs, u8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u8vmuls_(lhs->data, rhs, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a u8v2 with a scalar
+SL_header u8v2 SL_u8v2muls(u8v2 lhs, u8 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v2) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a u8v3 with a scalar
+SL_header u8v3 SL_u8v3muls(u8v3 lhs, u8 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v3) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs,
+        .z = lhs.z * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a u8v4 with a scalar
+SL_header u8v4 SL_u8v4muls(u8v4 lhs, u8 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v4) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs,
+        .z = lhs.z * rhs,
+        .w = lhs.w * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two u8v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8* SL_u8vdiv_(u8* lhs, u8* rhs, u8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] / rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two u8v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8v* SL_u8vdiv(u8v* lhs, u8v* rhs, u8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u8vdiv_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two u8v2
+SL_header u8v2 SL_u8v2div(u8v2 lhs, u8v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v2) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two u8v3
+SL_header u8v3 SL_u8v3div(u8v3 lhs, u8v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v3) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y,
+        .z = lhs.z / rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two u8v4
+SL_header u8v4 SL_u8v4div(u8v4 lhs, u8v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v4) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y,
+        .z = lhs.z / rhs.z,
+        .w = lhs.w / rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a u8v* with a scalar
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8* SL_u8vdivs_(u8* lhs, u8 rhs, u8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] / rhs;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a u8v* with a scalar
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8v* SL_u8vdivs(u8v* lhs, u8 rhs, u8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u8vdivs_(lhs->data, rhs, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a u8v2 with a scalar
+SL_header u8v2 SL_u8v2divs(u8v2 lhs, u8 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v2) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a u8v3 with a scalar
+SL_header u8v3 SL_u8v3divs(u8v3 lhs, u8 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v3) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs,
+        .z = lhs.z / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a u8v4 with a scalar
+SL_header u8v4 SL_u8v4divs(u8v4 lhs, u8 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v4) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs,
+        .z = lhs.z / rhs,
+        .w = lhs.w / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u8v* with lhs scaled by a u8
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8* SL_u8vaddS_(u8* lhs, u8* rhs, u8 s, u8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * s;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u8v* with lhs scaled by a u8
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8v* SL_u8vaddS(u8v* lhs, u8v* rhs, u8 s, u8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u8vaddS_(lhs->data, rhs->data, s, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u8v2 with lhs scaled by a u8
+SL_header u8v2 SL_u8v2addS(u8v2 lhs, u8v2 rhs, u8 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v2) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u8v3 with lhs scaled by a u8
+SL_header u8v3 SL_u8v3addS(u8v3 lhs, u8v3 rhs, u8 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v3) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s,
+        .z = lhs.z + rhs.z * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u8v4 with lhs scaled by a u8
+SL_header u8v4 SL_u8v4addS(u8v4 lhs, u8v4 rhs, u8 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v4) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s,
+        .z = lhs.z + rhs.z * s,
+        .w = lhs.w + rhs.w * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u8v* with lhs scaled by a u8
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8* SL_u8vsubS_(u8* lhs, u8* rhs, u8 s, u8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * s;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u8v* with lhs scaled by a u8
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8v* SL_u8vsubS(u8v* lhs, u8v* rhs, u8 s, u8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u8vsubS_(lhs->data, rhs->data, s, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u8v2 with lhs scaled by a u8
+SL_header u8v2 SL_u8v2subS(u8v2 lhs, u8v2 rhs, u8 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v2) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u8v3 with lhs scaled by a u8
+SL_header u8v3 SL_u8v3subS(u8v3 lhs, u8v3 rhs, u8 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v3) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s,
+        .z = lhs.z - rhs.z * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u8v4 with lhs scaled by a u8
+SL_header u8v4 SL_u8v4subS(u8v4 lhs, u8v4 rhs, u8 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v4) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s,
+        .z = lhs.z - rhs.z * s,
+        .w = lhs.w - rhs.w * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u8v* with lhs multiplied with a u8
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8* SL_u8vaddM_(u8* lhs, u8* rhs, u8* m, u8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u8v* with lhs multiplied with a u8
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8v* SL_u8vaddM(u8v* lhs, u8v* rhs, u8v* m, u8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u8vaddM_(lhs->data, rhs->data, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u8v2 with lhs multiplied with a u8
+SL_header u8v2 SL_u8v2addM(u8v2 lhs, u8v2 rhs, u8v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v2) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u8v3 with lhs multiplied with a u8
+SL_header u8v3 SL_u8v3addM(u8v3 lhs, u8v3 rhs, u8v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v3) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y,
+        .z = lhs.z + rhs.z * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u8v4 with lhs multiplied with a u8
+SL_header u8v4 SL_u8v4addM(u8v4 lhs, u8v4 rhs, u8v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v4) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y,
+        .z = lhs.z + rhs.z * m.z,
+        .w = lhs.w + rhs.w * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u8v* with lhs multiplied with a u8
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8* SL_u8vsubM_(u8* lhs, u8* rhs, u8* m, u8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u8v* with lhs multiplied with a u8
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8v* SL_u8vsubM(u8v* lhs, u8v* rhs, u8v* m, u8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u8vsubM_(lhs->data, rhs->data, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u8v2 with lhs multiplied with a u8
+SL_header u8v2 SL_u8v2subM(u8v2 lhs, u8v2 rhs, u8v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v2) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u8v3 with lhs multiplied with a u8
+SL_header u8v3 SL_u8v3subM(u8v3 lhs, u8v3 rhs, u8v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v3) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y,
+        .z = lhs.z - rhs.z * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u8v4 with lhs multiplied with a u8
+SL_header u8v4 SL_u8v4subM(u8v4 lhs, u8v4 rhs, u8v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v4) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y,
+        .z = lhs.z - rhs.z * m.z,
+        .w = lhs.w - rhs.w * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u8v* with lhs scaled by u8 and multiplied with a u8
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8* SL_u8vaddSM_(u8* lhs, u8* rhs, u8 s, u8* m, u8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * s * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u8v* with lhs scaled by u8 and multiplied with a u8
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8v* SL_u8vaddSM(u8v* lhs, u8v* rhs, u8 s, u8v* m, u8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u8vaddSM_(lhs->data, rhs->data, s, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u8v2 with lhs scaled by u8 and multiplied with a u8
+SL_header u8v2 SL_u8v2addSM(u8v2 lhs, u8v2 rhs, u8 s, u8v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v2) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u8v3 with lhs scaled by u8 and multiplied with a u8
+SL_header u8v3 SL_u8v3addSM(u8v3 lhs, u8v3 rhs, u8 s, u8v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v3) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y,
+        .z = lhs.z + rhs.z * s * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u8v4 with lhs scaled by u8 and multiplied with a u8
+SL_header u8v4 SL_u8v4addSM(u8v4 lhs, u8v4 rhs, u8 s, u8v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v4) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y,
+        .z = lhs.z + rhs.z * s * m.z,
+        .w = lhs.w + rhs.w * s * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u8v* with lhs scaled by u8 and multiplied with a u8
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8* SL_u8vsubSM_(u8* lhs, u8* rhs, u8 s, u8* m, u8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * s * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u8v* with lhs scaled by u8 and multiplied with a u8
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8v* SL_u8vsubSM(u8v* lhs, u8v* rhs, u8 s, u8v* m, u8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u8vsubSM_(lhs->data, rhs->data, s, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u8v2 with lhs scaled by u8 and multiplied with a u8
+SL_header u8v2 SL_u8v2subSM(u8v2 lhs, u8v2 rhs, u8 s, u8v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v2) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u8v3 with lhs scaled by u8 and multiplied with a u8
+SL_header u8v3 SL_u8v3subSM(u8v3 lhs, u8v3 rhs, u8 s, u8v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v3) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y,
+        .z = lhs.z - rhs.z * s * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u8v4 with lhs scaled by u8 and multiplied with a u8
+SL_header u8v4 SL_u8v4subSM(u8v4 lhs, u8v4 rhs, u8 s, u8v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v4) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y,
+        .z = lhs.z - rhs.z * s * m.z,
+        .w = lhs.w - rhs.w * s * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u8v* with rhs scaled by a u8
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8* SL_u8vSadd_(u8* lhs, u8 s, u8* rhs, u8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * s + rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u8v* with rhs scaled by a u8
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8v* SL_u8vSadd(u8v* lhs, u8 s, u8v* rhs, u8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u8vSadd_(lhs->data, s, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u8v2 with rhs scaled by a u8
+SL_header u8v2 SL_u8v2Sadd(u8v2 lhs, u8 s, u8v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v2) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u8v3 with rhs scaled by a u8
+SL_header u8v3 SL_u8v3Sadd(u8v3 lhs, u8 s, u8v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v3) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y,
+        .z = lhs.z * s + rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u8v4 with rhs scaled by a u8
+SL_header u8v4 SL_u8v4Sadd(u8v4 lhs, u8 s, u8v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v4) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y,
+        .z = lhs.z * s + rhs.z,
+        .w = lhs.w * s + rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u8v* with rhs scaled by a u8
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8* SL_u8vSsub_(u8* lhs, u8 s, u8* rhs, u8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * s - rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u8v* with rhs scaled by a u8
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8v* SL_u8vSsub(u8v* lhs, u8 s, u8v* rhs, u8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u8vSsub_(lhs->data, s, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u8v2 with rhs scaled by a u8
+SL_header u8v2 SL_u8v2Ssub(u8v2 lhs, u8 s, u8v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v2) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u8v3 with rhs scaled by a u8
+SL_header u8v3 SL_u8v3Ssub(u8v3 lhs, u8 s, u8v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v3) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y,
+        .z = lhs.z * s - rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u8v4 with rhs scaled by a u8
+SL_header u8v4 SL_u8v4Ssub(u8v4 lhs, u8 s, u8v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v4) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y,
+        .z = lhs.z * s - rhs.z,
+        .w = lhs.w * s - rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two u8v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8* SL_u8vmin_(u8* lhs, u8* rhs, u8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] < rhs[i] ? lhs[i] : rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two u8v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8v* SL_u8vmin(u8v* lhs, u8v* rhs, u8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u8vmin_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two u8v2
+SL_header u8v2 SL_u8v2min(u8v2 lhs, u8v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v2) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two u8v3
+SL_header u8v3 SL_u8v3min(u8v3 lhs, u8v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v3) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z < rhs.z ? lhs.z : rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two u8v4
+SL_header u8v4 SL_u8v4min(u8v4 lhs, u8v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v4) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z < rhs.z ? lhs.z : rhs.z,
+        .w = lhs.w < rhs.w ? lhs.w : rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two u8v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8* SL_u8vmax_(u8* lhs, u8* rhs, u8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] > rhs[i] ? lhs[i] : rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two u8v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8v* SL_u8vmax(u8v* lhs, u8v* rhs, u8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u8vmax_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two u8v2
+SL_header u8v2 SL_u8v2max(u8v2 lhs, u8v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v2) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two u8v3
+SL_header u8v3 SL_u8v3max(u8v3 lhs, u8v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v3) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z > rhs.z ? lhs.z : rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two u8v4
+SL_header u8v4 SL_u8v4max(u8v4 lhs, u8v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v4) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z > rhs.z ? lhs.z : rhs.z,
+        .w = lhs.w > rhs.w ? lhs.w : rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Dot product of two u8v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u8vdot_(u8* lhs, u8* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    u64 dest = 0;
+    for (usize i = 0; i < count; ++i) dest += lhs[i] * rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Dot product of two u8v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u8vdot(u8v* lhs, u8v* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u8vdot_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Dot product of two u8v2
+SL_header u64 SL_u8v2dot(u8v2 lhs, u8v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y;
+}
+#else
+;
+#endif
+/// @brief Dot product of two u8v3
+SL_header u64 SL_u8v3dot(u8v3 lhs, u8v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
+}
+#else
+;
+#endif
+/// @brief Dot product of two u8v4
+SL_header u64 SL_u8v4dot(u8v4 lhs, u8v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z + lhs.w * rhs.w;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a u8v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u8vlen_max_(u8* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    u64 dest = 0;
+    for (usize i = 0; i < count; ++i) dest = v[i] > dest ? v[i] : dest;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a u8v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u8vlen_max(u8v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u8vlen_max_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Maximum component of a u8v2
+SL_header u64 SL_u8v2len_max(u8v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return v.x > v.y ? v.x : v.y;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a u8v3
+SL_header u64 SL_u8v3len_max(u8v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return v.x > v.y ? (v.x > v.z ? v.x : v.z) : (v.y > v.z ? v.y : v.z);
+}
+#else
+;
+#endif
+/// @brief Maximum component of a u8v4
+SL_header u64 SL_u8v4len_max(u8v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return v.x > v.y ? (v.x > v.z ? (v.x > v.w ? v.x : v.w) : (v.z > v.w ? v.z : v.w)) : (v.y > v.z ? (v.y > v.w ? v.y : v.w) : (v.z > v.w ? v.z : v.w));
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a u8v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u8vlen_manh_(u8* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    u64 dest = 0;
+    for (usize i = 0; i < count; ++i) dest += v[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a u8v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u8vlen_manh(u8v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u8vlen_manh_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a u8v2
+SL_header u64 SL_u8v2len_manh(u8v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return v.x + v.y;
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a u8v3
+SL_header u64 SL_u8v3len_manh(u8v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return v.x + v.y + v.z;
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a u8v4
+SL_header u64 SL_u8v4len_manh(u8v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return v.x + v.y + v.z + v.w;
+}
+#else
+;
+#endif
+/// @brief Squared euclidean length of a u8v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u8vlen_srq_(u8* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u8vdot_(v, v, count);
+}
+#else
+;
+#endif
+/// @brief Squared euclidean length of a u8v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u8vlen_srq(u8v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u8vlen_srq_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Square length of a u8v2
+SL_header u64 SL_u8v2len_sqr(u8v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u8v2dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Square length of a u8v3
+SL_header u64 SL_u8v3len_sqr(u8v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u8v3dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Square length of a u8v4
+SL_header u64 SL_u8v4len_sqr(u8v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u8v4dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a u8v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_u8vlen_(u8* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_u8vdot_(v, v, count));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a u8v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_u8vlen(u8v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u8vlen_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a u8v2
+SL_header double SL_u8v2len(u8v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_u8v2dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a u8v3
+SL_header double SL_u8v3len(u8v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_u8v3dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a u8v4
+SL_header double SL_u8v4len(u8v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_u8v4dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance bewteen two u8v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_u8vdist_(u8* lhs, u8* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    double accum = 0;
+    for (int i = 0; i < count; ++i) accum += (lhs[i] - rhs[i]) * (lhs[i] - rhs[i]);
+    return sqrt(accum);
+}
+#else
+;
+#endif
+/// @brief Euclidean distance bewteen two u8v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_u8vdist(u8v* lhs, u8v* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u8vdist_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two u8v2
+SL_header double SL_u8v2dist(u8v2 lhs, u8v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u8v2len(SL_u8v2sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two u8v3
+SL_header double SL_u8v3dist(u8v3 lhs, u8v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u8v3len(SL_u8v3sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two u8v4
+SL_header double SL_u8v4dist(u8v4 lhs, u8v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u8v4len(SL_u8v4sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Reflection of u8v2 v around vector u8v2 n
+SL_header u8v2 SL_u8v2refl(u8v2 v, u8v2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u8v2subS(v, n, 2.0 * SL_u8v2dot(v, n) / SL_u8v2dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of u8v3 v around vector u8v3 n
+SL_header u8v3 SL_u8v3refl(u8v3 v, u8v3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u8v3subS(v, n, 2.0 * SL_u8v3dot(v, n) / SL_u8v3dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of u8v4 v around vector u8v4 n
+SL_header u8v4 SL_u8v4refl(u8v4 v, u8v4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u8v4subS(v, n, 2.0 * SL_u8v4dot(v, n) / SL_u8v4dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of u8v2 v around vector u8v2 n assumed to be of unit length
+SL_header u8v2 SL_u8v2refl_u(u8v2 v, u8v2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u8v2subS(v, n, 2.0 * SL_u8v2dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of u8v3 v around vector u8v3 n assumed to be of unit length
+SL_header u8v3 SL_u8v3refl_u(u8v3 v, u8v3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u8v3subS(v, n, 2.0 * SL_u8v3dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of u8v4 v around vector u8v4 n assumed to be of unit length
+SL_header u8v4 SL_u8v4refl_u(u8v4 v, u8v4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u8v4subS(v, n, 2.0 * SL_u8v4dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u8v* by integer n
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8* SL_u8vmods_(u8* v, u8 n, u8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = v[i] % n;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u8v* by integer n
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8v* SL_u8vmods(u8v* v, u8 n, u8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u8vmods_(v->data, n, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u8v2 by integer n
+SL_header u8v2 SL_u8v2mods(u8v2 v, u8 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v2) {
+        .x = v.x % n,
+        .y = v.y % n
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u8v3 by integer n
+SL_header u8v3 SL_u8v3mods(u8v3 v, u8 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v3) {
+        .x = v.x % n,
+        .y = v.y % n,
+        .z = v.z % n
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u8v4 by integer n
+SL_header u8v4 SL_u8v4mods(u8v4 v, u8 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v4) {
+        .x = v.x % n,
+        .y = v.y % n,
+        .z = v.z % n,
+        .w = v.w % n
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u8v* by u8v* n
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8* SL_u8vmod_(u8* v, u8* n, u8* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = v[i] % n[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u8v* by u8v* n
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u8v* SL_u8vmod(u8v* v, u8v* n, u8v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u8vmod_(v->data, n->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u8v2 by u8v2 n
+SL_header u8v2 SL_u8v2mod(u8v2 v, u8v2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v2) {
+        .x = v.x % n.x,
+        .y = v.y % n.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u8v3 by u8v3 n
+SL_header u8v3 SL_u8v3mod(u8v3 v, u8v3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v3) {
+        .x = v.x % n.x,
+        .y = v.y % n.y,
+        .z = v.z % n.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u8v4 by u8v4 n
+SL_header u8v4 SL_u8v4mod(u8v4 v, u8v4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u8v4) {
+        .x = v.x % n.x,
+        .y = v.y % n.y,
+        .z = v.z % n.z,
+        .w = v.w % n.w
+    };
+}
+#else
+;
+#endif
+#pragma endregion U8
+#pragma region U16
+
+/// @brief Vector of u16 with arbitrary dimension
+typedef struct {
+    const usize count;
+    u16 data[];
+} u16v;
+
+/// @brief Vector of u16 with dimension 2
+typedef union {
+    u16 data[2];
+    struct {
+        union { u16 x, r, u; };
+        union { u16 y, g, v; };
+    };
+} u16v2;
+
+#define SL_u16v2_zero  ((u16v2){.x =  0, .y =  0})
+#define SL_u16v2_one   ((u16v2){.x =  1, .y =  1})
+#define SL_u16v2_right ((u16v2){.x =  1, .y =  0})
+#define SL_u16v2_up    ((u16v2){.x =  0, .y =  1})
+
+/// @brief Vector of u16 with dimension 3
+typedef union {
+    u16 data[3];
+    struct {
+        union { u16 x, r, u; };
+        union { u16 y, g, v; };
+        union { u16 z, b, s; };
+    };
+    struct {
+        union { u16 __x, __r, __u; };
+        union { u16v2 yz, gb, vs; };
+    };
+    struct {
+        union { u16v2 xy, rg, uv; };
+        union { u16 __z, __b, __s; };
+    };
+} u16v3;
+
+#define SL_u16v3_zero  ((u16v3){.x =  0, .y =  0, .z =  0})
+#define SL_u16v3_one   ((u16v3){.x =  1, .y =  1, .z =  1})
+#define SL_u16v3_right ((u16v3){.x =  1, .y =  0, .z =  0})
+#define SL_u16v3_up    ((u16v3){.x =  0, .y =  1, .z =  0})
+#define SL_u16v3_forw  ((u16v3){.x =  0, .y =  0, .z =  1})
+
+/// @brief Vector of u16 with dimension 4
+typedef union {
+    u16 data[4];
+    struct {
+        union { u16 x, r, u; };
+        union { u16 y, g, v; };
+        union { u16 z, b, s; };
+        union { u16 w, a, t; };
+    };
+    struct {
+        union { u16 __x0, __r0, __u0; };
+        union { u16v2 yz, gb, vs; };
+        union { u16 __w0, __a0, __t0; };
+    };
+    struct {
+        union { u16v2 xy, rb, uv; };
+        union { u16v2 zw, ba, st; };
+    };
+    struct {
+        union { u16v3 xyz, rgb, uvs; };
+        union { u16 __w1, __a1, __t1; };
+    };
+    struct {
+        union { u16 __x1, __r1, __u1; };
+        union { u16v3 yzw, gba, vst; };
+    };
+} u16v4;
+
+#define SL_u16v4_zero  ((u16v4){.x = 0, .y = 0, .z = 0, .w = 0})
+#define SL_u16v4_one   ((u16v4){.x = 1, .y = 1, .z = 1, .w = 1})
+
+
+
+#define SL_u16v2_(X, Y)       ((u16v2){.x = X, .y = Y})
+#define SL_u16v3_(X, Y, Z)    ((u16v3){.x = X, .y = Y, .z = Z})
+#define SL_u16v4_(X, Y, Z, W) ((u16v4){.x = X, .y = Y, .z = Z, .w = W})
+
+#define SL_u16v2s(S)          ((u16v2){.x = S, .y = S})
+#define SL_u16v3s(S)          ((u16v3){.x = S, .y = S, .z = S})
+#define SL_u16v4s(S)          ((u16v4){.x = S, .y = S, .z = S, .w = S})
+
+#define SL_u16v2v(V, ...)     ((u16v2){.x = (V).x, .y = (V).y})
+#define SL_u16v3v(V, ...)     ((u16v3){.x = (V).x, .y = (V).y, .z = (SL_vsize(V) >= 2 ? (V).data[2] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[1]))})
+#define SL_u16v4v(V, ...)     ((u16v4){.x = (V).x, .y = (V).y, .z = (SL_vsize(V) >= 2 ? (V).data[2] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[1])), .w = (SL_vsize(V) >= 3 ? (V).data[3] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[2]))})
+
+
+
+/// @brief Addition of two u16v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16* SL_u16vadd_(u16* lhs, u16* rhs, u16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u16v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16v* SL_u16vadd(u16v* lhs, u16v* rhs, u16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u16vadd_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u16v2
+SL_header u16v2 SL_u16v2add(u16v2 lhs, u16v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v2) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u16v3
+SL_header u16v3 SL_u16v3add(u16v3 lhs, u16v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v3) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y,
+        .z = lhs.z + rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u16v4
+SL_header u16v4 SL_u16v4add(u16v4 lhs, u16v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v4) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y,
+        .z = lhs.z + rhs.z,
+        .w = lhs.w + rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u16v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16* SL_u16vsub_(u16* lhs, u16* rhs, u16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u16v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16v* SL_u16vsub(u16v* lhs, u16v* rhs, u16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u16vsub_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u16v2
+SL_header u16v2 SL_u16v2sub(u16v2 lhs, u16v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v2) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u16v3
+SL_header u16v3 SL_u16v3sub(u16v3 lhs, u16v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v3) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y,
+        .z = lhs.z - rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u16v4
+SL_header u16v4 SL_u16v4sub(u16v4 lhs, u16v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v4) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y,
+        .z = lhs.z - rhs.z,
+        .w = lhs.w - rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two u16v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16* SL_u16vmul_(u16* lhs, u16* rhs, u16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two u16v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16v* SL_u16vmul(u16v* lhs, u16v* rhs, u16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u16vmul_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two u16v2
+SL_header u16v2 SL_u16v2mul(u16v2 lhs, u16v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v2) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two u16v3
+SL_header u16v3 SL_u16v3mul(u16v3 lhs, u16v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v3) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y,
+        .z = lhs.z * rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two u16v4
+SL_header u16v4 SL_u16v4mul(u16v4 lhs, u16v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v4) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y,
+        .z = lhs.z * rhs.z,
+        .w = lhs.w * rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a u16v* with a scalar
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16* SL_u16vmuls_(u16* lhs, u16 rhs, u16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * rhs;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a u16v* with a scalar
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16v* SL_u16vmuls(u16v* lhs, u16 rhs, u16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u16vmuls_(lhs->data, rhs, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a u16v2 with a scalar
+SL_header u16v2 SL_u16v2muls(u16v2 lhs, u16 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v2) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a u16v3 with a scalar
+SL_header u16v3 SL_u16v3muls(u16v3 lhs, u16 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v3) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs,
+        .z = lhs.z * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a u16v4 with a scalar
+SL_header u16v4 SL_u16v4muls(u16v4 lhs, u16 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v4) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs,
+        .z = lhs.z * rhs,
+        .w = lhs.w * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two u16v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16* SL_u16vdiv_(u16* lhs, u16* rhs, u16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] / rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two u16v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16v* SL_u16vdiv(u16v* lhs, u16v* rhs, u16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u16vdiv_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two u16v2
+SL_header u16v2 SL_u16v2div(u16v2 lhs, u16v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v2) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two u16v3
+SL_header u16v3 SL_u16v3div(u16v3 lhs, u16v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v3) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y,
+        .z = lhs.z / rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two u16v4
+SL_header u16v4 SL_u16v4div(u16v4 lhs, u16v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v4) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y,
+        .z = lhs.z / rhs.z,
+        .w = lhs.w / rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a u16v* with a scalar
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16* SL_u16vdivs_(u16* lhs, u16 rhs, u16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] / rhs;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a u16v* with a scalar
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16v* SL_u16vdivs(u16v* lhs, u16 rhs, u16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u16vdivs_(lhs->data, rhs, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a u16v2 with a scalar
+SL_header u16v2 SL_u16v2divs(u16v2 lhs, u16 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v2) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a u16v3 with a scalar
+SL_header u16v3 SL_u16v3divs(u16v3 lhs, u16 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v3) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs,
+        .z = lhs.z / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a u16v4 with a scalar
+SL_header u16v4 SL_u16v4divs(u16v4 lhs, u16 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v4) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs,
+        .z = lhs.z / rhs,
+        .w = lhs.w / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u16v* with lhs scaled by a u16
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16* SL_u16vaddS_(u16* lhs, u16* rhs, u16 s, u16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * s;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u16v* with lhs scaled by a u16
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16v* SL_u16vaddS(u16v* lhs, u16v* rhs, u16 s, u16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u16vaddS_(lhs->data, rhs->data, s, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u16v2 with lhs scaled by a u16
+SL_header u16v2 SL_u16v2addS(u16v2 lhs, u16v2 rhs, u16 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v2) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u16v3 with lhs scaled by a u16
+SL_header u16v3 SL_u16v3addS(u16v3 lhs, u16v3 rhs, u16 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v3) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s,
+        .z = lhs.z + rhs.z * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u16v4 with lhs scaled by a u16
+SL_header u16v4 SL_u16v4addS(u16v4 lhs, u16v4 rhs, u16 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v4) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s,
+        .z = lhs.z + rhs.z * s,
+        .w = lhs.w + rhs.w * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u16v* with lhs scaled by a u16
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16* SL_u16vsubS_(u16* lhs, u16* rhs, u16 s, u16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * s;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u16v* with lhs scaled by a u16
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16v* SL_u16vsubS(u16v* lhs, u16v* rhs, u16 s, u16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u16vsubS_(lhs->data, rhs->data, s, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u16v2 with lhs scaled by a u16
+SL_header u16v2 SL_u16v2subS(u16v2 lhs, u16v2 rhs, u16 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v2) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u16v3 with lhs scaled by a u16
+SL_header u16v3 SL_u16v3subS(u16v3 lhs, u16v3 rhs, u16 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v3) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s,
+        .z = lhs.z - rhs.z * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u16v4 with lhs scaled by a u16
+SL_header u16v4 SL_u16v4subS(u16v4 lhs, u16v4 rhs, u16 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v4) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s,
+        .z = lhs.z - rhs.z * s,
+        .w = lhs.w - rhs.w * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u16v* with lhs multiplied with a u16
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16* SL_u16vaddM_(u16* lhs, u16* rhs, u16* m, u16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u16v* with lhs multiplied with a u16
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16v* SL_u16vaddM(u16v* lhs, u16v* rhs, u16v* m, u16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u16vaddM_(lhs->data, rhs->data, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u16v2 with lhs multiplied with a u16
+SL_header u16v2 SL_u16v2addM(u16v2 lhs, u16v2 rhs, u16v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v2) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u16v3 with lhs multiplied with a u16
+SL_header u16v3 SL_u16v3addM(u16v3 lhs, u16v3 rhs, u16v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v3) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y,
+        .z = lhs.z + rhs.z * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u16v4 with lhs multiplied with a u16
+SL_header u16v4 SL_u16v4addM(u16v4 lhs, u16v4 rhs, u16v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v4) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y,
+        .z = lhs.z + rhs.z * m.z,
+        .w = lhs.w + rhs.w * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u16v* with lhs multiplied with a u16
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16* SL_u16vsubM_(u16* lhs, u16* rhs, u16* m, u16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u16v* with lhs multiplied with a u16
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16v* SL_u16vsubM(u16v* lhs, u16v* rhs, u16v* m, u16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u16vsubM_(lhs->data, rhs->data, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u16v2 with lhs multiplied with a u16
+SL_header u16v2 SL_u16v2subM(u16v2 lhs, u16v2 rhs, u16v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v2) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u16v3 with lhs multiplied with a u16
+SL_header u16v3 SL_u16v3subM(u16v3 lhs, u16v3 rhs, u16v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v3) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y,
+        .z = lhs.z - rhs.z * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u16v4 with lhs multiplied with a u16
+SL_header u16v4 SL_u16v4subM(u16v4 lhs, u16v4 rhs, u16v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v4) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y,
+        .z = lhs.z - rhs.z * m.z,
+        .w = lhs.w - rhs.w * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u16v* with lhs scaled by u16 and multiplied with a u16
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16* SL_u16vaddSM_(u16* lhs, u16* rhs, u16 s, u16* m, u16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * s * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u16v* with lhs scaled by u16 and multiplied with a u16
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16v* SL_u16vaddSM(u16v* lhs, u16v* rhs, u16 s, u16v* m, u16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u16vaddSM_(lhs->data, rhs->data, s, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u16v2 with lhs scaled by u16 and multiplied with a u16
+SL_header u16v2 SL_u16v2addSM(u16v2 lhs, u16v2 rhs, u16 s, u16v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v2) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u16v3 with lhs scaled by u16 and multiplied with a u16
+SL_header u16v3 SL_u16v3addSM(u16v3 lhs, u16v3 rhs, u16 s, u16v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v3) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y,
+        .z = lhs.z + rhs.z * s * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u16v4 with lhs scaled by u16 and multiplied with a u16
+SL_header u16v4 SL_u16v4addSM(u16v4 lhs, u16v4 rhs, u16 s, u16v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v4) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y,
+        .z = lhs.z + rhs.z * s * m.z,
+        .w = lhs.w + rhs.w * s * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u16v* with lhs scaled by u16 and multiplied with a u16
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16* SL_u16vsubSM_(u16* lhs, u16* rhs, u16 s, u16* m, u16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * s * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u16v* with lhs scaled by u16 and multiplied with a u16
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16v* SL_u16vsubSM(u16v* lhs, u16v* rhs, u16 s, u16v* m, u16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u16vsubSM_(lhs->data, rhs->data, s, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u16v2 with lhs scaled by u16 and multiplied with a u16
+SL_header u16v2 SL_u16v2subSM(u16v2 lhs, u16v2 rhs, u16 s, u16v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v2) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u16v3 with lhs scaled by u16 and multiplied with a u16
+SL_header u16v3 SL_u16v3subSM(u16v3 lhs, u16v3 rhs, u16 s, u16v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v3) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y,
+        .z = lhs.z - rhs.z * s * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u16v4 with lhs scaled by u16 and multiplied with a u16
+SL_header u16v4 SL_u16v4subSM(u16v4 lhs, u16v4 rhs, u16 s, u16v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v4) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y,
+        .z = lhs.z - rhs.z * s * m.z,
+        .w = lhs.w - rhs.w * s * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u16v* with rhs scaled by a u16
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16* SL_u16vSadd_(u16* lhs, u16 s, u16* rhs, u16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * s + rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u16v* with rhs scaled by a u16
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16v* SL_u16vSadd(u16v* lhs, u16 s, u16v* rhs, u16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u16vSadd_(lhs->data, s, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u16v2 with rhs scaled by a u16
+SL_header u16v2 SL_u16v2Sadd(u16v2 lhs, u16 s, u16v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v2) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u16v3 with rhs scaled by a u16
+SL_header u16v3 SL_u16v3Sadd(u16v3 lhs, u16 s, u16v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v3) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y,
+        .z = lhs.z * s + rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u16v4 with rhs scaled by a u16
+SL_header u16v4 SL_u16v4Sadd(u16v4 lhs, u16 s, u16v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v4) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y,
+        .z = lhs.z * s + rhs.z,
+        .w = lhs.w * s + rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u16v* with rhs scaled by a u16
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16* SL_u16vSsub_(u16* lhs, u16 s, u16* rhs, u16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * s - rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u16v* with rhs scaled by a u16
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16v* SL_u16vSsub(u16v* lhs, u16 s, u16v* rhs, u16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u16vSsub_(lhs->data, s, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u16v2 with rhs scaled by a u16
+SL_header u16v2 SL_u16v2Ssub(u16v2 lhs, u16 s, u16v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v2) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u16v3 with rhs scaled by a u16
+SL_header u16v3 SL_u16v3Ssub(u16v3 lhs, u16 s, u16v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v3) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y,
+        .z = lhs.z * s - rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u16v4 with rhs scaled by a u16
+SL_header u16v4 SL_u16v4Ssub(u16v4 lhs, u16 s, u16v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v4) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y,
+        .z = lhs.z * s - rhs.z,
+        .w = lhs.w * s - rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two u16v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16* SL_u16vmin_(u16* lhs, u16* rhs, u16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] < rhs[i] ? lhs[i] : rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two u16v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16v* SL_u16vmin(u16v* lhs, u16v* rhs, u16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u16vmin_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two u16v2
+SL_header u16v2 SL_u16v2min(u16v2 lhs, u16v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v2) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two u16v3
+SL_header u16v3 SL_u16v3min(u16v3 lhs, u16v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v3) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z < rhs.z ? lhs.z : rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two u16v4
+SL_header u16v4 SL_u16v4min(u16v4 lhs, u16v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v4) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z < rhs.z ? lhs.z : rhs.z,
+        .w = lhs.w < rhs.w ? lhs.w : rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two u16v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16* SL_u16vmax_(u16* lhs, u16* rhs, u16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] > rhs[i] ? lhs[i] : rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two u16v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16v* SL_u16vmax(u16v* lhs, u16v* rhs, u16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u16vmax_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two u16v2
+SL_header u16v2 SL_u16v2max(u16v2 lhs, u16v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v2) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two u16v3
+SL_header u16v3 SL_u16v3max(u16v3 lhs, u16v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v3) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z > rhs.z ? lhs.z : rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two u16v4
+SL_header u16v4 SL_u16v4max(u16v4 lhs, u16v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v4) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z > rhs.z ? lhs.z : rhs.z,
+        .w = lhs.w > rhs.w ? lhs.w : rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Dot product of two u16v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u16vdot_(u16* lhs, u16* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    u64 dest = 0;
+    for (usize i = 0; i < count; ++i) dest += lhs[i] * rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Dot product of two u16v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u16vdot(u16v* lhs, u16v* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u16vdot_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Dot product of two u16v2
+SL_header u64 SL_u16v2dot(u16v2 lhs, u16v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y;
+}
+#else
+;
+#endif
+/// @brief Dot product of two u16v3
+SL_header u64 SL_u16v3dot(u16v3 lhs, u16v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
+}
+#else
+;
+#endif
+/// @brief Dot product of two u16v4
+SL_header u64 SL_u16v4dot(u16v4 lhs, u16v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z + lhs.w * rhs.w;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a u16v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u16vlen_max_(u16* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    u64 dest = 0;
+    for (usize i = 0; i < count; ++i) dest = v[i] > dest ? v[i] : dest;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a u16v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u16vlen_max(u16v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u16vlen_max_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Maximum component of a u16v2
+SL_header u64 SL_u16v2len_max(u16v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return v.x > v.y ? v.x : v.y;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a u16v3
+SL_header u64 SL_u16v3len_max(u16v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return v.x > v.y ? (v.x > v.z ? v.x : v.z) : (v.y > v.z ? v.y : v.z);
+}
+#else
+;
+#endif
+/// @brief Maximum component of a u16v4
+SL_header u64 SL_u16v4len_max(u16v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return v.x > v.y ? (v.x > v.z ? (v.x > v.w ? v.x : v.w) : (v.z > v.w ? v.z : v.w)) : (v.y > v.z ? (v.y > v.w ? v.y : v.w) : (v.z > v.w ? v.z : v.w));
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a u16v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u16vlen_manh_(u16* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    u64 dest = 0;
+    for (usize i = 0; i < count; ++i) dest += v[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a u16v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u16vlen_manh(u16v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u16vlen_manh_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a u16v2
+SL_header u64 SL_u16v2len_manh(u16v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return v.x + v.y;
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a u16v3
+SL_header u64 SL_u16v3len_manh(u16v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return v.x + v.y + v.z;
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a u16v4
+SL_header u64 SL_u16v4len_manh(u16v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return v.x + v.y + v.z + v.w;
+}
+#else
+;
+#endif
+/// @brief Squared euclidean length of a u16v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u16vlen_srq_(u16* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u16vdot_(v, v, count);
+}
+#else
+;
+#endif
+/// @brief Squared euclidean length of a u16v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u16vlen_srq(u16v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u16vlen_srq_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Square length of a u16v2
+SL_header u64 SL_u16v2len_sqr(u16v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u16v2dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Square length of a u16v3
+SL_header u64 SL_u16v3len_sqr(u16v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u16v3dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Square length of a u16v4
+SL_header u64 SL_u16v4len_sqr(u16v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u16v4dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a u16v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_u16vlen_(u16* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_u16vdot_(v, v, count));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a u16v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_u16vlen(u16v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u16vlen_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a u16v2
+SL_header double SL_u16v2len(u16v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_u16v2dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a u16v3
+SL_header double SL_u16v3len(u16v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_u16v3dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a u16v4
+SL_header double SL_u16v4len(u16v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_u16v4dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance bewteen two u16v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_u16vdist_(u16* lhs, u16* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    double accum = 0;
+    for (int i = 0; i < count; ++i) accum += (lhs[i] - rhs[i]) * (lhs[i] - rhs[i]);
+    return sqrt(accum);
+}
+#else
+;
+#endif
+/// @brief Euclidean distance bewteen two u16v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_u16vdist(u16v* lhs, u16v* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u16vdist_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two u16v2
+SL_header double SL_u16v2dist(u16v2 lhs, u16v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u16v2len(SL_u16v2sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two u16v3
+SL_header double SL_u16v3dist(u16v3 lhs, u16v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u16v3len(SL_u16v3sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two u16v4
+SL_header double SL_u16v4dist(u16v4 lhs, u16v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u16v4len(SL_u16v4sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Reflection of u16v2 v around vector u16v2 n
+SL_header u16v2 SL_u16v2refl(u16v2 v, u16v2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u16v2subS(v, n, 2.0 * SL_u16v2dot(v, n) / SL_u16v2dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of u16v3 v around vector u16v3 n
+SL_header u16v3 SL_u16v3refl(u16v3 v, u16v3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u16v3subS(v, n, 2.0 * SL_u16v3dot(v, n) / SL_u16v3dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of u16v4 v around vector u16v4 n
+SL_header u16v4 SL_u16v4refl(u16v4 v, u16v4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u16v4subS(v, n, 2.0 * SL_u16v4dot(v, n) / SL_u16v4dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of u16v2 v around vector u16v2 n assumed to be of unit length
+SL_header u16v2 SL_u16v2refl_u(u16v2 v, u16v2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u16v2subS(v, n, 2.0 * SL_u16v2dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of u16v3 v around vector u16v3 n assumed to be of unit length
+SL_header u16v3 SL_u16v3refl_u(u16v3 v, u16v3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u16v3subS(v, n, 2.0 * SL_u16v3dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of u16v4 v around vector u16v4 n assumed to be of unit length
+SL_header u16v4 SL_u16v4refl_u(u16v4 v, u16v4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u16v4subS(v, n, 2.0 * SL_u16v4dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u16v* by integer n
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16* SL_u16vmods_(u16* v, u16 n, u16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = v[i] % n;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u16v* by integer n
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16v* SL_u16vmods(u16v* v, u16 n, u16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u16vmods_(v->data, n, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u16v2 by integer n
+SL_header u16v2 SL_u16v2mods(u16v2 v, u16 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v2) {
+        .x = v.x % n,
+        .y = v.y % n
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u16v3 by integer n
+SL_header u16v3 SL_u16v3mods(u16v3 v, u16 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v3) {
+        .x = v.x % n,
+        .y = v.y % n,
+        .z = v.z % n
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u16v4 by integer n
+SL_header u16v4 SL_u16v4mods(u16v4 v, u16 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v4) {
+        .x = v.x % n,
+        .y = v.y % n,
+        .z = v.z % n,
+        .w = v.w % n
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u16v* by u16v* n
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16* SL_u16vmod_(u16* v, u16* n, u16* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = v[i] % n[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u16v* by u16v* n
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u16v* SL_u16vmod(u16v* v, u16v* n, u16v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u16vmod_(v->data, n->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u16v2 by u16v2 n
+SL_header u16v2 SL_u16v2mod(u16v2 v, u16v2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v2) {
+        .x = v.x % n.x,
+        .y = v.y % n.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u16v3 by u16v3 n
+SL_header u16v3 SL_u16v3mod(u16v3 v, u16v3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v3) {
+        .x = v.x % n.x,
+        .y = v.y % n.y,
+        .z = v.z % n.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u16v4 by u16v4 n
+SL_header u16v4 SL_u16v4mod(u16v4 v, u16v4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u16v4) {
+        .x = v.x % n.x,
+        .y = v.y % n.y,
+        .z = v.z % n.z,
+        .w = v.w % n.w
+    };
+}
+#else
+;
+#endif
+#pragma endregion U16
+#pragma region U32
+
+/// @brief Vector of u32 with arbitrary dimension
+typedef struct {
+    const usize count;
+    u32 data[];
+} u32v;
+
+/// @brief Vector of u32 with dimension 2
+typedef union {
+    u32 data[2];
+    struct {
+        union { u32 x, r, u; };
+        union { u32 y, g, v; };
+    };
+} u32v2;
+
+#define SL_u32v2_zero  ((u32v2){.x =  0, .y =  0})
+#define SL_u32v2_one   ((u32v2){.x =  1, .y =  1})
+#define SL_u32v2_right ((u32v2){.x =  1, .y =  0})
+#define SL_u32v2_up    ((u32v2){.x =  0, .y =  1})
+
+/// @brief Vector of u32 with dimension 3
+typedef union {
+    u32 data[3];
+    struct {
+        union { u32 x, r, u; };
+        union { u32 y, g, v; };
+        union { u32 z, b, s; };
+    };
+    struct {
+        union { u32 __x, __r, __u; };
+        union { u32v2 yz, gb, vs; };
+    };
+    struct {
+        union { u32v2 xy, rg, uv; };
+        union { u32 __z, __b, __s; };
+    };
+} u32v3;
+
+#define SL_u32v3_zero  ((u32v3){.x =  0, .y =  0, .z =  0})
+#define SL_u32v3_one   ((u32v3){.x =  1, .y =  1, .z =  1})
+#define SL_u32v3_right ((u32v3){.x =  1, .y =  0, .z =  0})
+#define SL_u32v3_up    ((u32v3){.x =  0, .y =  1, .z =  0})
+#define SL_u32v3_forw  ((u32v3){.x =  0, .y =  0, .z =  1})
+
+/// @brief Vector of u32 with dimension 4
+typedef union {
+    u32 data[4];
+    struct {
+        union { u32 x, r, u; };
+        union { u32 y, g, v; };
+        union { u32 z, b, s; };
+        union { u32 w, a, t; };
+    };
+    struct {
+        union { u32 __x0, __r0, __u0; };
+        union { u32v2 yz, gb, vs; };
+        union { u32 __w0, __a0, __t0; };
+    };
+    struct {
+        union { u32v2 xy, rb, uv; };
+        union { u32v2 zw, ba, st; };
+    };
+    struct {
+        union { u32v3 xyz, rgb, uvs; };
+        union { u32 __w1, __a1, __t1; };
+    };
+    struct {
+        union { u32 __x1, __r1, __u1; };
+        union { u32v3 yzw, gba, vst; };
+    };
+} u32v4;
+
+#define SL_u32v4_zero  ((u32v4){.x = 0, .y = 0, .z = 0, .w = 0})
+#define SL_u32v4_one   ((u32v4){.x = 1, .y = 1, .z = 1, .w = 1})
+
+
+
+#define SL_u32v2_(X, Y)       ((u32v2){.x = X, .y = Y})
+#define SL_u32v3_(X, Y, Z)    ((u32v3){.x = X, .y = Y, .z = Z})
+#define SL_u32v4_(X, Y, Z, W) ((u32v4){.x = X, .y = Y, .z = Z, .w = W})
+
+#define SL_u32v2s(S)          ((u32v2){.x = S, .y = S})
+#define SL_u32v3s(S)          ((u32v3){.x = S, .y = S, .z = S})
+#define SL_u32v4s(S)          ((u32v4){.x = S, .y = S, .z = S, .w = S})
+
+#define SL_u32v2v(V, ...)     ((u32v2){.x = (V).x, .y = (V).y})
+#define SL_u32v3v(V, ...)     ((u32v3){.x = (V).x, .y = (V).y, .z = (SL_vsize(V) >= 2 ? (V).data[2] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[1]))})
+#define SL_u32v4v(V, ...)     ((u32v4){.x = (V).x, .y = (V).y, .z = (SL_vsize(V) >= 2 ? (V).data[2] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[1])), .w = (SL_vsize(V) >= 3 ? (V).data[3] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[2]))})
+
+
+
+/// @brief Addition of two u32v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32* SL_u32vadd_(u32* lhs, u32* rhs, u32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u32v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32v* SL_u32vadd(u32v* lhs, u32v* rhs, u32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u32vadd_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u32v2
+SL_header u32v2 SL_u32v2add(u32v2 lhs, u32v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v2) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u32v3
+SL_header u32v3 SL_u32v3add(u32v3 lhs, u32v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v3) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y,
+        .z = lhs.z + rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u32v4
+SL_header u32v4 SL_u32v4add(u32v4 lhs, u32v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v4) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y,
+        .z = lhs.z + rhs.z,
+        .w = lhs.w + rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u32v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32* SL_u32vsub_(u32* lhs, u32* rhs, u32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u32v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32v* SL_u32vsub(u32v* lhs, u32v* rhs, u32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u32vsub_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u32v2
+SL_header u32v2 SL_u32v2sub(u32v2 lhs, u32v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v2) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u32v3
+SL_header u32v3 SL_u32v3sub(u32v3 lhs, u32v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v3) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y,
+        .z = lhs.z - rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u32v4
+SL_header u32v4 SL_u32v4sub(u32v4 lhs, u32v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v4) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y,
+        .z = lhs.z - rhs.z,
+        .w = lhs.w - rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two u32v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32* SL_u32vmul_(u32* lhs, u32* rhs, u32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two u32v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32v* SL_u32vmul(u32v* lhs, u32v* rhs, u32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u32vmul_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two u32v2
+SL_header u32v2 SL_u32v2mul(u32v2 lhs, u32v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v2) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two u32v3
+SL_header u32v3 SL_u32v3mul(u32v3 lhs, u32v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v3) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y,
+        .z = lhs.z * rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two u32v4
+SL_header u32v4 SL_u32v4mul(u32v4 lhs, u32v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v4) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y,
+        .z = lhs.z * rhs.z,
+        .w = lhs.w * rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a u32v* with a scalar
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32* SL_u32vmuls_(u32* lhs, u32 rhs, u32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * rhs;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a u32v* with a scalar
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32v* SL_u32vmuls(u32v* lhs, u32 rhs, u32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u32vmuls_(lhs->data, rhs, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a u32v2 with a scalar
+SL_header u32v2 SL_u32v2muls(u32v2 lhs, u32 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v2) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a u32v3 with a scalar
+SL_header u32v3 SL_u32v3muls(u32v3 lhs, u32 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v3) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs,
+        .z = lhs.z * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a u32v4 with a scalar
+SL_header u32v4 SL_u32v4muls(u32v4 lhs, u32 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v4) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs,
+        .z = lhs.z * rhs,
+        .w = lhs.w * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two u32v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32* SL_u32vdiv_(u32* lhs, u32* rhs, u32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] / rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two u32v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32v* SL_u32vdiv(u32v* lhs, u32v* rhs, u32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u32vdiv_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two u32v2
+SL_header u32v2 SL_u32v2div(u32v2 lhs, u32v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v2) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two u32v3
+SL_header u32v3 SL_u32v3div(u32v3 lhs, u32v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v3) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y,
+        .z = lhs.z / rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two u32v4
+SL_header u32v4 SL_u32v4div(u32v4 lhs, u32v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v4) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y,
+        .z = lhs.z / rhs.z,
+        .w = lhs.w / rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a u32v* with a scalar
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32* SL_u32vdivs_(u32* lhs, u32 rhs, u32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] / rhs;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a u32v* with a scalar
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32v* SL_u32vdivs(u32v* lhs, u32 rhs, u32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u32vdivs_(lhs->data, rhs, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a u32v2 with a scalar
+SL_header u32v2 SL_u32v2divs(u32v2 lhs, u32 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v2) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a u32v3 with a scalar
+SL_header u32v3 SL_u32v3divs(u32v3 lhs, u32 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v3) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs,
+        .z = lhs.z / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a u32v4 with a scalar
+SL_header u32v4 SL_u32v4divs(u32v4 lhs, u32 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v4) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs,
+        .z = lhs.z / rhs,
+        .w = lhs.w / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u32v* with lhs scaled by a u32
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32* SL_u32vaddS_(u32* lhs, u32* rhs, u32 s, u32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * s;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u32v* with lhs scaled by a u32
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32v* SL_u32vaddS(u32v* lhs, u32v* rhs, u32 s, u32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u32vaddS_(lhs->data, rhs->data, s, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u32v2 with lhs scaled by a u32
+SL_header u32v2 SL_u32v2addS(u32v2 lhs, u32v2 rhs, u32 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v2) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u32v3 with lhs scaled by a u32
+SL_header u32v3 SL_u32v3addS(u32v3 lhs, u32v3 rhs, u32 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v3) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s,
+        .z = lhs.z + rhs.z * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u32v4 with lhs scaled by a u32
+SL_header u32v4 SL_u32v4addS(u32v4 lhs, u32v4 rhs, u32 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v4) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s,
+        .z = lhs.z + rhs.z * s,
+        .w = lhs.w + rhs.w * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u32v* with lhs scaled by a u32
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32* SL_u32vsubS_(u32* lhs, u32* rhs, u32 s, u32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * s;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u32v* with lhs scaled by a u32
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32v* SL_u32vsubS(u32v* lhs, u32v* rhs, u32 s, u32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u32vsubS_(lhs->data, rhs->data, s, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u32v2 with lhs scaled by a u32
+SL_header u32v2 SL_u32v2subS(u32v2 lhs, u32v2 rhs, u32 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v2) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u32v3 with lhs scaled by a u32
+SL_header u32v3 SL_u32v3subS(u32v3 lhs, u32v3 rhs, u32 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v3) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s,
+        .z = lhs.z - rhs.z * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u32v4 with lhs scaled by a u32
+SL_header u32v4 SL_u32v4subS(u32v4 lhs, u32v4 rhs, u32 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v4) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s,
+        .z = lhs.z - rhs.z * s,
+        .w = lhs.w - rhs.w * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u32v* with lhs multiplied with a u32
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32* SL_u32vaddM_(u32* lhs, u32* rhs, u32* m, u32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u32v* with lhs multiplied with a u32
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32v* SL_u32vaddM(u32v* lhs, u32v* rhs, u32v* m, u32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u32vaddM_(lhs->data, rhs->data, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u32v2 with lhs multiplied with a u32
+SL_header u32v2 SL_u32v2addM(u32v2 lhs, u32v2 rhs, u32v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v2) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u32v3 with lhs multiplied with a u32
+SL_header u32v3 SL_u32v3addM(u32v3 lhs, u32v3 rhs, u32v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v3) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y,
+        .z = lhs.z + rhs.z * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u32v4 with lhs multiplied with a u32
+SL_header u32v4 SL_u32v4addM(u32v4 lhs, u32v4 rhs, u32v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v4) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y,
+        .z = lhs.z + rhs.z * m.z,
+        .w = lhs.w + rhs.w * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u32v* with lhs multiplied with a u32
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32* SL_u32vsubM_(u32* lhs, u32* rhs, u32* m, u32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u32v* with lhs multiplied with a u32
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32v* SL_u32vsubM(u32v* lhs, u32v* rhs, u32v* m, u32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u32vsubM_(lhs->data, rhs->data, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u32v2 with lhs multiplied with a u32
+SL_header u32v2 SL_u32v2subM(u32v2 lhs, u32v2 rhs, u32v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v2) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u32v3 with lhs multiplied with a u32
+SL_header u32v3 SL_u32v3subM(u32v3 lhs, u32v3 rhs, u32v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v3) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y,
+        .z = lhs.z - rhs.z * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u32v4 with lhs multiplied with a u32
+SL_header u32v4 SL_u32v4subM(u32v4 lhs, u32v4 rhs, u32v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v4) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y,
+        .z = lhs.z - rhs.z * m.z,
+        .w = lhs.w - rhs.w * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u32v* with lhs scaled by u32 and multiplied with a u32
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32* SL_u32vaddSM_(u32* lhs, u32* rhs, u32 s, u32* m, u32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * s * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u32v* with lhs scaled by u32 and multiplied with a u32
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32v* SL_u32vaddSM(u32v* lhs, u32v* rhs, u32 s, u32v* m, u32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u32vaddSM_(lhs->data, rhs->data, s, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u32v2 with lhs scaled by u32 and multiplied with a u32
+SL_header u32v2 SL_u32v2addSM(u32v2 lhs, u32v2 rhs, u32 s, u32v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v2) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u32v3 with lhs scaled by u32 and multiplied with a u32
+SL_header u32v3 SL_u32v3addSM(u32v3 lhs, u32v3 rhs, u32 s, u32v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v3) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y,
+        .z = lhs.z + rhs.z * s * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u32v4 with lhs scaled by u32 and multiplied with a u32
+SL_header u32v4 SL_u32v4addSM(u32v4 lhs, u32v4 rhs, u32 s, u32v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v4) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y,
+        .z = lhs.z + rhs.z * s * m.z,
+        .w = lhs.w + rhs.w * s * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u32v* with lhs scaled by u32 and multiplied with a u32
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32* SL_u32vsubSM_(u32* lhs, u32* rhs, u32 s, u32* m, u32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * s * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u32v* with lhs scaled by u32 and multiplied with a u32
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32v* SL_u32vsubSM(u32v* lhs, u32v* rhs, u32 s, u32v* m, u32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u32vsubSM_(lhs->data, rhs->data, s, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u32v2 with lhs scaled by u32 and multiplied with a u32
+SL_header u32v2 SL_u32v2subSM(u32v2 lhs, u32v2 rhs, u32 s, u32v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v2) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u32v3 with lhs scaled by u32 and multiplied with a u32
+SL_header u32v3 SL_u32v3subSM(u32v3 lhs, u32v3 rhs, u32 s, u32v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v3) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y,
+        .z = lhs.z - rhs.z * s * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u32v4 with lhs scaled by u32 and multiplied with a u32
+SL_header u32v4 SL_u32v4subSM(u32v4 lhs, u32v4 rhs, u32 s, u32v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v4) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y,
+        .z = lhs.z - rhs.z * s * m.z,
+        .w = lhs.w - rhs.w * s * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u32v* with rhs scaled by a u32
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32* SL_u32vSadd_(u32* lhs, u32 s, u32* rhs, u32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * s + rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u32v* with rhs scaled by a u32
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32v* SL_u32vSadd(u32v* lhs, u32 s, u32v* rhs, u32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u32vSadd_(lhs->data, s, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u32v2 with rhs scaled by a u32
+SL_header u32v2 SL_u32v2Sadd(u32v2 lhs, u32 s, u32v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v2) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u32v3 with rhs scaled by a u32
+SL_header u32v3 SL_u32v3Sadd(u32v3 lhs, u32 s, u32v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v3) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y,
+        .z = lhs.z * s + rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u32v4 with rhs scaled by a u32
+SL_header u32v4 SL_u32v4Sadd(u32v4 lhs, u32 s, u32v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v4) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y,
+        .z = lhs.z * s + rhs.z,
+        .w = lhs.w * s + rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u32v* with rhs scaled by a u32
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32* SL_u32vSsub_(u32* lhs, u32 s, u32* rhs, u32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * s - rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u32v* with rhs scaled by a u32
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32v* SL_u32vSsub(u32v* lhs, u32 s, u32v* rhs, u32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u32vSsub_(lhs->data, s, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u32v2 with rhs scaled by a u32
+SL_header u32v2 SL_u32v2Ssub(u32v2 lhs, u32 s, u32v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v2) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u32v3 with rhs scaled by a u32
+SL_header u32v3 SL_u32v3Ssub(u32v3 lhs, u32 s, u32v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v3) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y,
+        .z = lhs.z * s - rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u32v4 with rhs scaled by a u32
+SL_header u32v4 SL_u32v4Ssub(u32v4 lhs, u32 s, u32v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v4) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y,
+        .z = lhs.z * s - rhs.z,
+        .w = lhs.w * s - rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two u32v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32* SL_u32vmin_(u32* lhs, u32* rhs, u32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] < rhs[i] ? lhs[i] : rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two u32v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32v* SL_u32vmin(u32v* lhs, u32v* rhs, u32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u32vmin_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two u32v2
+SL_header u32v2 SL_u32v2min(u32v2 lhs, u32v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v2) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two u32v3
+SL_header u32v3 SL_u32v3min(u32v3 lhs, u32v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v3) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z < rhs.z ? lhs.z : rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two u32v4
+SL_header u32v4 SL_u32v4min(u32v4 lhs, u32v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v4) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z < rhs.z ? lhs.z : rhs.z,
+        .w = lhs.w < rhs.w ? lhs.w : rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two u32v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32* SL_u32vmax_(u32* lhs, u32* rhs, u32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] > rhs[i] ? lhs[i] : rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two u32v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32v* SL_u32vmax(u32v* lhs, u32v* rhs, u32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u32vmax_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two u32v2
+SL_header u32v2 SL_u32v2max(u32v2 lhs, u32v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v2) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two u32v3
+SL_header u32v3 SL_u32v3max(u32v3 lhs, u32v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v3) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z > rhs.z ? lhs.z : rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two u32v4
+SL_header u32v4 SL_u32v4max(u32v4 lhs, u32v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v4) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z > rhs.z ? lhs.z : rhs.z,
+        .w = lhs.w > rhs.w ? lhs.w : rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Dot product of two u32v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u32vdot_(u32* lhs, u32* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    u64 dest = 0;
+    for (usize i = 0; i < count; ++i) dest += lhs[i] * rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Dot product of two u32v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u32vdot(u32v* lhs, u32v* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u32vdot_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Dot product of two u32v2
+SL_header u64 SL_u32v2dot(u32v2 lhs, u32v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y;
+}
+#else
+;
+#endif
+/// @brief Dot product of two u32v3
+SL_header u64 SL_u32v3dot(u32v3 lhs, u32v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
+}
+#else
+;
+#endif
+/// @brief Dot product of two u32v4
+SL_header u64 SL_u32v4dot(u32v4 lhs, u32v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z + lhs.w * rhs.w;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a u32v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u32vlen_max_(u32* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    u64 dest = 0;
+    for (usize i = 0; i < count; ++i) dest = v[i] > dest ? v[i] : dest;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a u32v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u32vlen_max(u32v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u32vlen_max_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Maximum component of a u32v2
+SL_header u64 SL_u32v2len_max(u32v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return v.x > v.y ? v.x : v.y;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a u32v3
+SL_header u64 SL_u32v3len_max(u32v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return v.x > v.y ? (v.x > v.z ? v.x : v.z) : (v.y > v.z ? v.y : v.z);
+}
+#else
+;
+#endif
+/// @brief Maximum component of a u32v4
+SL_header u64 SL_u32v4len_max(u32v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return v.x > v.y ? (v.x > v.z ? (v.x > v.w ? v.x : v.w) : (v.z > v.w ? v.z : v.w)) : (v.y > v.z ? (v.y > v.w ? v.y : v.w) : (v.z > v.w ? v.z : v.w));
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a u32v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u32vlen_manh_(u32* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    u64 dest = 0;
+    for (usize i = 0; i < count; ++i) dest += v[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a u32v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u32vlen_manh(u32v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u32vlen_manh_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a u32v2
+SL_header u64 SL_u32v2len_manh(u32v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return v.x + v.y;
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a u32v3
+SL_header u64 SL_u32v3len_manh(u32v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return v.x + v.y + v.z;
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a u32v4
+SL_header u64 SL_u32v4len_manh(u32v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return v.x + v.y + v.z + v.w;
+}
+#else
+;
+#endif
+/// @brief Squared euclidean length of a u32v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u32vlen_srq_(u32* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u32vdot_(v, v, count);
+}
+#else
+;
+#endif
+/// @brief Squared euclidean length of a u32v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u32vlen_srq(u32v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u32vlen_srq_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Square length of a u32v2
+SL_header u64 SL_u32v2len_sqr(u32v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u32v2dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Square length of a u32v3
+SL_header u64 SL_u32v3len_sqr(u32v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u32v3dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Square length of a u32v4
+SL_header u64 SL_u32v4len_sqr(u32v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u32v4dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a u32v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_u32vlen_(u32* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_u32vdot_(v, v, count));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a u32v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_u32vlen(u32v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u32vlen_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a u32v2
+SL_header double SL_u32v2len(u32v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_u32v2dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a u32v3
+SL_header double SL_u32v3len(u32v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_u32v3dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a u32v4
+SL_header double SL_u32v4len(u32v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_u32v4dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance bewteen two u32v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_u32vdist_(u32* lhs, u32* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    double accum = 0;
+    for (int i = 0; i < count; ++i) accum += (lhs[i] - rhs[i]) * (lhs[i] - rhs[i]);
+    return sqrt(accum);
+}
+#else
+;
+#endif
+/// @brief Euclidean distance bewteen two u32v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_u32vdist(u32v* lhs, u32v* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u32vdist_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two u32v2
+SL_header double SL_u32v2dist(u32v2 lhs, u32v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u32v2len(SL_u32v2sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two u32v3
+SL_header double SL_u32v3dist(u32v3 lhs, u32v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u32v3len(SL_u32v3sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two u32v4
+SL_header double SL_u32v4dist(u32v4 lhs, u32v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u32v4len(SL_u32v4sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Reflection of u32v2 v around vector u32v2 n
+SL_header u32v2 SL_u32v2refl(u32v2 v, u32v2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u32v2subS(v, n, 2.0 * SL_u32v2dot(v, n) / SL_u32v2dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of u32v3 v around vector u32v3 n
+SL_header u32v3 SL_u32v3refl(u32v3 v, u32v3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u32v3subS(v, n, 2.0 * SL_u32v3dot(v, n) / SL_u32v3dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of u32v4 v around vector u32v4 n
+SL_header u32v4 SL_u32v4refl(u32v4 v, u32v4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u32v4subS(v, n, 2.0 * SL_u32v4dot(v, n) / SL_u32v4dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of u32v2 v around vector u32v2 n assumed to be of unit length
+SL_header u32v2 SL_u32v2refl_u(u32v2 v, u32v2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u32v2subS(v, n, 2.0 * SL_u32v2dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of u32v3 v around vector u32v3 n assumed to be of unit length
+SL_header u32v3 SL_u32v3refl_u(u32v3 v, u32v3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u32v3subS(v, n, 2.0 * SL_u32v3dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of u32v4 v around vector u32v4 n assumed to be of unit length
+SL_header u32v4 SL_u32v4refl_u(u32v4 v, u32v4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u32v4subS(v, n, 2.0 * SL_u32v4dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u32v* by integer n
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32* SL_u32vmods_(u32* v, u32 n, u32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = v[i] % n;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u32v* by integer n
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32v* SL_u32vmods(u32v* v, u32 n, u32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u32vmods_(v->data, n, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u32v2 by integer n
+SL_header u32v2 SL_u32v2mods(u32v2 v, u32 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v2) {
+        .x = v.x % n,
+        .y = v.y % n
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u32v3 by integer n
+SL_header u32v3 SL_u32v3mods(u32v3 v, u32 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v3) {
+        .x = v.x % n,
+        .y = v.y % n,
+        .z = v.z % n
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u32v4 by integer n
+SL_header u32v4 SL_u32v4mods(u32v4 v, u32 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v4) {
+        .x = v.x % n,
+        .y = v.y % n,
+        .z = v.z % n,
+        .w = v.w % n
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u32v* by u32v* n
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32* SL_u32vmod_(u32* v, u32* n, u32* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = v[i] % n[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u32v* by u32v* n
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u32v* SL_u32vmod(u32v* v, u32v* n, u32v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u32vmod_(v->data, n->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u32v2 by u32v2 n
+SL_header u32v2 SL_u32v2mod(u32v2 v, u32v2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v2) {
+        .x = v.x % n.x,
+        .y = v.y % n.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u32v3 by u32v3 n
+SL_header u32v3 SL_u32v3mod(u32v3 v, u32v3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v3) {
+        .x = v.x % n.x,
+        .y = v.y % n.y,
+        .z = v.z % n.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u32v4 by u32v4 n
+SL_header u32v4 SL_u32v4mod(u32v4 v, u32v4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32v4) {
+        .x = v.x % n.x,
+        .y = v.y % n.y,
+        .z = v.z % n.z,
+        .w = v.w % n.w
+    };
+}
+#else
+;
+#endif
+#pragma endregion U32
+#pragma region U64
+
+/// @brief Vector of u64 with arbitrary dimension
+typedef struct {
+    const usize count;
+    u64 data[];
+} u64v;
+
+/// @brief Vector of u64 with dimension 2
+typedef union {
+    u64 data[2];
+    struct {
+        union { u64 x, r, u; };
+        union { u64 y, g, v; };
+    };
+} u64v2;
+
+#define SL_u64v2_zero  ((u64v2){.x =  0, .y =  0})
+#define SL_u64v2_one   ((u64v2){.x =  1, .y =  1})
+#define SL_u64v2_right ((u64v2){.x =  1, .y =  0})
+#define SL_u64v2_up    ((u64v2){.x =  0, .y =  1})
+
+/// @brief Vector of u64 with dimension 3
+typedef union {
+    u64 data[3];
+    struct {
+        union { u64 x, r, u; };
+        union { u64 y, g, v; };
+        union { u64 z, b, s; };
+    };
+    struct {
+        union { u64 __x, __r, __u; };
+        union { u64v2 yz, gb, vs; };
+    };
+    struct {
+        union { u64v2 xy, rg, uv; };
+        union { u64 __z, __b, __s; };
+    };
+} u64v3;
+
+#define SL_u64v3_zero  ((u64v3){.x =  0, .y =  0, .z =  0})
+#define SL_u64v3_one   ((u64v3){.x =  1, .y =  1, .z =  1})
+#define SL_u64v3_right ((u64v3){.x =  1, .y =  0, .z =  0})
+#define SL_u64v3_up    ((u64v3){.x =  0, .y =  1, .z =  0})
+#define SL_u64v3_forw  ((u64v3){.x =  0, .y =  0, .z =  1})
+
+/// @brief Vector of u64 with dimension 4
+typedef union {
+    u64 data[4];
+    struct {
+        union { u64 x, r, u; };
+        union { u64 y, g, v; };
+        union { u64 z, b, s; };
+        union { u64 w, a, t; };
+    };
+    struct {
+        union { u64 __x0, __r0, __u0; };
+        union { u64v2 yz, gb, vs; };
+        union { u64 __w0, __a0, __t0; };
+    };
+    struct {
+        union { u64v2 xy, rb, uv; };
+        union { u64v2 zw, ba, st; };
+    };
+    struct {
+        union { u64v3 xyz, rgb, uvs; };
+        union { u64 __w1, __a1, __t1; };
+    };
+    struct {
+        union { u64 __x1, __r1, __u1; };
+        union { u64v3 yzw, gba, vst; };
+    };
+} u64v4;
+
+#define SL_u64v4_zero  ((u64v4){.x = 0, .y = 0, .z = 0, .w = 0})
+#define SL_u64v4_one   ((u64v4){.x = 1, .y = 1, .z = 1, .w = 1})
+
+
+
+#define SL_u64v2_(X, Y)       ((u64v2){.x = X, .y = Y})
+#define SL_u64v3_(X, Y, Z)    ((u64v3){.x = X, .y = Y, .z = Z})
+#define SL_u64v4_(X, Y, Z, W) ((u64v4){.x = X, .y = Y, .z = Z, .w = W})
+
+#define SL_u64v2s(S)          ((u64v2){.x = S, .y = S})
+#define SL_u64v3s(S)          ((u64v3){.x = S, .y = S, .z = S})
+#define SL_u64v4s(S)          ((u64v4){.x = S, .y = S, .z = S, .w = S})
+
+#define SL_u64v2v(V, ...)     ((u64v2){.x = (V).x, .y = (V).y})
+#define SL_u64v3v(V, ...)     ((u64v3){.x = (V).x, .y = (V).y, .z = (SL_vsize(V) >= 2 ? (V).data[2] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[1]))})
+#define SL_u64v4v(V, ...)     ((u64v4){.x = (V).x, .y = (V).y, .z = (SL_vsize(V) >= 2 ? (V).data[2] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[1])), .w = (SL_vsize(V) >= 3 ? (V).data[3] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[2]))})
+
+
+
+/// @brief Addition of two u64v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64* SL_u64vadd_(u64* lhs, u64* rhs, u64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u64v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64v* SL_u64vadd(u64v* lhs, u64v* rhs, u64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u64vadd_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u64v2
+SL_header u64v2 SL_u64v2add(u64v2 lhs, u64v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v2) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u64v3
+SL_header u64v3 SL_u64v3add(u64v3 lhs, u64v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v3) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y,
+        .z = lhs.z + rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u64v4
+SL_header u64v4 SL_u64v4add(u64v4 lhs, u64v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v4) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y,
+        .z = lhs.z + rhs.z,
+        .w = lhs.w + rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u64v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64* SL_u64vsub_(u64* lhs, u64* rhs, u64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u64v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64v* SL_u64vsub(u64v* lhs, u64v* rhs, u64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u64vsub_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u64v2
+SL_header u64v2 SL_u64v2sub(u64v2 lhs, u64v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v2) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u64v3
+SL_header u64v3 SL_u64v3sub(u64v3 lhs, u64v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v3) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y,
+        .z = lhs.z - rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u64v4
+SL_header u64v4 SL_u64v4sub(u64v4 lhs, u64v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v4) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y,
+        .z = lhs.z - rhs.z,
+        .w = lhs.w - rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two u64v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64* SL_u64vmul_(u64* lhs, u64* rhs, u64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two u64v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64v* SL_u64vmul(u64v* lhs, u64v* rhs, u64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u64vmul_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two u64v2
+SL_header u64v2 SL_u64v2mul(u64v2 lhs, u64v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v2) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two u64v3
+SL_header u64v3 SL_u64v3mul(u64v3 lhs, u64v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v3) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y,
+        .z = lhs.z * rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two u64v4
+SL_header u64v4 SL_u64v4mul(u64v4 lhs, u64v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v4) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y,
+        .z = lhs.z * rhs.z,
+        .w = lhs.w * rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a u64v* with a scalar
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64* SL_u64vmuls_(u64* lhs, u64 rhs, u64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * rhs;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a u64v* with a scalar
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64v* SL_u64vmuls(u64v* lhs, u64 rhs, u64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u64vmuls_(lhs->data, rhs, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a u64v2 with a scalar
+SL_header u64v2 SL_u64v2muls(u64v2 lhs, u64 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v2) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a u64v3 with a scalar
+SL_header u64v3 SL_u64v3muls(u64v3 lhs, u64 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v3) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs,
+        .z = lhs.z * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a u64v4 with a scalar
+SL_header u64v4 SL_u64v4muls(u64v4 lhs, u64 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v4) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs,
+        .z = lhs.z * rhs,
+        .w = lhs.w * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two u64v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64* SL_u64vdiv_(u64* lhs, u64* rhs, u64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] / rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two u64v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64v* SL_u64vdiv(u64v* lhs, u64v* rhs, u64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u64vdiv_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two u64v2
+SL_header u64v2 SL_u64v2div(u64v2 lhs, u64v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v2) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two u64v3
+SL_header u64v3 SL_u64v3div(u64v3 lhs, u64v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v3) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y,
+        .z = lhs.z / rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two u64v4
+SL_header u64v4 SL_u64v4div(u64v4 lhs, u64v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v4) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y,
+        .z = lhs.z / rhs.z,
+        .w = lhs.w / rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a u64v* with a scalar
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64* SL_u64vdivs_(u64* lhs, u64 rhs, u64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] / rhs;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a u64v* with a scalar
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64v* SL_u64vdivs(u64v* lhs, u64 rhs, u64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u64vdivs_(lhs->data, rhs, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a u64v2 with a scalar
+SL_header u64v2 SL_u64v2divs(u64v2 lhs, u64 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v2) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a u64v3 with a scalar
+SL_header u64v3 SL_u64v3divs(u64v3 lhs, u64 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v3) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs,
+        .z = lhs.z / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a u64v4 with a scalar
+SL_header u64v4 SL_u64v4divs(u64v4 lhs, u64 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v4) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs,
+        .z = lhs.z / rhs,
+        .w = lhs.w / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u64v* with lhs scaled by a u64
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64* SL_u64vaddS_(u64* lhs, u64* rhs, u64 s, u64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * s;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u64v* with lhs scaled by a u64
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64v* SL_u64vaddS(u64v* lhs, u64v* rhs, u64 s, u64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u64vaddS_(lhs->data, rhs->data, s, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u64v2 with lhs scaled by a u64
+SL_header u64v2 SL_u64v2addS(u64v2 lhs, u64v2 rhs, u64 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v2) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u64v3 with lhs scaled by a u64
+SL_header u64v3 SL_u64v3addS(u64v3 lhs, u64v3 rhs, u64 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v3) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s,
+        .z = lhs.z + rhs.z * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u64v4 with lhs scaled by a u64
+SL_header u64v4 SL_u64v4addS(u64v4 lhs, u64v4 rhs, u64 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v4) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s,
+        .z = lhs.z + rhs.z * s,
+        .w = lhs.w + rhs.w * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u64v* with lhs scaled by a u64
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64* SL_u64vsubS_(u64* lhs, u64* rhs, u64 s, u64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * s;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u64v* with lhs scaled by a u64
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64v* SL_u64vsubS(u64v* lhs, u64v* rhs, u64 s, u64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u64vsubS_(lhs->data, rhs->data, s, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u64v2 with lhs scaled by a u64
+SL_header u64v2 SL_u64v2subS(u64v2 lhs, u64v2 rhs, u64 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v2) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u64v3 with lhs scaled by a u64
+SL_header u64v3 SL_u64v3subS(u64v3 lhs, u64v3 rhs, u64 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v3) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s,
+        .z = lhs.z - rhs.z * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u64v4 with lhs scaled by a u64
+SL_header u64v4 SL_u64v4subS(u64v4 lhs, u64v4 rhs, u64 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v4) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s,
+        .z = lhs.z - rhs.z * s,
+        .w = lhs.w - rhs.w * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u64v* with lhs multiplied with a u64
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64* SL_u64vaddM_(u64* lhs, u64* rhs, u64* m, u64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u64v* with lhs multiplied with a u64
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64v* SL_u64vaddM(u64v* lhs, u64v* rhs, u64v* m, u64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u64vaddM_(lhs->data, rhs->data, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u64v2 with lhs multiplied with a u64
+SL_header u64v2 SL_u64v2addM(u64v2 lhs, u64v2 rhs, u64v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v2) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u64v3 with lhs multiplied with a u64
+SL_header u64v3 SL_u64v3addM(u64v3 lhs, u64v3 rhs, u64v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v3) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y,
+        .z = lhs.z + rhs.z * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u64v4 with lhs multiplied with a u64
+SL_header u64v4 SL_u64v4addM(u64v4 lhs, u64v4 rhs, u64v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v4) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y,
+        .z = lhs.z + rhs.z * m.z,
+        .w = lhs.w + rhs.w * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u64v* with lhs multiplied with a u64
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64* SL_u64vsubM_(u64* lhs, u64* rhs, u64* m, u64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u64v* with lhs multiplied with a u64
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64v* SL_u64vsubM(u64v* lhs, u64v* rhs, u64v* m, u64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u64vsubM_(lhs->data, rhs->data, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u64v2 with lhs multiplied with a u64
+SL_header u64v2 SL_u64v2subM(u64v2 lhs, u64v2 rhs, u64v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v2) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u64v3 with lhs multiplied with a u64
+SL_header u64v3 SL_u64v3subM(u64v3 lhs, u64v3 rhs, u64v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v3) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y,
+        .z = lhs.z - rhs.z * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u64v4 with lhs multiplied with a u64
+SL_header u64v4 SL_u64v4subM(u64v4 lhs, u64v4 rhs, u64v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v4) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y,
+        .z = lhs.z - rhs.z * m.z,
+        .w = lhs.w - rhs.w * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u64v* with lhs scaled by u64 and multiplied with a u64
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64* SL_u64vaddSM_(u64* lhs, u64* rhs, u64 s, u64* m, u64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * s * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u64v* with lhs scaled by u64 and multiplied with a u64
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64v* SL_u64vaddSM(u64v* lhs, u64v* rhs, u64 s, u64v* m, u64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u64vaddSM_(lhs->data, rhs->data, s, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u64v2 with lhs scaled by u64 and multiplied with a u64
+SL_header u64v2 SL_u64v2addSM(u64v2 lhs, u64v2 rhs, u64 s, u64v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v2) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u64v3 with lhs scaled by u64 and multiplied with a u64
+SL_header u64v3 SL_u64v3addSM(u64v3 lhs, u64v3 rhs, u64 s, u64v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v3) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y,
+        .z = lhs.z + rhs.z * s * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u64v4 with lhs scaled by u64 and multiplied with a u64
+SL_header u64v4 SL_u64v4addSM(u64v4 lhs, u64v4 rhs, u64 s, u64v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v4) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y,
+        .z = lhs.z + rhs.z * s * m.z,
+        .w = lhs.w + rhs.w * s * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u64v* with lhs scaled by u64 and multiplied with a u64
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64* SL_u64vsubSM_(u64* lhs, u64* rhs, u64 s, u64* m, u64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * s * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u64v* with lhs scaled by u64 and multiplied with a u64
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64v* SL_u64vsubSM(u64v* lhs, u64v* rhs, u64 s, u64v* m, u64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u64vsubSM_(lhs->data, rhs->data, s, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u64v2 with lhs scaled by u64 and multiplied with a u64
+SL_header u64v2 SL_u64v2subSM(u64v2 lhs, u64v2 rhs, u64 s, u64v2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v2) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u64v3 with lhs scaled by u64 and multiplied with a u64
+SL_header u64v3 SL_u64v3subSM(u64v3 lhs, u64v3 rhs, u64 s, u64v3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v3) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y,
+        .z = lhs.z - rhs.z * s * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u64v4 with lhs scaled by u64 and multiplied with a u64
+SL_header u64v4 SL_u64v4subSM(u64v4 lhs, u64v4 rhs, u64 s, u64v4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v4) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y,
+        .z = lhs.z - rhs.z * s * m.z,
+        .w = lhs.w - rhs.w * s * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u64v* with rhs scaled by a u64
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64* SL_u64vSadd_(u64* lhs, u64 s, u64* rhs, u64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * s + rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u64v* with rhs scaled by a u64
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64v* SL_u64vSadd(u64v* lhs, u64 s, u64v* rhs, u64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u64vSadd_(lhs->data, s, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two u64v2 with rhs scaled by a u64
+SL_header u64v2 SL_u64v2Sadd(u64v2 lhs, u64 s, u64v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v2) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u64v3 with rhs scaled by a u64
+SL_header u64v3 SL_u64v3Sadd(u64v3 lhs, u64 s, u64v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v3) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y,
+        .z = lhs.z * s + rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u64v4 with rhs scaled by a u64
+SL_header u64v4 SL_u64v4Sadd(u64v4 lhs, u64 s, u64v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v4) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y,
+        .z = lhs.z * s + rhs.z,
+        .w = lhs.w * s + rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u64v* with rhs scaled by a u64
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64* SL_u64vSsub_(u64* lhs, u64 s, u64* rhs, u64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * s - rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u64v* with rhs scaled by a u64
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64v* SL_u64vSsub(u64v* lhs, u64 s, u64v* rhs, u64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u64vSsub_(lhs->data, s, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two u64v2 with rhs scaled by a u64
+SL_header u64v2 SL_u64v2Ssub(u64v2 lhs, u64 s, u64v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v2) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u64v3 with rhs scaled by a u64
+SL_header u64v3 SL_u64v3Ssub(u64v3 lhs, u64 s, u64v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v3) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y,
+        .z = lhs.z * s - rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u64v4 with rhs scaled by a u64
+SL_header u64v4 SL_u64v4Ssub(u64v4 lhs, u64 s, u64v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v4) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y,
+        .z = lhs.z * s - rhs.z,
+        .w = lhs.w * s - rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two u64v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64* SL_u64vmin_(u64* lhs, u64* rhs, u64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] < rhs[i] ? lhs[i] : rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two u64v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64v* SL_u64vmin(u64v* lhs, u64v* rhs, u64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u64vmin_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two u64v2
+SL_header u64v2 SL_u64v2min(u64v2 lhs, u64v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v2) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two u64v3
+SL_header u64v3 SL_u64v3min(u64v3 lhs, u64v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v3) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z < rhs.z ? lhs.z : rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two u64v4
+SL_header u64v4 SL_u64v4min(u64v4 lhs, u64v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v4) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z < rhs.z ? lhs.z : rhs.z,
+        .w = lhs.w < rhs.w ? lhs.w : rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two u64v*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64* SL_u64vmax_(u64* lhs, u64* rhs, u64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] > rhs[i] ? lhs[i] : rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two u64v*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64v* SL_u64vmax(u64v* lhs, u64v* rhs, u64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u64vmax_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two u64v2
+SL_header u64v2 SL_u64v2max(u64v2 lhs, u64v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v2) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two u64v3
+SL_header u64v3 SL_u64v3max(u64v3 lhs, u64v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v3) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z > rhs.z ? lhs.z : rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two u64v4
+SL_header u64v4 SL_u64v4max(u64v4 lhs, u64v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v4) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z > rhs.z ? lhs.z : rhs.z,
+        .w = lhs.w > rhs.w ? lhs.w : rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Dot product of two u64v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u64vdot_(u64* lhs, u64* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    u64 dest = 0;
+    for (usize i = 0; i < count; ++i) dest += lhs[i] * rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Dot product of two u64v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u64vdot(u64v* lhs, u64v* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u64vdot_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Dot product of two u64v2
+SL_header u64 SL_u64v2dot(u64v2 lhs, u64v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y;
+}
+#else
+;
+#endif
+/// @brief Dot product of two u64v3
+SL_header u64 SL_u64v3dot(u64v3 lhs, u64v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
+}
+#else
+;
+#endif
+/// @brief Dot product of two u64v4
+SL_header u64 SL_u64v4dot(u64v4 lhs, u64v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z + lhs.w * rhs.w;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a u64v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u64vlen_max_(u64* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    u64 dest = 0;
+    for (usize i = 0; i < count; ++i) dest = v[i] > dest ? v[i] : dest;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a u64v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u64vlen_max(u64v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u64vlen_max_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Maximum component of a u64v2
+SL_header u64 SL_u64v2len_max(u64v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return v.x > v.y ? v.x : v.y;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a u64v3
+SL_header u64 SL_u64v3len_max(u64v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return v.x > v.y ? (v.x > v.z ? v.x : v.z) : (v.y > v.z ? v.y : v.z);
+}
+#else
+;
+#endif
+/// @brief Maximum component of a u64v4
+SL_header u64 SL_u64v4len_max(u64v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return v.x > v.y ? (v.x > v.z ? (v.x > v.w ? v.x : v.w) : (v.z > v.w ? v.z : v.w)) : (v.y > v.z ? (v.y > v.w ? v.y : v.w) : (v.z > v.w ? v.z : v.w));
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a u64v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u64vlen_manh_(u64* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    u64 dest = 0;
+    for (usize i = 0; i < count; ++i) dest += v[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a u64v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u64vlen_manh(u64v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u64vlen_manh_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a u64v2
+SL_header u64 SL_u64v2len_manh(u64v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return v.x + v.y;
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a u64v3
+SL_header u64 SL_u64v3len_manh(u64v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return v.x + v.y + v.z;
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a u64v4
+SL_header u64 SL_u64v4len_manh(u64v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return v.x + v.y + v.z + v.w;
+}
+#else
+;
+#endif
+/// @brief Squared euclidean length of a u64v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u64vlen_srq_(u64* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u64vdot_(v, v, count);
+}
+#else
+;
+#endif
+/// @brief Squared euclidean length of a u64v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_u64vlen_srq(u64v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u64vlen_srq_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Square length of a u64v2
+SL_header u64 SL_u64v2len_sqr(u64v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u64v2dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Square length of a u64v3
+SL_header u64 SL_u64v3len_sqr(u64v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u64v3dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Square length of a u64v4
+SL_header u64 SL_u64v4len_sqr(u64v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u64v4dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a u64v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_u64vlen_(u64* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_u64vdot_(v, v, count));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a u64v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_u64vlen(u64v* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u64vlen_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a u64v2
+SL_header double SL_u64v2len(u64v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_u64v2dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a u64v3
+SL_header double SL_u64v3len(u64v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_u64v3dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a u64v4
+SL_header double SL_u64v4len(u64v4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_u64v4dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance bewteen two u64v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_u64vdist_(u64* lhs, u64* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    double accum = 0;
+    for (int i = 0; i < count; ++i) accum += (lhs[i] - rhs[i]) * (lhs[i] - rhs[i]);
+    return sqrt(accum);
+}
+#else
+;
+#endif
+/// @brief Euclidean distance bewteen two u64v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_u64vdist(u64v* lhs, u64v* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u64vdist_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two u64v2
+SL_header double SL_u64v2dist(u64v2 lhs, u64v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u64v2len(SL_u64v2sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two u64v3
+SL_header double SL_u64v3dist(u64v3 lhs, u64v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u64v3len(SL_u64v3sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two u64v4
+SL_header double SL_u64v4dist(u64v4 lhs, u64v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u64v4len(SL_u64v4sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Reflection of u64v2 v around vector u64v2 n
+SL_header u64v2 SL_u64v2refl(u64v2 v, u64v2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u64v2subS(v, n, 2.0 * SL_u64v2dot(v, n) / SL_u64v2dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of u64v3 v around vector u64v3 n
+SL_header u64v3 SL_u64v3refl(u64v3 v, u64v3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u64v3subS(v, n, 2.0 * SL_u64v3dot(v, n) / SL_u64v3dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of u64v4 v around vector u64v4 n
+SL_header u64v4 SL_u64v4refl(u64v4 v, u64v4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u64v4subS(v, n, 2.0 * SL_u64v4dot(v, n) / SL_u64v4dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of u64v2 v around vector u64v2 n assumed to be of unit length
+SL_header u64v2 SL_u64v2refl_u(u64v2 v, u64v2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u64v2subS(v, n, 2.0 * SL_u64v2dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of u64v3 v around vector u64v3 n assumed to be of unit length
+SL_header u64v3 SL_u64v3refl_u(u64v3 v, u64v3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u64v3subS(v, n, 2.0 * SL_u64v3dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of u64v4 v around vector u64v4 n assumed to be of unit length
+SL_header u64v4 SL_u64v4refl_u(u64v4 v, u64v4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u64v4subS(v, n, 2.0 * SL_u64v4dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u64v* by integer n
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64* SL_u64vmods_(u64* v, u64 n, u64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = v[i] % n;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u64v* by integer n
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64v* SL_u64vmods(u64v* v, u64 n, u64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u64vmods_(v->data, n, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u64v2 by integer n
+SL_header u64v2 SL_u64v2mods(u64v2 v, u64 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v2) {
+        .x = v.x % n,
+        .y = v.y % n
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u64v3 by integer n
+SL_header u64v3 SL_u64v3mods(u64v3 v, u64 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v3) {
+        .x = v.x % n,
+        .y = v.y % n,
+        .z = v.z % n
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u64v4 by integer n
+SL_header u64v4 SL_u64v4mods(u64v4 v, u64 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v4) {
+        .x = v.x % n,
+        .y = v.y % n,
+        .z = v.z % n,
+        .w = v.w % n
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u64v* by u64v* n
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64* SL_u64vmod_(u64* v, u64* n, u64* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = v[i] % n[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u64v* by u64v* n
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header u64v* SL_u64vmod(u64v* v, u64v* n, u64v* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_u64vmod_(v->data, n->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u64v2 by u64v2 n
+SL_header u64v2 SL_u64v2mod(u64v2 v, u64v2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v2) {
+        .x = v.x % n.x,
+        .y = v.y % n.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u64v3 by u64v3 n
+SL_header u64v3 SL_u64v3mod(u64v3 v, u64v3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v3) {
+        .x = v.x % n.x,
+        .y = v.y % n.y,
+        .z = v.z % n.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a u64v4 by u64v4 n
+SL_header u64v4 SL_u64v4mod(u64v4 v, u64v4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64v4) {
+        .x = v.x % n.x,
+        .y = v.y % n.y,
+        .z = v.z % n.z,
+        .w = v.w % n.w
+    };
+}
+#else
+;
+#endif
+#pragma endregion U64
+#pragma region FLOAT
+
+/// @brief Vector of float with arbitrary dimension
+typedef struct {
+    const usize count;
+    float data[];
+} fv;
+
+/// @brief Vector of float with dimension 2
+typedef union {
+    float data[2];
+    struct {
+        union { float x, r, u; };
+        union { float y, g, v; };
+    };
+} fv2;
+
+#define SL_fv2_zero  ((fv2){.x =  0, .y =  0})
+#define SL_fv2_one   ((fv2){.x =  1, .y =  1})
+#define SL_fv2_right ((fv2){.x =  1, .y =  0})
+#define SL_fv2_up    ((fv2){.x =  0, .y =  1})
+#define SL_fv2_left  ((fv2){.x = -1, .y =  0})
+#define SL_fv2_down  ((fv2){.x =  0, .y = -1})
+
+/// @brief Vector of float with dimension 3
+typedef union {
+    float data[3];
+    struct {
+        union { float x, r, u; };
+        union { float y, g, v; };
+        union { float z, b, s; };
+    };
+    struct {
+        union { float __x, __r, __u; };
+        union { fv2 yz, gb, vs; };
+    };
+    struct {
+        union { fv2 xy, rg, uv; };
+        union { float __z, __b, __s; };
+    };
+} fv3;
+
+#define SL_fv3_zero  ((fv3){.x =  0, .y =  0, .z =  0})
+#define SL_fv3_one   ((fv3){.x =  1, .y =  1, .z =  1})
+#define SL_fv3_right ((fv3){.x =  1, .y =  0, .z =  0})
+#define SL_fv3_up    ((fv3){.x =  0, .y =  1, .z =  0})
+#define SL_fv3_forw  ((fv3){.x =  0, .y =  0, .z =  1})
+#define SL_fv3_left  ((fv3){.x = -1, .y =  0, .z =  0})
+#define SL_fv3_down  ((fv3){.x =  0, .y = -1, .z =  0})
+#define SL_fv3_back  ((fv3){.x =  0, .y =  0, .z = -1})
+
+/// @brief Vector of float with dimension 4
+typedef union {
+    float data[4];
+    struct {
+        union { float x, r, u; };
+        union { float y, g, v; };
+        union { float z, b, s; };
+        union { float w, a, t; };
+    };
+    struct {
+        union { float __x0, __r0, __u0; };
+        union { fv2 yz, gb, vs; };
+        union { float __w0, __a0, __t0; };
+    };
+    struct {
+        union { fv2 xy, rb, uv; };
+        union { fv2 zw, ba, st; };
+    };
+    struct {
+        union { fv3 xyz, rgb, uvs; };
+        union { float __w1, __a1, __t1; };
+    };
+    struct {
+        union { float __x1, __r1, __u1; };
+        union { fv3 yzw, gba, vst; };
+    };
+} fv4;
+
+#define SL_fv4_zero  ((fv4){.x = 0, .y = 0, .z = 0, .w = 0})
+#define SL_fv4_one   ((fv4){.x = 1, .y = 1, .z = 1, .w = 1})
+
+
+
+#define SL_fv2_(X, Y)       ((fv2){.x = X, .y = Y})
+#define SL_fv3_(X, Y, Z)    ((fv3){.x = X, .y = Y, .z = Z})
+#define SL_fv4_(X, Y, Z, W) ((fv4){.x = X, .y = Y, .z = Z, .w = W})
+
+#define SL_fv2s(S)          ((fv2){.x = S, .y = S})
+#define SL_fv3s(S)          ((fv3){.x = S, .y = S, .z = S})
+#define SL_fv4s(S)          ((fv4){.x = S, .y = S, .z = S, .w = S})
+
+#define SL_fv2v(V, ...)     ((fv2){.x = (V).x, .y = (V).y})
+#define SL_fv3v(V, ...)     ((fv3){.x = (V).x, .y = (V).y, .z = (SL_vsize(V) >= 2 ? (V).data[2] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[1]))})
+#define SL_fv4v(V, ...)     ((fv4){.x = (V).x, .y = (V).y, .z = (SL_vsize(V) >= 2 ? (V).data[2] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[1])), .w = (SL_vsize(V) >= 3 ? (V).data[3] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[2]))})
+
+
+
+/// @brief Addition of two fv*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header float* SL_fvadd_(float* lhs, float* rhs, float* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two fv*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header fv* SL_fvadd(fv* lhs, fv* rhs, fv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_fvadd_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two fv2
+SL_header fv2 SL_fv2add(fv2 lhs, fv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv2) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two fv3
+SL_header fv3 SL_fv3add(fv3 lhs, fv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv3) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y,
+        .z = lhs.z + rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two fv4
+SL_header fv4 SL_fv4add(fv4 lhs, fv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv4) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y,
+        .z = lhs.z + rhs.z,
+        .w = lhs.w + rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two fv*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header float* SL_fvsub_(float* lhs, float* rhs, float* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two fv*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header fv* SL_fvsub(fv* lhs, fv* rhs, fv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_fvsub_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two fv2
+SL_header fv2 SL_fv2sub(fv2 lhs, fv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv2) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two fv3
+SL_header fv3 SL_fv3sub(fv3 lhs, fv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv3) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y,
+        .z = lhs.z - rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two fv4
+SL_header fv4 SL_fv4sub(fv4 lhs, fv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv4) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y,
+        .z = lhs.z - rhs.z,
+        .w = lhs.w - rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two fv*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header float* SL_fvmul_(float* lhs, float* rhs, float* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two fv*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header fv* SL_fvmul(fv* lhs, fv* rhs, fv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_fvmul_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two fv2
+SL_header fv2 SL_fv2mul(fv2 lhs, fv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv2) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two fv3
+SL_header fv3 SL_fv3mul(fv3 lhs, fv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv3) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y,
+        .z = lhs.z * rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two fv4
+SL_header fv4 SL_fv4mul(fv4 lhs, fv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv4) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y,
+        .z = lhs.z * rhs.z,
+        .w = lhs.w * rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a fv* with a scalar
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header float* SL_fvmuls_(float* lhs, float rhs, float* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * rhs;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a fv* with a scalar
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header fv* SL_fvmuls(fv* lhs, float rhs, fv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_fvmuls_(lhs->data, rhs, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a fv2 with a scalar
+SL_header fv2 SL_fv2muls(fv2 lhs, float rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv2) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a fv3 with a scalar
+SL_header fv3 SL_fv3muls(fv3 lhs, float rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv3) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs,
+        .z = lhs.z * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a fv4 with a scalar
+SL_header fv4 SL_fv4muls(fv4 lhs, float rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv4) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs,
+        .z = lhs.z * rhs,
+        .w = lhs.w * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two fv*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header float* SL_fvdiv_(float* lhs, float* rhs, float* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] / rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two fv*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header fv* SL_fvdiv(fv* lhs, fv* rhs, fv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_fvdiv_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two fv2
+SL_header fv2 SL_fv2div(fv2 lhs, fv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv2) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two fv3
+SL_header fv3 SL_fv3div(fv3 lhs, fv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv3) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y,
+        .z = lhs.z / rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two fv4
+SL_header fv4 SL_fv4div(fv4 lhs, fv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv4) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y,
+        .z = lhs.z / rhs.z,
+        .w = lhs.w / rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a fv* with a scalar
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header float* SL_fvdivs_(float* lhs, float rhs, float* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] / rhs;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a fv* with a scalar
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header fv* SL_fvdivs(fv* lhs, float rhs, fv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_fvdivs_(lhs->data, rhs, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a fv2 with a scalar
+SL_header fv2 SL_fv2divs(fv2 lhs, float rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv2) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a fv3 with a scalar
+SL_header fv3 SL_fv3divs(fv3 lhs, float rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv3) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs,
+        .z = lhs.z / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a fv4 with a scalar
+SL_header fv4 SL_fv4divs(fv4 lhs, float rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv4) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs,
+        .z = lhs.z / rhs,
+        .w = lhs.w / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two fv* with lhs scaled by a float
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header float* SL_fvaddS_(float* lhs, float* rhs, float s, float* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * s;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two fv* with lhs scaled by a float
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header fv* SL_fvaddS(fv* lhs, fv* rhs, float s, fv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_fvaddS_(lhs->data, rhs->data, s, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two fv2 with lhs scaled by a float
+SL_header fv2 SL_fv2addS(fv2 lhs, fv2 rhs, float s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv2) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two fv3 with lhs scaled by a float
+SL_header fv3 SL_fv3addS(fv3 lhs, fv3 rhs, float s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv3) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s,
+        .z = lhs.z + rhs.z * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two fv4 with lhs scaled by a float
+SL_header fv4 SL_fv4addS(fv4 lhs, fv4 rhs, float s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv4) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s,
+        .z = lhs.z + rhs.z * s,
+        .w = lhs.w + rhs.w * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two fv* with lhs scaled by a float
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header float* SL_fvsubS_(float* lhs, float* rhs, float s, float* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * s;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two fv* with lhs scaled by a float
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header fv* SL_fvsubS(fv* lhs, fv* rhs, float s, fv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_fvsubS_(lhs->data, rhs->data, s, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two fv2 with lhs scaled by a float
+SL_header fv2 SL_fv2subS(fv2 lhs, fv2 rhs, float s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv2) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two fv3 with lhs scaled by a float
+SL_header fv3 SL_fv3subS(fv3 lhs, fv3 rhs, float s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv3) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s,
+        .z = lhs.z - rhs.z * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two fv4 with lhs scaled by a float
+SL_header fv4 SL_fv4subS(fv4 lhs, fv4 rhs, float s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv4) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s,
+        .z = lhs.z - rhs.z * s,
+        .w = lhs.w - rhs.w * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two fv* with lhs multiplied with a float
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header float* SL_fvaddM_(float* lhs, float* rhs, float* m, float* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two fv* with lhs multiplied with a float
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header fv* SL_fvaddM(fv* lhs, fv* rhs, fv* m, fv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_fvaddM_(lhs->data, rhs->data, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two fv2 with lhs multiplied with a float
+SL_header fv2 SL_fv2addM(fv2 lhs, fv2 rhs, fv2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv2) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two fv3 with lhs multiplied with a float
+SL_header fv3 SL_fv3addM(fv3 lhs, fv3 rhs, fv3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv3) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y,
+        .z = lhs.z + rhs.z * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two fv4 with lhs multiplied with a float
+SL_header fv4 SL_fv4addM(fv4 lhs, fv4 rhs, fv4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv4) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y,
+        .z = lhs.z + rhs.z * m.z,
+        .w = lhs.w + rhs.w * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two fv* with lhs multiplied with a float
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header float* SL_fvsubM_(float* lhs, float* rhs, float* m, float* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two fv* with lhs multiplied with a float
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header fv* SL_fvsubM(fv* lhs, fv* rhs, fv* m, fv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_fvsubM_(lhs->data, rhs->data, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two fv2 with lhs multiplied with a float
+SL_header fv2 SL_fv2subM(fv2 lhs, fv2 rhs, fv2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv2) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two fv3 with lhs multiplied with a float
+SL_header fv3 SL_fv3subM(fv3 lhs, fv3 rhs, fv3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv3) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y,
+        .z = lhs.z - rhs.z * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two fv4 with lhs multiplied with a float
+SL_header fv4 SL_fv4subM(fv4 lhs, fv4 rhs, fv4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv4) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y,
+        .z = lhs.z - rhs.z * m.z,
+        .w = lhs.w - rhs.w * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two fv* with lhs scaled by float and multiplied with a float
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header float* SL_fvaddSM_(float* lhs, float* rhs, float s, float* m, float* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * s * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two fv* with lhs scaled by float and multiplied with a float
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header fv* SL_fvaddSM(fv* lhs, fv* rhs, float s, fv* m, fv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_fvaddSM_(lhs->data, rhs->data, s, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two fv2 with lhs scaled by float and multiplied with a float
+SL_header fv2 SL_fv2addSM(fv2 lhs, fv2 rhs, float s, fv2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv2) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two fv3 with lhs scaled by float and multiplied with a float
+SL_header fv3 SL_fv3addSM(fv3 lhs, fv3 rhs, float s, fv3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv3) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y,
+        .z = lhs.z + rhs.z * s * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two fv4 with lhs scaled by float and multiplied with a float
+SL_header fv4 SL_fv4addSM(fv4 lhs, fv4 rhs, float s, fv4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv4) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y,
+        .z = lhs.z + rhs.z * s * m.z,
+        .w = lhs.w + rhs.w * s * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two fv* with lhs scaled by float and multiplied with a float
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header float* SL_fvsubSM_(float* lhs, float* rhs, float s, float* m, float* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * s * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two fv* with lhs scaled by float and multiplied with a float
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header fv* SL_fvsubSM(fv* lhs, fv* rhs, float s, fv* m, fv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_fvsubSM_(lhs->data, rhs->data, s, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two fv2 with lhs scaled by float and multiplied with a float
+SL_header fv2 SL_fv2subSM(fv2 lhs, fv2 rhs, float s, fv2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv2) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two fv3 with lhs scaled by float and multiplied with a float
+SL_header fv3 SL_fv3subSM(fv3 lhs, fv3 rhs, float s, fv3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv3) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y,
+        .z = lhs.z - rhs.z * s * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two fv4 with lhs scaled by float and multiplied with a float
+SL_header fv4 SL_fv4subSM(fv4 lhs, fv4 rhs, float s, fv4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv4) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y,
+        .z = lhs.z - rhs.z * s * m.z,
+        .w = lhs.w - rhs.w * s * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two fv* with rhs scaled by a float
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header float* SL_fvSadd_(float* lhs, float s, float* rhs, float* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * s + rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two fv* with rhs scaled by a float
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header fv* SL_fvSadd(fv* lhs, float s, fv* rhs, fv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_fvSadd_(lhs->data, s, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two fv2 with rhs scaled by a float
+SL_header fv2 SL_fv2Sadd(fv2 lhs, float s, fv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv2) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two fv3 with rhs scaled by a float
+SL_header fv3 SL_fv3Sadd(fv3 lhs, float s, fv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv3) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y,
+        .z = lhs.z * s + rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two fv4 with rhs scaled by a float
+SL_header fv4 SL_fv4Sadd(fv4 lhs, float s, fv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv4) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y,
+        .z = lhs.z * s + rhs.z,
+        .w = lhs.w * s + rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two fv* with rhs scaled by a float
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header float* SL_fvSsub_(float* lhs, float s, float* rhs, float* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * s - rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two fv* with rhs scaled by a float
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header fv* SL_fvSsub(fv* lhs, float s, fv* rhs, fv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_fvSsub_(lhs->data, s, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two fv2 with rhs scaled by a float
+SL_header fv2 SL_fv2Ssub(fv2 lhs, float s, fv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv2) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two fv3 with rhs scaled by a float
+SL_header fv3 SL_fv3Ssub(fv3 lhs, float s, fv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv3) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y,
+        .z = lhs.z * s - rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two fv4 with rhs scaled by a float
+SL_header fv4 SL_fv4Ssub(fv4 lhs, float s, fv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv4) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y,
+        .z = lhs.z * s - rhs.z,
+        .w = lhs.w * s - rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a fv*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header float* SL_fvneg_(float* v, float* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = -v[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Negation of a fv*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header fv* SL_fvneg(fv* v, fv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_fvneg_(v->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Negation of a fv2
+SL_header fv2 SL_fv2neg(fv2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv2) {
+        .x = -v.x,
+        .y = -v.y
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a fv3
+SL_header fv3 SL_fv3neg(fv3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv3) {
+        .x = -v.x,
+        .y = -v.y,
+        .z = -v.z
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a fv4
+SL_header fv4 SL_fv4neg(fv4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv4) {
+        .x = -v.x,
+        .y = -v.y,
+        .z = -v.z,
+        .w = -v.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a fv*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header float* SL_fvabs_(float* v, float* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = fabs(v[i]);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a fv*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header fv* SL_fvabs(fv* v, fv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_fvabs_(v->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a fv2
+SL_header fv2 SL_fv2abs(fv2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv2) {
+        .x = fabs(v.x),
+        .y = fabs(v.y)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a fv3
+SL_header fv3 SL_fv3abs(fv3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv3) {
+        .x = fabs(v.x),
+        .y = fabs(v.y),
+        .z = fabs(v.z)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a fv4
+SL_header fv4 SL_fv4abs(fv4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv4) {
+        .x = fabs(v.x),
+        .y = fabs(v.y),
+        .z = fabs(v.z),
+        .w = fabs(v.w)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two fv*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header float* SL_fvmin_(float* lhs, float* rhs, float* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] < rhs[i] ? lhs[i] : rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two fv*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header fv* SL_fvmin(fv* lhs, fv* rhs, fv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_fvmin_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two fv2
+SL_header fv2 SL_fv2min(fv2 lhs, fv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv2) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two fv3
+SL_header fv3 SL_fv3min(fv3 lhs, fv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv3) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z < rhs.z ? lhs.z : rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two fv4
+SL_header fv4 SL_fv4min(fv4 lhs, fv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv4) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z < rhs.z ? lhs.z : rhs.z,
+        .w = lhs.w < rhs.w ? lhs.w : rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two fv*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header float* SL_fvmax_(float* lhs, float* rhs, float* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] > rhs[i] ? lhs[i] : rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two fv*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header fv* SL_fvmax(fv* lhs, fv* rhs, fv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_fvmax_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two fv2
+SL_header fv2 SL_fv2max(fv2 lhs, fv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv2) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two fv3
+SL_header fv3 SL_fv3max(fv3 lhs, fv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv3) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z > rhs.z ? lhs.z : rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two fv4
+SL_header fv4 SL_fv4max(fv4 lhs, fv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv4) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z > rhs.z ? lhs.z : rhs.z,
+        .w = lhs.w > rhs.w ? lhs.w : rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Dot product of two fv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_fvdot_(float* lhs, float* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    double dest = 0;
+    for (usize i = 0; i < count; ++i) dest += lhs[i] * rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Dot product of two fv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_fvdot(fv* lhs, fv* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_fvdot_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Dot product of two fv2
+SL_header double SL_fv2dot(fv2 lhs, fv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y;
+}
+#else
+;
+#endif
+/// @brief Dot product of two fv3
+SL_header double SL_fv3dot(fv3 lhs, fv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
+}
+#else
+;
+#endif
+/// @brief Dot product of two fv4
+SL_header double SL_fv4dot(fv4 lhs, fv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z + lhs.w * rhs.w;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a fv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_fvlen_max_(float* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    double dest = 0;
+    for (usize i = 0; i < count; ++i) dest = dest < fabs(v[i]) ? fabs(v[i]) : dest;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a fv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_fvlen_max(fv* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_fvlen_max_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Maximum component of a fv2
+SL_header double SL_fv2len_max(fv2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    fv2 av = SL_fv2_(fabs(v.x), fabs(v.y));
+    return av.x > av.y ? av.x : av.y;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a fv3
+SL_header double SL_fv3len_max(fv3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    fv3 av = SL_fv3_(fabs(v.x), fabs(v.y), fabs(v.z));
+    return av.x > av.y ? (av.x > av.z ? av.x : av.z) : (av.y > av.z ? av.y : av.z);
+}
+#else
+;
+#endif
+/// @brief Maximum component of a fv4
+SL_header double SL_fv4len_max(fv4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    fv4 av = SL_fv4_(fabs(v.x), fabs(v.y), fabs(v.z), fabs(v.w));
+    return av.x > av.y ? (av.x > av.z ? (av.x > av.w ? av.x : av.w) : (av.z > av.w ? av.z : av.w)) : (av.y > av.z ? (av.y > av.w ? av.y : av.w) : (av.z > av.w ? av.z : av.w));
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a fv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_fvlen_manh_(float* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    double dest = 0;
+    for (usize i = 0; i < count; ++i) dest += fabs(v[i]);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a fv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_fvlen_manh(fv* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_fvlen_manh_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a fv2
+SL_header double SL_fv2len_manh(fv2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return fabs(v.x) + fabs(v.y);
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a fv3
+SL_header double SL_fv3len_manh(fv3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return fabs(v.x) + fabs(v.y) + fabs(v.z);
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a fv4
+SL_header double SL_fv4len_manh(fv4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return fabs(v.x) + fabs(v.y) + fabs(v.z) + fabs(v.w);
+}
+#else
+;
+#endif
+/// @brief Squared euclidean length of a fv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_fvlen_srq_(float* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_fvdot_(v, v, count);
+}
+#else
+;
+#endif
+/// @brief Squared euclidean length of a fv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_fvlen_srq(fv* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_fvlen_srq_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Square length of a fv2
+SL_header double SL_fv2len_sqr(fv2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_fv2dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Square length of a fv3
+SL_header double SL_fv3len_sqr(fv3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_fv3dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Square length of a fv4
+SL_header double SL_fv4len_sqr(fv4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_fv4dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a fv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_fvlen_(float* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_fvdot_(v, v, count));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a fv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_fvlen(fv* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_fvlen_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a fv2
+SL_header double SL_fv2len(fv2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_fv2dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a fv3
+SL_header double SL_fv3len(fv3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_fv3dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a fv4
+SL_header double SL_fv4len(fv4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_fv4dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance bewteen two fv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_fvdist_(float* lhs, float* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    double accum = 0;
+    for (int i = 0; i < count; ++i) accum += (lhs[i] - rhs[i]) * (lhs[i] - rhs[i]);
+    return sqrt(accum);
+}
+#else
+;
+#endif
+/// @brief Euclidean distance bewteen two fv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_fvdist(fv* lhs, fv* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_fvdist_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two fv2
+SL_header double SL_fv2dist(fv2 lhs, fv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_fv2len(SL_fv2sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two fv3
+SL_header double SL_fv3dist(fv3 lhs, fv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_fv3len(SL_fv3sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two fv4
+SL_header double SL_fv4dist(fv4 lhs, fv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_fv4len(SL_fv4sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Reflection of fv2 v around vector fv2 n
+SL_header fv2 SL_fv2refl(fv2 v, fv2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_fv2subS(v, n, 2.0 * SL_fv2dot(v, n) / SL_fv2dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of fv3 v around vector fv3 n
+SL_header fv3 SL_fv3refl(fv3 v, fv3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_fv3subS(v, n, 2.0 * SL_fv3dot(v, n) / SL_fv3dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of fv4 v around vector fv4 n
+SL_header fv4 SL_fv4refl(fv4 v, fv4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_fv4subS(v, n, 2.0 * SL_fv4dot(v, n) / SL_fv4dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of fv2 v around vector fv2 n assumed to be of unit length
+SL_header fv2 SL_fv2refl_u(fv2 v, fv2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_fv2subS(v, n, 2.0 * SL_fv2dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of fv3 v around vector fv3 n assumed to be of unit length
+SL_header fv3 SL_fv3refl_u(fv3 v, fv3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_fv3subS(v, n, 2.0 * SL_fv3dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of fv4 v around vector fv4 n assumed to be of unit length
+SL_header fv4 SL_fv4refl_u(fv4 v, fv4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_fv4subS(v, n, 2.0 * SL_fv4dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a fv* by real n
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header float* SL_fvmods_(float* v, float n, float* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = fmod(v[i], n);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a fv* by real n
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header fv* SL_fvmods(fv* v, float n, fv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_fvmods_(v->data, n, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a fv2 by real n
+SL_header fv2 SL_fv2mods(fv2 v, float n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv2) {
+        .x = fmod(v.x, n),
+        .y = fmod(v.y, n)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a fv3 by real n
+SL_header fv3 SL_fv3mods(fv3 v, float n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv3) {
+        .x = fmod(v.x, n),
+        .y = fmod(v.y, n),
+        .z = fmod(v.z, n)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a fv4 by real n
+SL_header fv4 SL_fv4mods(fv4 v, float n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv4) {
+        .x = fmod(v.x, n),
+        .y = fmod(v.y, n),
+        .z = fmod(v.z, n),
+        .w = fmod(v.w, n)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a fv* by fv* n
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header float* SL_fvmod_(float* v, float* n, float* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = fmod(v[i], n[i]);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a fv* by fv* n
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header fv* SL_fvmod(fv* v, fv* n, fv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_fvmod_(v->data, n->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a fv2 by fv2 n
+SL_header fv2 SL_fv2mod(fv2 v, fv2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv2) {
+        .x = fmod(v.x, n.x),
+        .y = fmod(v.y, n.y)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a fv3 by fv3 n
+SL_header fv3 SL_fv3mod(fv3 v, fv3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv3) {
+        .x = fmod(v.x, n.x),
+        .y = fmod(v.y, n.y),
+        .z = fmod(v.z, n.z)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a fv4 by fv4 n
+SL_header fv4 SL_fv4mod(fv4 v, fv4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv4) {
+        .x = fmod(v.x, n.x),
+        .y = fmod(v.y, n.y),
+        .z = fmod(v.z, n.z),
+        .w = fmod(v.w, n.w)
+    };
+}
+#else
+;
+#endif
+/// @brief Normalization of a fv*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header float* SL_fvnorm_(float* v, float* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    double inv_len = 1.0 / SL_fvlen_(v, count);
+    for (usize i = 0; i < count; ++i) dest[i] = v[i] * inv_len;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Normalization of a fv*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header fv* SL_fvnorm(fv* v, fv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_fvnorm_(v->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Normalization of a fv2
+SL_header fv2 SL_fv2norm(fv2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    double inv_len = 1.0 / SL_fv2len(v);
+    return (fv2) {
+        .x = v.x * inv_len,
+        .y = v.y * inv_len
+    };
+}
+#else
+;
+#endif
+/// @brief Normalization of a fv3
+SL_header fv3 SL_fv3norm(fv3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    double inv_len = 1.0 / SL_fv3len(v);
+    return (fv3) {
+        .x = v.x * inv_len,
+        .y = v.y * inv_len,
+        .z = v.z * inv_len
+    };
+}
+#else
+;
+#endif
+/// @brief Normalization of a fv4
+SL_header fv4 SL_fv4norm(fv4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    double inv_len = 1.0 / SL_fv4len(v);
+    return (fv4) {
+        .x = v.x * inv_len,
+        .y = v.y * inv_len,
+        .z = v.z * inv_len,
+        .w = v.w * inv_len
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise flooring of a fv*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header float* SL_fvfloor_(float* v, float* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = floor(v[i]);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise flooring of a fv*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header fv* SL_fvfloor(fv* v, fv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_fvfloor_(v->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise flooring of a fv2
+SL_header fv2 SL_fv2floor(fv2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv2) {
+        .x = floor(v.x),
+        .y = floor(v.y)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise flooring of a fv3
+SL_header fv3 SL_fv3floor(fv3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv3) {
+        .x = floor(v.x),
+        .y = floor(v.y),
+        .z = floor(v.z)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise flooring of a fv4
+SL_header fv4 SL_fv4floor(fv4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv4) {
+        .x = floor(v.x),
+        .y = floor(v.y),
+        .z = floor(v.z),
+        .w = floor(v.w)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise ceiling of a fv*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header float* SL_fvceil_(float* v, float* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = ceil(v[i]);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise ceiling of a fv*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header fv* SL_fvceil(fv* v, fv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_fvceil_(v->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise ceiling of a fv2
+SL_header fv2 SL_fv2ceil(fv2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv2) {
+        .x = ceil(v.x),
+        .y = ceil(v.y)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise ceiling of a fv3
+SL_header fv3 SL_fv3ceil(fv3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv3) {
+        .x = ceil(v.x),
+        .y = ceil(v.y),
+        .z = ceil(v.z)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise ceiling of a fv4
+SL_header fv4 SL_fv4ceil(fv4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv4) {
+        .x = ceil(v.x),
+        .y = ceil(v.y),
+        .z = ceil(v.z),
+        .w = ceil(v.w)
+    };
+}
+#else
+;
+#endif
+/// @brief Linear interpolation of two fv*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header float* SL_fvlerp_(float* lhs, float* rhs, float t, float* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + (rhs[i] - lhs[i]) * t;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Linear interpolation of two fv*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header fv* SL_fvlerp(fv* lhs, fv* rhs, float t, fv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_fvlerp_(lhs->data, rhs->data, t, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Linear interpolation of two fv2
+SL_header fv2 SL_fv2lerp(fv2 lhs, fv2 rhs, float t)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv2) {
+        .x = lhs.x + (rhs.x - lhs.x) * t,
+        .y = lhs.y + (rhs.y - lhs.y) * t
+    };
+}
+#else
+;
+#endif
+/// @brief Linear interpolation of two fv3
+SL_header fv3 SL_fv3lerp(fv3 lhs, fv3 rhs, float t)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv3) {
+        .x = lhs.x + (rhs.x - lhs.x) * t,
+        .y = lhs.y + (rhs.y - lhs.y) * t,
+        .z = lhs.z + (rhs.z - lhs.z) * t
+    };
+}
+#else
+;
+#endif
+/// @brief Linear interpolation of two fv4
+SL_header fv4 SL_fv4lerp(fv4 lhs, fv4 rhs, float t)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv4) {
+        .x = lhs.x + (rhs.x - lhs.x) * t,
+        .y = lhs.y + (rhs.y - lhs.y) * t,
+        .z = lhs.z + (rhs.z - lhs.z) * t,
+        .w = lhs.w + (rhs.w - lhs.w) * t
+    };
+}
+#else
+;
+#endif
+/// @brief Spherical interpolation of two fv2
+SL_header fv2 SL_fv2serp(fv2 lhs, fv2 rhs, float t)
+#if defined(SL_IMPLEMENTATION)
+{
+    float angle = acos(SL_fv2dot(SL_fv2norm(lhs), SL_fv2norm(rhs)));
+    float inv_sin = 1.0 / sin(angle);
+    float a = sin(angle * t) * inv_sin;
+    float b = sin(angle * (1 - t)) * inv_sin;
+    return (fv2) {
+        .x = lhs.x * a + rhs.x * b,
+        .y = lhs.y * a + rhs.y * b
+    };
+}
+#else
+;
+#endif
+/// @brief Spherical interpolation of two fv3
+SL_header fv3 SL_fv3serp(fv3 lhs, fv3 rhs, float t)
+#if defined(SL_IMPLEMENTATION)
+{
+    float angle = acos(SL_fv3dot(SL_fv3norm(lhs), SL_fv3norm(rhs)));
+    float inv_sin = 1.0 / sin(angle);
+    float a = sin(angle * t) * inv_sin;
+    float b = sin(angle * (1 - t)) * inv_sin;
+    return (fv3) {
+        .x = lhs.x * a + rhs.x * b,
+        .y = lhs.y * a + rhs.y * b,
+        .z = lhs.z * a + rhs.z * b
+    };
+}
+#else
+;
+#endif
+/// @brief Spherical interpolation of two fv4
+SL_header fv4 SL_fv4serp(fv4 lhs, fv4 rhs, float t)
+#if defined(SL_IMPLEMENTATION)
+{
+    float angle = acos(SL_fv4dot(SL_fv4norm(lhs), SL_fv4norm(rhs)));
+    float inv_sin = 1.0 / sin(angle);
+    float a = sin(angle * t) * inv_sin;
+    float b = sin(angle * (1 - t)) * inv_sin;
+    return (fv4) {
+        .x = lhs.x * a + rhs.x * b,
+        .y = lhs.y * a + rhs.y * b,
+        .z = lhs.z * a + rhs.z * b,
+        .w = lhs.w * a + rhs.w * b
+    };
+}
+#else
+;
+#endif
+/// @brief Cross-product of two fv2
+SL_header double SL_fv2cross(fv2 lhs, fv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.y - lhs.y * rhs.x;
+}
+#else
+;
+#endif
+/// @brief Cross-product of two fv3
+SL_header fv3 SL_fv3cross(fv3 lhs, fv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv3) {
+            .x = lhs.y * rhs.z - lhs.z * rhs.y,
+            .y = lhs.z * rhs.x - lhs.x * rhs.z,
+            .z = lhs.x * rhs.y - lhs.y * rhs.x
+        };
+
+}
+#else
+;
+#endif
+#pragma endregion FLOAT
+#pragma region DOUBLE
+
+/// @brief Vector of double with arbitrary dimension
+typedef struct {
+    const usize count;
+    double data[];
+} dv;
+
+/// @brief Vector of double with dimension 2
+typedef union {
+    double data[2];
+    struct {
+        union { double x, r, u; };
+        union { double y, g, v; };
+    };
+} dv2;
+
+#define SL_dv2_zero  ((dv2){.x =  0, .y =  0})
+#define SL_dv2_one   ((dv2){.x =  1, .y =  1})
+#define SL_dv2_right ((dv2){.x =  1, .y =  0})
+#define SL_dv2_up    ((dv2){.x =  0, .y =  1})
+#define SL_dv2_left  ((dv2){.x = -1, .y =  0})
+#define SL_dv2_down  ((dv2){.x =  0, .y = -1})
+
+/// @brief Vector of double with dimension 3
+typedef union {
+    double data[3];
+    struct {
+        union { double x, r, u; };
+        union { double y, g, v; };
+        union { double z, b, s; };
+    };
+    struct {
+        union { double __x, __r, __u; };
+        union { dv2 yz, gb, vs; };
+    };
+    struct {
+        union { dv2 xy, rg, uv; };
+        union { double __z, __b, __s; };
+    };
+} dv3;
+
+#define SL_dv3_zero  ((dv3){.x =  0, .y =  0, .z =  0})
+#define SL_dv3_one   ((dv3){.x =  1, .y =  1, .z =  1})
+#define SL_dv3_right ((dv3){.x =  1, .y =  0, .z =  0})
+#define SL_dv3_up    ((dv3){.x =  0, .y =  1, .z =  0})
+#define SL_dv3_forw  ((dv3){.x =  0, .y =  0, .z =  1})
+#define SL_dv3_left  ((dv3){.x = -1, .y =  0, .z =  0})
+#define SL_dv3_down  ((dv3){.x =  0, .y = -1, .z =  0})
+#define SL_dv3_back  ((dv3){.x =  0, .y =  0, .z = -1})
+
+/// @brief Vector of double with dimension 4
+typedef union {
+    double data[4];
+    struct {
+        union { double x, r, u; };
+        union { double y, g, v; };
+        union { double z, b, s; };
+        union { double w, a, t; };
+    };
+    struct {
+        union { double __x0, __r0, __u0; };
+        union { dv2 yz, gb, vs; };
+        union { double __w0, __a0, __t0; };
+    };
+    struct {
+        union { dv2 xy, rb, uv; };
+        union { dv2 zw, ba, st; };
+    };
+    struct {
+        union { dv3 xyz, rgb, uvs; };
+        union { double __w1, __a1, __t1; };
+    };
+    struct {
+        union { double __x1, __r1, __u1; };
+        union { dv3 yzw, gba, vst; };
+    };
+} dv4;
+
+#define SL_dv4_zero  ((dv4){.x = 0, .y = 0, .z = 0, .w = 0})
+#define SL_dv4_one   ((dv4){.x = 1, .y = 1, .z = 1, .w = 1})
+
+
+
+#define SL_dv2_(X, Y)       ((dv2){.x = X, .y = Y})
+#define SL_dv3_(X, Y, Z)    ((dv3){.x = X, .y = Y, .z = Z})
+#define SL_dv4_(X, Y, Z, W) ((dv4){.x = X, .y = Y, .z = Z, .w = W})
+
+#define SL_dv2s(S)          ((dv2){.x = S, .y = S})
+#define SL_dv3s(S)          ((dv3){.x = S, .y = S, .z = S})
+#define SL_dv4s(S)          ((dv4){.x = S, .y = S, .z = S, .w = S})
+
+#define SL_dv2v(V, ...)     ((dv2){.x = (V).x, .y = (V).y})
+#define SL_dv3v(V, ...)     ((dv3){.x = (V).x, .y = (V).y, .z = (SL_vsize(V) >= 2 ? (V).data[2] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[1]))})
+#define SL_dv4v(V, ...)     ((dv4){.x = (V).x, .y = (V).y, .z = (SL_vsize(V) >= 2 ? (V).data[2] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[1])), .w = (SL_vsize(V) >= 3 ? (V).data[3] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[2]))})
+
+
+
+/// @brief Addition of two dv*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header double* SL_dvadd_(double* lhs, double* rhs, double* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two dv*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header dv* SL_dvadd(dv* lhs, dv* rhs, dv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_dvadd_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two dv2
+SL_header dv2 SL_dv2add(dv2 lhs, dv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv2) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two dv3
+SL_header dv3 SL_dv3add(dv3 lhs, dv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv3) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y,
+        .z = lhs.z + rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two dv4
+SL_header dv4 SL_dv4add(dv4 lhs, dv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv4) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y,
+        .z = lhs.z + rhs.z,
+        .w = lhs.w + rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two dv*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header double* SL_dvsub_(double* lhs, double* rhs, double* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two dv*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header dv* SL_dvsub(dv* lhs, dv* rhs, dv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_dvsub_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two dv2
+SL_header dv2 SL_dv2sub(dv2 lhs, dv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv2) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two dv3
+SL_header dv3 SL_dv3sub(dv3 lhs, dv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv3) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y,
+        .z = lhs.z - rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two dv4
+SL_header dv4 SL_dv4sub(dv4 lhs, dv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv4) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y,
+        .z = lhs.z - rhs.z,
+        .w = lhs.w - rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two dv*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header double* SL_dvmul_(double* lhs, double* rhs, double* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two dv*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header dv* SL_dvmul(dv* lhs, dv* rhs, dv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_dvmul_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two dv2
+SL_header dv2 SL_dv2mul(dv2 lhs, dv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv2) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two dv3
+SL_header dv3 SL_dv3mul(dv3 lhs, dv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv3) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y,
+        .z = lhs.z * rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two dv4
+SL_header dv4 SL_dv4mul(dv4 lhs, dv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv4) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y,
+        .z = lhs.z * rhs.z,
+        .w = lhs.w * rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a dv* with a scalar
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header double* SL_dvmuls_(double* lhs, double rhs, double* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * rhs;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a dv* with a scalar
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header dv* SL_dvmuls(dv* lhs, double rhs, dv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_dvmuls_(lhs->data, rhs, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a dv2 with a scalar
+SL_header dv2 SL_dv2muls(dv2 lhs, double rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv2) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a dv3 with a scalar
+SL_header dv3 SL_dv3muls(dv3 lhs, double rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv3) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs,
+        .z = lhs.z * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a dv4 with a scalar
+SL_header dv4 SL_dv4muls(dv4 lhs, double rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv4) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs,
+        .z = lhs.z * rhs,
+        .w = lhs.w * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two dv*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header double* SL_dvdiv_(double* lhs, double* rhs, double* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] / rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two dv*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header dv* SL_dvdiv(dv* lhs, dv* rhs, dv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_dvdiv_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two dv2
+SL_header dv2 SL_dv2div(dv2 lhs, dv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv2) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two dv3
+SL_header dv3 SL_dv3div(dv3 lhs, dv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv3) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y,
+        .z = lhs.z / rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two dv4
+SL_header dv4 SL_dv4div(dv4 lhs, dv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv4) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y,
+        .z = lhs.z / rhs.z,
+        .w = lhs.w / rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a dv* with a scalar
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header double* SL_dvdivs_(double* lhs, double rhs, double* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] / rhs;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a dv* with a scalar
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header dv* SL_dvdivs(dv* lhs, double rhs, dv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_dvdivs_(lhs->data, rhs, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a dv2 with a scalar
+SL_header dv2 SL_dv2divs(dv2 lhs, double rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv2) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a dv3 with a scalar
+SL_header dv3 SL_dv3divs(dv3 lhs, double rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv3) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs,
+        .z = lhs.z / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a dv4 with a scalar
+SL_header dv4 SL_dv4divs(dv4 lhs, double rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv4) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs,
+        .z = lhs.z / rhs,
+        .w = lhs.w / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two dv* with lhs scaled by a double
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header double* SL_dvaddS_(double* lhs, double* rhs, double s, double* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * s;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two dv* with lhs scaled by a double
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header dv* SL_dvaddS(dv* lhs, dv* rhs, double s, dv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_dvaddS_(lhs->data, rhs->data, s, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two dv2 with lhs scaled by a double
+SL_header dv2 SL_dv2addS(dv2 lhs, dv2 rhs, double s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv2) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two dv3 with lhs scaled by a double
+SL_header dv3 SL_dv3addS(dv3 lhs, dv3 rhs, double s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv3) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s,
+        .z = lhs.z + rhs.z * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two dv4 with lhs scaled by a double
+SL_header dv4 SL_dv4addS(dv4 lhs, dv4 rhs, double s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv4) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s,
+        .z = lhs.z + rhs.z * s,
+        .w = lhs.w + rhs.w * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two dv* with lhs scaled by a double
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header double* SL_dvsubS_(double* lhs, double* rhs, double s, double* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * s;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two dv* with lhs scaled by a double
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header dv* SL_dvsubS(dv* lhs, dv* rhs, double s, dv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_dvsubS_(lhs->data, rhs->data, s, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two dv2 with lhs scaled by a double
+SL_header dv2 SL_dv2subS(dv2 lhs, dv2 rhs, double s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv2) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two dv3 with lhs scaled by a double
+SL_header dv3 SL_dv3subS(dv3 lhs, dv3 rhs, double s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv3) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s,
+        .z = lhs.z - rhs.z * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two dv4 with lhs scaled by a double
+SL_header dv4 SL_dv4subS(dv4 lhs, dv4 rhs, double s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv4) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s,
+        .z = lhs.z - rhs.z * s,
+        .w = lhs.w - rhs.w * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two dv* with lhs multiplied with a double
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header double* SL_dvaddM_(double* lhs, double* rhs, double* m, double* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two dv* with lhs multiplied with a double
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header dv* SL_dvaddM(dv* lhs, dv* rhs, dv* m, dv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_dvaddM_(lhs->data, rhs->data, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two dv2 with lhs multiplied with a double
+SL_header dv2 SL_dv2addM(dv2 lhs, dv2 rhs, dv2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv2) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two dv3 with lhs multiplied with a double
+SL_header dv3 SL_dv3addM(dv3 lhs, dv3 rhs, dv3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv3) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y,
+        .z = lhs.z + rhs.z * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two dv4 with lhs multiplied with a double
+SL_header dv4 SL_dv4addM(dv4 lhs, dv4 rhs, dv4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv4) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y,
+        .z = lhs.z + rhs.z * m.z,
+        .w = lhs.w + rhs.w * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two dv* with lhs multiplied with a double
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header double* SL_dvsubM_(double* lhs, double* rhs, double* m, double* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two dv* with lhs multiplied with a double
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header dv* SL_dvsubM(dv* lhs, dv* rhs, dv* m, dv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_dvsubM_(lhs->data, rhs->data, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two dv2 with lhs multiplied with a double
+SL_header dv2 SL_dv2subM(dv2 lhs, dv2 rhs, dv2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv2) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two dv3 with lhs multiplied with a double
+SL_header dv3 SL_dv3subM(dv3 lhs, dv3 rhs, dv3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv3) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y,
+        .z = lhs.z - rhs.z * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two dv4 with lhs multiplied with a double
+SL_header dv4 SL_dv4subM(dv4 lhs, dv4 rhs, dv4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv4) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y,
+        .z = lhs.z - rhs.z * m.z,
+        .w = lhs.w - rhs.w * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two dv* with lhs scaled by double and multiplied with a double
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header double* SL_dvaddSM_(double* lhs, double* rhs, double s, double* m, double* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * s * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two dv* with lhs scaled by double and multiplied with a double
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header dv* SL_dvaddSM(dv* lhs, dv* rhs, double s, dv* m, dv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_dvaddSM_(lhs->data, rhs->data, s, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two dv2 with lhs scaled by double and multiplied with a double
+SL_header dv2 SL_dv2addSM(dv2 lhs, dv2 rhs, double s, dv2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv2) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two dv3 with lhs scaled by double and multiplied with a double
+SL_header dv3 SL_dv3addSM(dv3 lhs, dv3 rhs, double s, dv3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv3) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y,
+        .z = lhs.z + rhs.z * s * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two dv4 with lhs scaled by double and multiplied with a double
+SL_header dv4 SL_dv4addSM(dv4 lhs, dv4 rhs, double s, dv4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv4) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y,
+        .z = lhs.z + rhs.z * s * m.z,
+        .w = lhs.w + rhs.w * s * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two dv* with lhs scaled by double and multiplied with a double
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header double* SL_dvsubSM_(double* lhs, double* rhs, double s, double* m, double* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * s * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two dv* with lhs scaled by double and multiplied with a double
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header dv* SL_dvsubSM(dv* lhs, dv* rhs, double s, dv* m, dv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_dvsubSM_(lhs->data, rhs->data, s, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two dv2 with lhs scaled by double and multiplied with a double
+SL_header dv2 SL_dv2subSM(dv2 lhs, dv2 rhs, double s, dv2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv2) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two dv3 with lhs scaled by double and multiplied with a double
+SL_header dv3 SL_dv3subSM(dv3 lhs, dv3 rhs, double s, dv3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv3) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y,
+        .z = lhs.z - rhs.z * s * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two dv4 with lhs scaled by double and multiplied with a double
+SL_header dv4 SL_dv4subSM(dv4 lhs, dv4 rhs, double s, dv4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv4) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y,
+        .z = lhs.z - rhs.z * s * m.z,
+        .w = lhs.w - rhs.w * s * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two dv* with rhs scaled by a double
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header double* SL_dvSadd_(double* lhs, double s, double* rhs, double* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * s + rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two dv* with rhs scaled by a double
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header dv* SL_dvSadd(dv* lhs, double s, dv* rhs, dv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_dvSadd_(lhs->data, s, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two dv2 with rhs scaled by a double
+SL_header dv2 SL_dv2Sadd(dv2 lhs, double s, dv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv2) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two dv3 with rhs scaled by a double
+SL_header dv3 SL_dv3Sadd(dv3 lhs, double s, dv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv3) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y,
+        .z = lhs.z * s + rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two dv4 with rhs scaled by a double
+SL_header dv4 SL_dv4Sadd(dv4 lhs, double s, dv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv4) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y,
+        .z = lhs.z * s + rhs.z,
+        .w = lhs.w * s + rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two dv* with rhs scaled by a double
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header double* SL_dvSsub_(double* lhs, double s, double* rhs, double* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * s - rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two dv* with rhs scaled by a double
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header dv* SL_dvSsub(dv* lhs, double s, dv* rhs, dv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_dvSsub_(lhs->data, s, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two dv2 with rhs scaled by a double
+SL_header dv2 SL_dv2Ssub(dv2 lhs, double s, dv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv2) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two dv3 with rhs scaled by a double
+SL_header dv3 SL_dv3Ssub(dv3 lhs, double s, dv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv3) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y,
+        .z = lhs.z * s - rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two dv4 with rhs scaled by a double
+SL_header dv4 SL_dv4Ssub(dv4 lhs, double s, dv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv4) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y,
+        .z = lhs.z * s - rhs.z,
+        .w = lhs.w * s - rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a dv*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header double* SL_dvneg_(double* v, double* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = -v[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Negation of a dv*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header dv* SL_dvneg(dv* v, dv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_dvneg_(v->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Negation of a dv2
+SL_header dv2 SL_dv2neg(dv2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv2) {
+        .x = -v.x,
+        .y = -v.y
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a dv3
+SL_header dv3 SL_dv3neg(dv3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv3) {
+        .x = -v.x,
+        .y = -v.y,
+        .z = -v.z
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a dv4
+SL_header dv4 SL_dv4neg(dv4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv4) {
+        .x = -v.x,
+        .y = -v.y,
+        .z = -v.z,
+        .w = -v.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a dv*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header double* SL_dvabs_(double* v, double* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = fabs(v[i]);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a dv*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header dv* SL_dvabs(dv* v, dv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_dvabs_(v->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a dv2
+SL_header dv2 SL_dv2abs(dv2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv2) {
+        .x = fabs(v.x),
+        .y = fabs(v.y)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a dv3
+SL_header dv3 SL_dv3abs(dv3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv3) {
+        .x = fabs(v.x),
+        .y = fabs(v.y),
+        .z = fabs(v.z)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a dv4
+SL_header dv4 SL_dv4abs(dv4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv4) {
+        .x = fabs(v.x),
+        .y = fabs(v.y),
+        .z = fabs(v.z),
+        .w = fabs(v.w)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two dv*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header double* SL_dvmin_(double* lhs, double* rhs, double* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] < rhs[i] ? lhs[i] : rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two dv*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header dv* SL_dvmin(dv* lhs, dv* rhs, dv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_dvmin_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two dv2
+SL_header dv2 SL_dv2min(dv2 lhs, dv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv2) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two dv3
+SL_header dv3 SL_dv3min(dv3 lhs, dv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv3) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z < rhs.z ? lhs.z : rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two dv4
+SL_header dv4 SL_dv4min(dv4 lhs, dv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv4) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z < rhs.z ? lhs.z : rhs.z,
+        .w = lhs.w < rhs.w ? lhs.w : rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two dv*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header double* SL_dvmax_(double* lhs, double* rhs, double* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] > rhs[i] ? lhs[i] : rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two dv*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header dv* SL_dvmax(dv* lhs, dv* rhs, dv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_dvmax_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two dv2
+SL_header dv2 SL_dv2max(dv2 lhs, dv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv2) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two dv3
+SL_header dv3 SL_dv3max(dv3 lhs, dv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv3) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z > rhs.z ? lhs.z : rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two dv4
+SL_header dv4 SL_dv4max(dv4 lhs, dv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv4) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z > rhs.z ? lhs.z : rhs.z,
+        .w = lhs.w > rhs.w ? lhs.w : rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Dot product of two dv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_dvdot_(double* lhs, double* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    double dest = 0;
+    for (usize i = 0; i < count; ++i) dest += lhs[i] * rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Dot product of two dv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_dvdot(dv* lhs, dv* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_dvdot_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Dot product of two dv2
+SL_header double SL_dv2dot(dv2 lhs, dv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y;
+}
+#else
+;
+#endif
+/// @brief Dot product of two dv3
+SL_header double SL_dv3dot(dv3 lhs, dv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
+}
+#else
+;
+#endif
+/// @brief Dot product of two dv4
+SL_header double SL_dv4dot(dv4 lhs, dv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z + lhs.w * rhs.w;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a dv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_dvlen_max_(double* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    double dest = 0;
+    for (usize i = 0; i < count; ++i) dest = dest < fabs(v[i]) ? fabs(v[i]) : dest;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a dv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_dvlen_max(dv* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_dvlen_max_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Maximum component of a dv2
+SL_header double SL_dv2len_max(dv2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    dv2 av = SL_dv2_(fabs(v.x), fabs(v.y));
+    return av.x > av.y ? av.x : av.y;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a dv3
+SL_header double SL_dv3len_max(dv3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    dv3 av = SL_dv3_(fabs(v.x), fabs(v.y), fabs(v.z));
+    return av.x > av.y ? (av.x > av.z ? av.x : av.z) : (av.y > av.z ? av.y : av.z);
+}
+#else
+;
+#endif
+/// @brief Maximum component of a dv4
+SL_header double SL_dv4len_max(dv4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    dv4 av = SL_dv4_(fabs(v.x), fabs(v.y), fabs(v.z), fabs(v.w));
+    return av.x > av.y ? (av.x > av.z ? (av.x > av.w ? av.x : av.w) : (av.z > av.w ? av.z : av.w)) : (av.y > av.z ? (av.y > av.w ? av.y : av.w) : (av.z > av.w ? av.z : av.w));
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a dv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_dvlen_manh_(double* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    double dest = 0;
+    for (usize i = 0; i < count; ++i) dest += fabs(v[i]);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a dv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_dvlen_manh(dv* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_dvlen_manh_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a dv2
+SL_header double SL_dv2len_manh(dv2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return fabs(v.x) + fabs(v.y);
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a dv3
+SL_header double SL_dv3len_manh(dv3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return fabs(v.x) + fabs(v.y) + fabs(v.z);
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a dv4
+SL_header double SL_dv4len_manh(dv4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return fabs(v.x) + fabs(v.y) + fabs(v.z) + fabs(v.w);
+}
+#else
+;
+#endif
+/// @brief Squared euclidean length of a dv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_dvlen_srq_(double* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_dvdot_(v, v, count);
+}
+#else
+;
+#endif
+/// @brief Squared euclidean length of a dv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_dvlen_srq(dv* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_dvlen_srq_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Square length of a dv2
+SL_header double SL_dv2len_sqr(dv2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_dv2dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Square length of a dv3
+SL_header double SL_dv3len_sqr(dv3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_dv3dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Square length of a dv4
+SL_header double SL_dv4len_sqr(dv4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_dv4dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a dv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_dvlen_(double* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_dvdot_(v, v, count));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a dv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_dvlen(dv* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_dvlen_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a dv2
+SL_header double SL_dv2len(dv2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_dv2dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a dv3
+SL_header double SL_dv3len(dv3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_dv3dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a dv4
+SL_header double SL_dv4len(dv4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_dv4dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance bewteen two dv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_dvdist_(double* lhs, double* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    double accum = 0;
+    for (int i = 0; i < count; ++i) accum += (lhs[i] - rhs[i]) * (lhs[i] - rhs[i]);
+    return sqrt(accum);
+}
+#else
+;
+#endif
+/// @brief Euclidean distance bewteen two dv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_dvdist(dv* lhs, dv* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_dvdist_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two dv2
+SL_header double SL_dv2dist(dv2 lhs, dv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_dv2len(SL_dv2sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two dv3
+SL_header double SL_dv3dist(dv3 lhs, dv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_dv3len(SL_dv3sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two dv4
+SL_header double SL_dv4dist(dv4 lhs, dv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_dv4len(SL_dv4sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Reflection of dv2 v around vector dv2 n
+SL_header dv2 SL_dv2refl(dv2 v, dv2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_dv2subS(v, n, 2.0 * SL_dv2dot(v, n) / SL_dv2dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of dv3 v around vector dv3 n
+SL_header dv3 SL_dv3refl(dv3 v, dv3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_dv3subS(v, n, 2.0 * SL_dv3dot(v, n) / SL_dv3dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of dv4 v around vector dv4 n
+SL_header dv4 SL_dv4refl(dv4 v, dv4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_dv4subS(v, n, 2.0 * SL_dv4dot(v, n) / SL_dv4dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of dv2 v around vector dv2 n assumed to be of unit length
+SL_header dv2 SL_dv2refl_u(dv2 v, dv2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_dv2subS(v, n, 2.0 * SL_dv2dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of dv3 v around vector dv3 n assumed to be of unit length
+SL_header dv3 SL_dv3refl_u(dv3 v, dv3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_dv3subS(v, n, 2.0 * SL_dv3dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of dv4 v around vector dv4 n assumed to be of unit length
+SL_header dv4 SL_dv4refl_u(dv4 v, dv4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_dv4subS(v, n, 2.0 * SL_dv4dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a dv* by real n
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header double* SL_dvmods_(double* v, double n, double* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = fmod(v[i], n);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a dv* by real n
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header dv* SL_dvmods(dv* v, double n, dv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_dvmods_(v->data, n, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a dv2 by real n
+SL_header dv2 SL_dv2mods(dv2 v, double n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv2) {
+        .x = fmod(v.x, n),
+        .y = fmod(v.y, n)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a dv3 by real n
+SL_header dv3 SL_dv3mods(dv3 v, double n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv3) {
+        .x = fmod(v.x, n),
+        .y = fmod(v.y, n),
+        .z = fmod(v.z, n)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a dv4 by real n
+SL_header dv4 SL_dv4mods(dv4 v, double n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv4) {
+        .x = fmod(v.x, n),
+        .y = fmod(v.y, n),
+        .z = fmod(v.z, n),
+        .w = fmod(v.w, n)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a dv* by dv* n
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header double* SL_dvmod_(double* v, double* n, double* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = fmod(v[i], n[i]);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a dv* by dv* n
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header dv* SL_dvmod(dv* v, dv* n, dv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_dvmod_(v->data, n->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a dv2 by dv2 n
+SL_header dv2 SL_dv2mod(dv2 v, dv2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv2) {
+        .x = fmod(v.x, n.x),
+        .y = fmod(v.y, n.y)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a dv3 by dv3 n
+SL_header dv3 SL_dv3mod(dv3 v, dv3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv3) {
+        .x = fmod(v.x, n.x),
+        .y = fmod(v.y, n.y),
+        .z = fmod(v.z, n.z)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise modulo of a dv4 by dv4 n
+SL_header dv4 SL_dv4mod(dv4 v, dv4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv4) {
+        .x = fmod(v.x, n.x),
+        .y = fmod(v.y, n.y),
+        .z = fmod(v.z, n.z),
+        .w = fmod(v.w, n.w)
+    };
+}
+#else
+;
+#endif
+/// @brief Normalization of a dv*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header double* SL_dvnorm_(double* v, double* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    double inv_len = 1.0 / SL_dvlen_(v, count);
+    for (usize i = 0; i < count; ++i) dest[i] = v[i] * inv_len;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Normalization of a dv*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header dv* SL_dvnorm(dv* v, dv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_dvnorm_(v->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Normalization of a dv2
+SL_header dv2 SL_dv2norm(dv2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    double inv_len = 1.0 / SL_dv2len(v);
+    return (dv2) {
+        .x = v.x * inv_len,
+        .y = v.y * inv_len
+    };
+}
+#else
+;
+#endif
+/// @brief Normalization of a dv3
+SL_header dv3 SL_dv3norm(dv3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    double inv_len = 1.0 / SL_dv3len(v);
+    return (dv3) {
+        .x = v.x * inv_len,
+        .y = v.y * inv_len,
+        .z = v.z * inv_len
+    };
+}
+#else
+;
+#endif
+/// @brief Normalization of a dv4
+SL_header dv4 SL_dv4norm(dv4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    double inv_len = 1.0 / SL_dv4len(v);
+    return (dv4) {
+        .x = v.x * inv_len,
+        .y = v.y * inv_len,
+        .z = v.z * inv_len,
+        .w = v.w * inv_len
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise flooring of a dv*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header double* SL_dvfloor_(double* v, double* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = floor(v[i]);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise flooring of a dv*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header dv* SL_dvfloor(dv* v, dv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_dvfloor_(v->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise flooring of a dv2
+SL_header dv2 SL_dv2floor(dv2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv2) {
+        .x = floor(v.x),
+        .y = floor(v.y)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise flooring of a dv3
+SL_header dv3 SL_dv3floor(dv3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv3) {
+        .x = floor(v.x),
+        .y = floor(v.y),
+        .z = floor(v.z)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise flooring of a dv4
+SL_header dv4 SL_dv4floor(dv4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv4) {
+        .x = floor(v.x),
+        .y = floor(v.y),
+        .z = floor(v.z),
+        .w = floor(v.w)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise ceiling of a dv*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header double* SL_dvceil_(double* v, double* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = ceil(v[i]);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise ceiling of a dv*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header dv* SL_dvceil(dv* v, dv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_dvceil_(v->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise ceiling of a dv2
+SL_header dv2 SL_dv2ceil(dv2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv2) {
+        .x = ceil(v.x),
+        .y = ceil(v.y)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise ceiling of a dv3
+SL_header dv3 SL_dv3ceil(dv3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv3) {
+        .x = ceil(v.x),
+        .y = ceil(v.y),
+        .z = ceil(v.z)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise ceiling of a dv4
+SL_header dv4 SL_dv4ceil(dv4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv4) {
+        .x = ceil(v.x),
+        .y = ceil(v.y),
+        .z = ceil(v.z),
+        .w = ceil(v.w)
+    };
+}
+#else
+;
+#endif
+/// @brief Linear interpolation of two dv*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header double* SL_dvlerp_(double* lhs, double* rhs, double t, double* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + (rhs[i] - lhs[i]) * t;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Linear interpolation of two dv*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header dv* SL_dvlerp(dv* lhs, dv* rhs, double t, dv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_dvlerp_(lhs->data, rhs->data, t, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Linear interpolation of two dv2
+SL_header dv2 SL_dv2lerp(dv2 lhs, dv2 rhs, double t)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv2) {
+        .x = lhs.x + (rhs.x - lhs.x) * t,
+        .y = lhs.y + (rhs.y - lhs.y) * t
+    };
+}
+#else
+;
+#endif
+/// @brief Linear interpolation of two dv3
+SL_header dv3 SL_dv3lerp(dv3 lhs, dv3 rhs, double t)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv3) {
+        .x = lhs.x + (rhs.x - lhs.x) * t,
+        .y = lhs.y + (rhs.y - lhs.y) * t,
+        .z = lhs.z + (rhs.z - lhs.z) * t
+    };
+}
+#else
+;
+#endif
+/// @brief Linear interpolation of two dv4
+SL_header dv4 SL_dv4lerp(dv4 lhs, dv4 rhs, double t)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv4) {
+        .x = lhs.x + (rhs.x - lhs.x) * t,
+        .y = lhs.y + (rhs.y - lhs.y) * t,
+        .z = lhs.z + (rhs.z - lhs.z) * t,
+        .w = lhs.w + (rhs.w - lhs.w) * t
+    };
+}
+#else
+;
+#endif
+/// @brief Spherical interpolation of two dv2
+SL_header dv2 SL_dv2serp(dv2 lhs, dv2 rhs, double t)
+#if defined(SL_IMPLEMENTATION)
+{
+    double angle = acos(SL_dv2dot(SL_dv2norm(lhs), SL_dv2norm(rhs)));
+    double inv_sin = 1.0 / sin(angle);
+    double a = sin(angle * t) * inv_sin;
+    double b = sin(angle * (1 - t)) * inv_sin;
+    return (dv2) {
+        .x = lhs.x * a + rhs.x * b,
+        .y = lhs.y * a + rhs.y * b
+    };
+}
+#else
+;
+#endif
+/// @brief Spherical interpolation of two dv3
+SL_header dv3 SL_dv3serp(dv3 lhs, dv3 rhs, double t)
+#if defined(SL_IMPLEMENTATION)
+{
+    double angle = acos(SL_dv3dot(SL_dv3norm(lhs), SL_dv3norm(rhs)));
+    double inv_sin = 1.0 / sin(angle);
+    double a = sin(angle * t) * inv_sin;
+    double b = sin(angle * (1 - t)) * inv_sin;
+    return (dv3) {
+        .x = lhs.x * a + rhs.x * b,
+        .y = lhs.y * a + rhs.y * b,
+        .z = lhs.z * a + rhs.z * b
+    };
+}
+#else
+;
+#endif
+/// @brief Spherical interpolation of two dv4
+SL_header dv4 SL_dv4serp(dv4 lhs, dv4 rhs, double t)
+#if defined(SL_IMPLEMENTATION)
+{
+    double angle = acos(SL_dv4dot(SL_dv4norm(lhs), SL_dv4norm(rhs)));
+    double inv_sin = 1.0 / sin(angle);
+    double a = sin(angle * t) * inv_sin;
+    double b = sin(angle * (1 - t)) * inv_sin;
+    return (dv4) {
+        .x = lhs.x * a + rhs.x * b,
+        .y = lhs.y * a + rhs.y * b,
+        .z = lhs.z * a + rhs.z * b,
+        .w = lhs.w * a + rhs.w * b
+    };
+}
+#else
+;
+#endif
+/// @brief Cross-product of two dv2
+SL_header double SL_dv2cross(dv2 lhs, dv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.y - lhs.y * rhs.x;
+}
+#else
+;
+#endif
+/// @brief Cross-product of two dv3
+SL_header dv3 SL_dv3cross(dv3 lhs, dv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv3) {
+            .x = lhs.y * rhs.z - lhs.z * rhs.y,
+            .y = lhs.z * rhs.x - lhs.x * rhs.z,
+            .z = lhs.x * rhs.y - lhs.y * rhs.x
+        };
+
+}
+#else
+;
+#endif
+#pragma endregion DOUBLE
+#pragma region BOOL
+
+/// @brief Vector of bool with arbitrary dimension
+typedef struct {
+    const usize count;
+    bool data[];
+} bv;
+
+/// @brief Vector of bool with dimension 2
+typedef union {
+    bool data[2];
+    struct {
+        union { bool x, r, u; };
+        union { bool y, g, v; };
+    };
+} bv2;
+
+#define SL_bv2_zero  ((bv2){.x =  0, .y =  0})
+#define SL_bv2_one   ((bv2){.x =  1, .y =  1})
+#define SL_bv2_right ((bv2){.x =  1, .y =  0})
+#define SL_bv2_up    ((bv2){.x =  0, .y =  1})
+
+/// @brief Vector of bool with dimension 3
+typedef union {
+    bool data[3];
+    struct {
+        union { bool x, r, u; };
+        union { bool y, g, v; };
+        union { bool z, b, s; };
+    };
+    struct {
+        union { bool __x, __r, __u; };
+        union { bv2 yz, gb, vs; };
+    };
+    struct {
+        union { bv2 xy, rg, uv; };
+        union { bool __z, __b, __s; };
+    };
+} bv3;
+
+#define SL_bv3_zero  ((bv3){.x =  0, .y =  0, .z =  0})
+#define SL_bv3_one   ((bv3){.x =  1, .y =  1, .z =  1})
+#define SL_bv3_right ((bv3){.x =  1, .y =  0, .z =  0})
+#define SL_bv3_up    ((bv3){.x =  0, .y =  1, .z =  0})
+#define SL_bv3_forw  ((bv3){.x =  0, .y =  0, .z =  1})
+
+/// @brief Vector of bool with dimension 4
+typedef union {
+    bool data[4];
+    struct {
+        union { bool x, r, u; };
+        union { bool y, g, v; };
+        union { bool z, b, s; };
+        union { bool w, a, t; };
+    };
+    struct {
+        union { bool __x0, __r0, __u0; };
+        union { bv2 yz, gb, vs; };
+        union { bool __w0, __a0, __t0; };
+    };
+    struct {
+        union { bv2 xy, rb, uv; };
+        union { bv2 zw, ba, st; };
+    };
+    struct {
+        union { bv3 xyz, rgb, uvs; };
+        union { bool __w1, __a1, __t1; };
+    };
+    struct {
+        union { bool __x1, __r1, __u1; };
+        union { bv3 yzw, gba, vst; };
+    };
+} bv4;
+
+#define SL_bv4_zero  ((bv4){.x = 0, .y = 0, .z = 0, .w = 0})
+#define SL_bv4_one   ((bv4){.x = 1, .y = 1, .z = 1, .w = 1})
+
+
+
+#define SL_bv2_(X, Y)       ((bv2){.x = X, .y = Y})
+#define SL_bv3_(X, Y, Z)    ((bv3){.x = X, .y = Y, .z = Z})
+#define SL_bv4_(X, Y, Z, W) ((bv4){.x = X, .y = Y, .z = Z, .w = W})
+
+#define SL_bv2s(S)          ((bv2){.x = S, .y = S})
+#define SL_bv3s(S)          ((bv3){.x = S, .y = S, .z = S})
+#define SL_bv4s(S)          ((bv4){.x = S, .y = S, .z = S, .w = S})
+
+#define SL_bv2v(V, ...)     ((bv2){.x = (V).x, .y = (V).y})
+#define SL_bv3v(V, ...)     ((bv3){.x = (V).x, .y = (V).y, .z = (SL_vsize(V) >= 2 ? (V).data[2] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[1]))})
+#define SL_bv4v(V, ...)     ((bv4){.x = (V).x, .y = (V).y, .z = (SL_vsize(V) >= 2 ? (V).data[2] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[1])), .w = (SL_vsize(V) >= 3 ? (V).data[3] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[2]))})
+
+
+
+/// @brief Addition of two bv*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bool* SL_bvadd_(bool* lhs, bool* rhs, bool* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two bv*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bv* SL_bvadd(bv* lhs, bv* rhs, bv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_bvadd_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two bv2
+SL_header bv2 SL_bv2add(bv2 lhs, bv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv2) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two bv3
+SL_header bv3 SL_bv3add(bv3 lhs, bv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv3) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y,
+        .z = lhs.z + rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two bv4
+SL_header bv4 SL_bv4add(bv4 lhs, bv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv4) {
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y,
+        .z = lhs.z + rhs.z,
+        .w = lhs.w + rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two bv*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bool* SL_bvsub_(bool* lhs, bool* rhs, bool* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two bv*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bv* SL_bvsub(bv* lhs, bv* rhs, bv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_bvsub_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two bv2
+SL_header bv2 SL_bv2sub(bv2 lhs, bv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv2) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two bv3
+SL_header bv3 SL_bv3sub(bv3 lhs, bv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv3) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y,
+        .z = lhs.z - rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two bv4
+SL_header bv4 SL_bv4sub(bv4 lhs, bv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv4) {
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y,
+        .z = lhs.z - rhs.z,
+        .w = lhs.w - rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two bv*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bool* SL_bvmul_(bool* lhs, bool* rhs, bool* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two bv*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bv* SL_bvmul(bv* lhs, bv* rhs, bv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_bvmul_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two bv2
+SL_header bv2 SL_bv2mul(bv2 lhs, bv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv2) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two bv3
+SL_header bv3 SL_bv3mul(bv3 lhs, bv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv3) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y,
+        .z = lhs.z * rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of two bv4
+SL_header bv4 SL_bv4mul(bv4 lhs, bv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv4) {
+        .x = lhs.x * rhs.x,
+        .y = lhs.y * rhs.y,
+        .z = lhs.z * rhs.z,
+        .w = lhs.w * rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a bv* with a scalar
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bool* SL_bvmuls_(bool* lhs, bool rhs, bool* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * rhs;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a bv* with a scalar
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bv* SL_bvmuls(bv* lhs, bool rhs, bv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_bvmuls_(lhs->data, rhs, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a bv2 with a scalar
+SL_header bv2 SL_bv2muls(bv2 lhs, bool rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv2) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a bv3 with a scalar
+SL_header bv3 SL_bv3muls(bv3 lhs, bool rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv3) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs,
+        .z = lhs.z * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a bv4 with a scalar
+SL_header bv4 SL_bv4muls(bv4 lhs, bool rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv4) {
+        .x = lhs.x * rhs,
+        .y = lhs.y * rhs,
+        .z = lhs.z * rhs,
+        .w = lhs.w * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two bv*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bool* SL_bvdiv_(bool* lhs, bool* rhs, bool* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] / rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two bv*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bv* SL_bvdiv(bv* lhs, bv* rhs, bv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_bvdiv_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two bv2
+SL_header bv2 SL_bv2div(bv2 lhs, bv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv2) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two bv3
+SL_header bv3 SL_bv3div(bv3 lhs, bv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv3) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y,
+        .z = lhs.z / rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of two bv4
+SL_header bv4 SL_bv4div(bv4 lhs, bv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv4) {
+        .x = lhs.x / rhs.x,
+        .y = lhs.y / rhs.y,
+        .z = lhs.z / rhs.z,
+        .w = lhs.w / rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a bv* with a scalar
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bool* SL_bvdivs_(bool* lhs, bool rhs, bool* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] / rhs;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a bv* with a scalar
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bv* SL_bvdivs(bv* lhs, bool rhs, bv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_bvdivs_(lhs->data, rhs, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a bv2 with a scalar
+SL_header bv2 SL_bv2divs(bv2 lhs, bool rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv2) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a bv3 with a scalar
+SL_header bv3 SL_bv3divs(bv3 lhs, bool rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv3) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs,
+        .z = lhs.z / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a bv4 with a scalar
+SL_header bv4 SL_bv4divs(bv4 lhs, bool rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv4) {
+        .x = lhs.x / rhs,
+        .y = lhs.y / rhs,
+        .z = lhs.z / rhs,
+        .w = lhs.w / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two bv* with lhs scaled by a bool
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bool* SL_bvaddS_(bool* lhs, bool* rhs, bool s, bool* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * s;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two bv* with lhs scaled by a bool
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bv* SL_bvaddS(bv* lhs, bv* rhs, bool s, bv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_bvaddS_(lhs->data, rhs->data, s, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two bv2 with lhs scaled by a bool
+SL_header bv2 SL_bv2addS(bv2 lhs, bv2 rhs, bool s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv2) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two bv3 with lhs scaled by a bool
+SL_header bv3 SL_bv3addS(bv3 lhs, bv3 rhs, bool s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv3) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s,
+        .z = lhs.z + rhs.z * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two bv4 with lhs scaled by a bool
+SL_header bv4 SL_bv4addS(bv4 lhs, bv4 rhs, bool s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv4) {
+        .x = lhs.x + rhs.x * s,
+        .y = lhs.y + rhs.y * s,
+        .z = lhs.z + rhs.z * s,
+        .w = lhs.w + rhs.w * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two bv* with lhs scaled by a bool
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bool* SL_bvsubS_(bool* lhs, bool* rhs, bool s, bool* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * s;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two bv* with lhs scaled by a bool
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bv* SL_bvsubS(bv* lhs, bv* rhs, bool s, bv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_bvsubS_(lhs->data, rhs->data, s, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two bv2 with lhs scaled by a bool
+SL_header bv2 SL_bv2subS(bv2 lhs, bv2 rhs, bool s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv2) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two bv3 with lhs scaled by a bool
+SL_header bv3 SL_bv3subS(bv3 lhs, bv3 rhs, bool s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv3) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s,
+        .z = lhs.z - rhs.z * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two bv4 with lhs scaled by a bool
+SL_header bv4 SL_bv4subS(bv4 lhs, bv4 rhs, bool s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv4) {
+        .x = lhs.x - rhs.x * s,
+        .y = lhs.y - rhs.y * s,
+        .z = lhs.z - rhs.z * s,
+        .w = lhs.w - rhs.w * s
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two bv* with lhs multiplied with a bool
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bool* SL_bvaddM_(bool* lhs, bool* rhs, bool* m, bool* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two bv* with lhs multiplied with a bool
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bv* SL_bvaddM(bv* lhs, bv* rhs, bv* m, bv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_bvaddM_(lhs->data, rhs->data, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two bv2 with lhs multiplied with a bool
+SL_header bv2 SL_bv2addM(bv2 lhs, bv2 rhs, bv2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv2) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two bv3 with lhs multiplied with a bool
+SL_header bv3 SL_bv3addM(bv3 lhs, bv3 rhs, bv3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv3) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y,
+        .z = lhs.z + rhs.z * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two bv4 with lhs multiplied with a bool
+SL_header bv4 SL_bv4addM(bv4 lhs, bv4 rhs, bv4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv4) {
+        .x = lhs.x + rhs.x * m.x,
+        .y = lhs.y + rhs.y * m.y,
+        .z = lhs.z + rhs.z * m.z,
+        .w = lhs.w + rhs.w * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two bv* with lhs multiplied with a bool
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bool* SL_bvsubM_(bool* lhs, bool* rhs, bool* m, bool* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two bv* with lhs multiplied with a bool
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bv* SL_bvsubM(bv* lhs, bv* rhs, bv* m, bv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_bvsubM_(lhs->data, rhs->data, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two bv2 with lhs multiplied with a bool
+SL_header bv2 SL_bv2subM(bv2 lhs, bv2 rhs, bv2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv2) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two bv3 with lhs multiplied with a bool
+SL_header bv3 SL_bv3subM(bv3 lhs, bv3 rhs, bv3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv3) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y,
+        .z = lhs.z - rhs.z * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two bv4 with lhs multiplied with a bool
+SL_header bv4 SL_bv4subM(bv4 lhs, bv4 rhs, bv4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv4) {
+        .x = lhs.x - rhs.x * m.x,
+        .y = lhs.y - rhs.y * m.y,
+        .z = lhs.z - rhs.z * m.z,
+        .w = lhs.w - rhs.w * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two bv* with lhs scaled by bool and multiplied with a bool
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bool* SL_bvaddSM_(bool* lhs, bool* rhs, bool s, bool* m, bool* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] + rhs[i] * s * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two bv* with lhs scaled by bool and multiplied with a bool
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bv* SL_bvaddSM(bv* lhs, bv* rhs, bool s, bv* m, bv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_bvaddSM_(lhs->data, rhs->data, s, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two bv2 with lhs scaled by bool and multiplied with a bool
+SL_header bv2 SL_bv2addSM(bv2 lhs, bv2 rhs, bool s, bv2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv2) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two bv3 with lhs scaled by bool and multiplied with a bool
+SL_header bv3 SL_bv3addSM(bv3 lhs, bv3 rhs, bool s, bv3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv3) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y,
+        .z = lhs.z + rhs.z * s * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two bv4 with lhs scaled by bool and multiplied with a bool
+SL_header bv4 SL_bv4addSM(bv4 lhs, bv4 rhs, bool s, bv4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv4) {
+        .x = lhs.x + rhs.x * s * m.x,
+        .y = lhs.y + rhs.y * s * m.y,
+        .z = lhs.z + rhs.z * s * m.z,
+        .w = lhs.w + rhs.w * s * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two bv* with lhs scaled by bool and multiplied with a bool
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bool* SL_bvsubSM_(bool* lhs, bool* rhs, bool s, bool* m, bool* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] - rhs[i] * s * m[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two bv* with lhs scaled by bool and multiplied with a bool
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bv* SL_bvsubSM(bv* lhs, bv* rhs, bool s, bv* m, bv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_bvsubSM_(lhs->data, rhs->data, s, m->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two bv2 with lhs scaled by bool and multiplied with a bool
+SL_header bv2 SL_bv2subSM(bv2 lhs, bv2 rhs, bool s, bv2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv2) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two bv3 with lhs scaled by bool and multiplied with a bool
+SL_header bv3 SL_bv3subSM(bv3 lhs, bv3 rhs, bool s, bv3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv3) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y,
+        .z = lhs.z - rhs.z * s * m.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two bv4 with lhs scaled by bool and multiplied with a bool
+SL_header bv4 SL_bv4subSM(bv4 lhs, bv4 rhs, bool s, bv4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv4) {
+        .x = lhs.x - rhs.x * s * m.x,
+        .y = lhs.y - rhs.y * s * m.y,
+        .z = lhs.z - rhs.z * s * m.z,
+        .w = lhs.w - rhs.w * s * m.w
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two bv* with rhs scaled by a bool
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bool* SL_bvSadd_(bool* lhs, bool s, bool* rhs, bool* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * s + rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two bv* with rhs scaled by a bool
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bv* SL_bvSadd(bv* lhs, bool s, bv* rhs, bv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_bvSadd_(lhs->data, s, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Addition of two bv2 with rhs scaled by a bool
+SL_header bv2 SL_bv2Sadd(bv2 lhs, bool s, bv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv2) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two bv3 with rhs scaled by a bool
+SL_header bv3 SL_bv3Sadd(bv3 lhs, bool s, bv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv3) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y,
+        .z = lhs.z * s + rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two bv4 with rhs scaled by a bool
+SL_header bv4 SL_bv4Sadd(bv4 lhs, bool s, bv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv4) {
+        .x = lhs.x * s + rhs.x,
+        .y = lhs.y * s + rhs.y,
+        .z = lhs.z * s + rhs.z,
+        .w = lhs.w * s + rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two bv* with rhs scaled by a bool
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bool* SL_bvSsub_(bool* lhs, bool s, bool* rhs, bool* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] * s - rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two bv* with rhs scaled by a bool
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bv* SL_bvSsub(bv* lhs, bool s, bv* rhs, bv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_bvSsub_(lhs->data, s, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Difference of two bv2 with rhs scaled by a bool
+SL_header bv2 SL_bv2Ssub(bv2 lhs, bool s, bv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv2) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two bv3 with rhs scaled by a bool
+SL_header bv3 SL_bv3Ssub(bv3 lhs, bool s, bv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv3) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y,
+        .z = lhs.z * s - rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two bv4 with rhs scaled by a bool
+SL_header bv4 SL_bv4Ssub(bv4 lhs, bool s, bv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv4) {
+        .x = lhs.x * s - rhs.x,
+        .y = lhs.y * s - rhs.y,
+        .z = lhs.z * s - rhs.z,
+        .w = lhs.w * s - rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two bv*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bool* SL_bvmin_(bool* lhs, bool* rhs, bool* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] < rhs[i] ? lhs[i] : rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two bv*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bv* SL_bvmin(bv* lhs, bv* rhs, bv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_bvmin_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two bv2
+SL_header bv2 SL_bv2min(bv2 lhs, bv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv2) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two bv3
+SL_header bv3 SL_bv3min(bv3 lhs, bv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv3) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z < rhs.z ? lhs.z : rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two bv4
+SL_header bv4 SL_bv4min(bv4 lhs, bv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv4) {
+        .x = lhs.x < rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y < rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z < rhs.z ? lhs.z : rhs.z,
+        .w = lhs.w < rhs.w ? lhs.w : rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two bv*
+/// @note All vectors are assumed to be of size 'count'
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bool* SL_bvmax_(bool* lhs, bool* rhs, bool* dest, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    for (usize i = 0; i < count; ++i) dest[i] = lhs[i] > rhs[i] ? lhs[i] : rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two bv*
+/// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
+SL_header bv* SL_bvmax(bv* lhs, bv* rhs, bv* dest)
+#if defined(SL_IMPLEMENTATION)
+{
+    (void)SL_bvmax_(lhs->data, rhs->data, dest->data, dest->count);
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two bv2
+SL_header bv2 SL_bv2max(bv2 lhs, bv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv2) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two bv3
+SL_header bv3 SL_bv3max(bv3 lhs, bv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv3) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z > rhs.z ? lhs.z : rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two bv4
+SL_header bv4 SL_bv4max(bv4 lhs, bv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bv4) {
+        .x = lhs.x > rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y > rhs.y ? lhs.y : rhs.y,
+        .z = lhs.z > rhs.z ? lhs.z : rhs.z,
+        .w = lhs.w > rhs.w ? lhs.w : rhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Dot product of two bv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_bvdot_(bool* lhs, bool* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    u64 dest = 0;
+    for (usize i = 0; i < count; ++i) dest += lhs[i] * rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Dot product of two bv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_bvdot(bv* lhs, bv* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_bvdot_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Dot product of two bv2
+SL_header u64 SL_bv2dot(bv2 lhs, bv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y;
+}
+#else
+;
+#endif
+/// @brief Dot product of two bv3
+SL_header u64 SL_bv3dot(bv3 lhs, bv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
+}
+#else
+;
+#endif
+/// @brief Dot product of two bv4
+SL_header u64 SL_bv4dot(bv4 lhs, bv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z + lhs.w * rhs.w;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a bv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_bvlen_max_(bool* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    u64 dest = 0;
+    for (usize i = 0; i < count; ++i) dest = v[i] > dest ? v[i] : dest;
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a bv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_bvlen_max(bv* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_bvlen_max_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Maximum component of a bv2
+SL_header u64 SL_bv2len_max(bv2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return v.x > v.y ? v.x : v.y;
+}
+#else
+;
+#endif
+/// @brief Maximum component of a bv3
+SL_header u64 SL_bv3len_max(bv3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return v.x > v.y ? (v.x > v.z ? v.x : v.z) : (v.y > v.z ? v.y : v.z);
+}
+#else
+;
+#endif
+/// @brief Maximum component of a bv4
+SL_header u64 SL_bv4len_max(bv4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return v.x > v.y ? (v.x > v.z ? (v.x > v.w ? v.x : v.w) : (v.z > v.w ? v.z : v.w)) : (v.y > v.z ? (v.y > v.w ? v.y : v.w) : (v.z > v.w ? v.z : v.w));
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a bv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_bvlen_manh_(bool* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    u64 dest = 0;
+    for (usize i = 0; i < count; ++i) dest += v[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a bv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_bvlen_manh(bv* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_bvlen_manh_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a bv2
+SL_header u64 SL_bv2len_manh(bv2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return v.x + v.y;
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a bv3
+SL_header u64 SL_bv3len_manh(bv3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return v.x + v.y + v.z;
+}
+#else
+;
+#endif
+/// @brief Manhattan (or taxicab) length of a bv4
+SL_header u64 SL_bv4len_manh(bv4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return v.x + v.y + v.z + v.w;
+}
+#else
+;
+#endif
+/// @brief Squared euclidean length of a bv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_bvlen_srq_(bool* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_bvdot_(v, v, count);
+}
+#else
+;
+#endif
+/// @brief Squared euclidean length of a bv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header u64 SL_bvlen_srq(bv* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_bvlen_srq_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Square length of a bv2
+SL_header u64 SL_bv2len_sqr(bv2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_bv2dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Square length of a bv3
+SL_header u64 SL_bv3len_sqr(bv3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_bv3dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Square length of a bv4
+SL_header u64 SL_bv4len_sqr(bv4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_bv4dot(v, v);
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a bv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_bvlen_(bool* v, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_bvdot_(v, v, count));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a bv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_bvlen(bv* v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_bvlen_(v->data, v->count);
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a bv2
+SL_header double SL_bv2len(bv2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_bv2dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a bv3
+SL_header double SL_bv3len(bv3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_bv3dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean length of a bv4
+SL_header double SL_bv4len(bv4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return sqrt(SL_bv4dot(v, v));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance bewteen two bv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_bvdist_(bool* lhs, bool* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    double accum = 0;
+    for (int i = 0; i < count; ++i) accum += (lhs[i] - rhs[i]) * (lhs[i] - rhs[i]);
+    return sqrt(accum);
+}
+#else
+;
+#endif
+/// @brief Euclidean distance bewteen two bv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header double SL_bvdist(bv* lhs, bv* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_bvdist_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two bv2
+SL_header double SL_bv2dist(bv2 lhs, bv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_bv2len(SL_bv2sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two bv3
+SL_header double SL_bv3dist(bv3 lhs, bv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_bv3len(SL_bv3sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Euclidean distance between two bv4
+SL_header double SL_bv4dist(bv4 lhs, bv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_bv4len(SL_bv4sub(lhs, rhs));
+}
+#else
+;
+#endif
+/// @brief Reflection of bv2 v around vector bv2 n
+SL_header bv2 SL_bv2refl(bv2 v, bv2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_bv2subS(v, n, 2.0 * SL_bv2dot(v, n) / SL_bv2dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of bv3 v around vector bv3 n
+SL_header bv3 SL_bv3refl(bv3 v, bv3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_bv3subS(v, n, 2.0 * SL_bv3dot(v, n) / SL_bv3dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of bv4 v around vector bv4 n
+SL_header bv4 SL_bv4refl(bv4 v, bv4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_bv4subS(v, n, 2.0 * SL_bv4dot(v, n) / SL_bv4dot(n, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of bv2 v around vector bv2 n assumed to be of unit length
+SL_header bv2 SL_bv2refl_u(bv2 v, bv2 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_bv2subS(v, n, 2.0 * SL_bv2dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of bv3 v around vector bv3 n assumed to be of unit length
+SL_header bv3 SL_bv3refl_u(bv3 v, bv3 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_bv3subS(v, n, 2.0 * SL_bv3dot(v, n));;
+
+}
+#else
+;
+#endif
+/// @brief Reflection of bv4 v around vector bv4 n assumed to be of unit length
+SL_header bv4 SL_bv4refl_u(bv4 v, bv4 n)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_bv4subS(v, n, 2.0 * SL_bv4dot(v, n));;
+
+}
+#else
+;
+#endif
+#pragma endregion BOOL
+#pragma region INT
+
+typedef i32v iv;
+typedef i32v2 iv2;
+#define SL_iv2_zero  SL_i32v2_zero
+#define SL_iv2_one   SL_i32v2_one
+#define SL_iv2_right SL_i32v2_right
+#define SL_iv2_up    SL_i32v2_up
+#define SL_iv2_left  SL_i32v2_left
+#define SL_iv2_down  SL_i32v2_down
+typedef i32v3 iv3;
+#define SL_iv3_zero  SL_i32v3_zero
+#define SL_iv3_one   SL_i32v3_one
+#define SL_iv3_right SL_i32v3_right
+#define SL_iv3_up    SL_i32v3_up
+#define SL_iv3_forw  SL_i32v3_forw
+#define SL_iv3_left  SL_i32v3_left
+#define SL_iv3_down  SL_i32v3_down
+#define SL_iv3_back  SL_i32v3_back
+typedef i32v4 iv4;
+#define SL_iv4_zero  SL_i32v4_zero
+#define SL_iv4_one   SL_i32v4_one
+
+
+#define SL_iv2_(X, Y)       ((iv2){.x = X, .y = Y})
+#define SL_iv3_(X, Y, Z)    ((iv3){.x = X, .y = Y, .z = Z})
+#define SL_iv4_(X, Y, Z, W) ((iv4){.x = X, .y = Y, .z = Z, .w = W})
+
+#define SL_iv2s(S)          ((iv2){.x = S, .y = S})
+#define SL_iv3s(S)          ((iv3){.x = S, .y = S, .z = S})
+#define SL_iv4s(S)          ((iv4){.x = S, .y = S, .z = S, .w = S})
+
+#define SL_iv2v(V, ...)     ((iv2){.x = (V).x, .y = (V).y})
+#define SL_iv3v(V, ...)     ((iv3){.x = (V).x, .y = (V).y, .z = (SL_vsize(V) >= 2 ? (V).data[2] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[1]))})
+#define SL_iv4v(V, ...)     ((iv4){.x = (V).x, .y = (V).y, .z = (SL_vsize(V) >= 2 ? (V).data[2] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[1])), .w = (SL_vsize(V) >= 3 ? (V).data[3] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[2]))})
+
+
+
+#define SL_ivadd_ SL_i32vadd_
+#define SL_ivadd SL_i32vadd
+#define SL_iv2add SL_i32v2add
+#define SL_iv3add SL_i32v3add
+#define SL_iv4add SL_i32v4add
+#define SL_ivsub_ SL_i32vsub_
+#define SL_ivsub SL_i32vsub
+#define SL_iv2sub SL_i32v2sub
+#define SL_iv3sub SL_i32v3sub
+#define SL_iv4sub SL_i32v4sub
+#define SL_ivmul_ SL_i32vmul_
+#define SL_ivmul SL_i32vmul
+#define SL_iv2mul SL_i32v2mul
+#define SL_iv3mul SL_i32v3mul
+#define SL_iv4mul SL_i32v4mul
+#define SL_ivmuls_ SL_i32vmuls_
+#define SL_ivmuls SL_i32vmuls
+#define SL_iv2muls SL_i32v2muls
+#define SL_iv3muls SL_i32v3muls
+#define SL_iv4muls SL_i32v4muls
+#define SL_ivdiv_ SL_i32vdiv_
+#define SL_ivdiv SL_i32vdiv
+#define SL_iv2div SL_i32v2div
+#define SL_iv3div SL_i32v3div
+#define SL_iv4div SL_i32v4div
+#define SL_ivdivs_ SL_i32vdivs_
+#define SL_ivdivs SL_i32vdivs
+#define SL_iv2divs SL_i32v2divs
+#define SL_iv3divs SL_i32v3divs
+#define SL_iv4divs SL_i32v4divs
+#define SL_ivaddS_ SL_i32vaddS_
+#define SL_ivaddS SL_i32vaddS
+#define SL_iv2addS SL_i32v2addS
+#define SL_iv3addS SL_i32v3addS
+#define SL_iv4addS SL_i32v4addS
+#define SL_ivsubS_ SL_i32vsubS_
+#define SL_ivsubS SL_i32vsubS
+#define SL_iv2subS SL_i32v2subS
+#define SL_iv3subS SL_i32v3subS
+#define SL_iv4subS SL_i32v4subS
+#define SL_ivaddM_ SL_i32vaddM_
+#define SL_ivaddM SL_i32vaddM
+#define SL_iv2addM SL_i32v2addM
+#define SL_iv3addM SL_i32v3addM
+#define SL_iv4addM SL_i32v4addM
+#define SL_ivsubM_ SL_i32vsubM_
+#define SL_ivsubM SL_i32vsubM
+#define SL_iv2subM SL_i32v2subM
+#define SL_iv3subM SL_i32v3subM
+#define SL_iv4subM SL_i32v4subM
+#define SL_ivaddSM_ SL_i32vaddSM_
+#define SL_ivaddSM SL_i32vaddSM
+#define SL_iv2addSM SL_i32v2addSM
+#define SL_iv3addSM SL_i32v3addSM
+#define SL_iv4addSM SL_i32v4addSM
+#define SL_ivsubSM_ SL_i32vsubSM_
+#define SL_ivsubSM SL_i32vsubSM
+#define SL_iv2subSM SL_i32v2subSM
+#define SL_iv3subSM SL_i32v3subSM
+#define SL_iv4subSM SL_i32v4subSM
+#define SL_ivSadd_ SL_i32vSadd_
+#define SL_ivSadd SL_i32vSadd
+#define SL_iv2Sadd SL_i32v2Sadd
+#define SL_iv3Sadd SL_i32v3Sadd
+#define SL_iv4Sadd SL_i32v4Sadd
+#define SL_ivSsub_ SL_i32vSsub_
+#define SL_ivSsub SL_i32vSsub
+#define SL_iv2Ssub SL_i32v2Ssub
+#define SL_iv3Ssub SL_i32v3Ssub
+#define SL_iv4Ssub SL_i32v4Ssub
+#define SL_ivneg_ SL_i32vneg_
+#define SL_ivneg SL_i32vneg
+#define SL_iv2neg SL_i32v2neg
+#define SL_iv3neg SL_i32v3neg
+#define SL_iv4neg SL_i32v4neg
+#define SL_ivabs_ SL_i32vabs_
+#define SL_ivabs SL_i32vabs
+#define SL_iv2abs SL_i32v2abs
+#define SL_iv3abs SL_i32v3abs
+#define SL_iv4abs SL_i32v4abs
+#define SL_ivmin_ SL_i32vmin_
+#define SL_ivmin SL_i32vmin
+#define SL_iv2min SL_i32v2min
+#define SL_iv3min SL_i32v3min
+#define SL_iv4min SL_i32v4min
+#define SL_ivmax_ SL_i32vmax_
+#define SL_ivmax SL_i32vmax
+#define SL_iv2max SL_i32v2max
+#define SL_iv3max SL_i32v3max
+#define SL_iv4max SL_i32v4max
+#define SL_ivdot_ SL_i32vdot_
+#define SL_ivdot SL_i32vdot
+#define SL_iv2dot SL_i32v2dot
+#define SL_iv3dot SL_i32v3dot
+#define SL_iv4dot SL_i32v4dot
+#define SL_ivlen_max_ SL_i32vlen_max_
+#define SL_ivlen_max SL_i32vlen_max
+#define SL_iv2len_max SL_i32v2len_max
+#define SL_iv3len_max SL_i32v3len_max
+#define SL_iv4len_max SL_i32v4len_max
+#define SL_ivlen_manh_ SL_i32vlen_manh_
+#define SL_ivlen_manh SL_i32vlen_manh
+#define SL_iv2len_manh SL_i32v2len_manh
+#define SL_iv3len_manh SL_i32v3len_manh
+#define SL_iv4len_manh SL_i32v4len_manh
+#define SL_ivlen_srq_ SL_i32vlen_srq_
+#define SL_ivlen_srq SL_i32vlen_srq
+#define SL_iv2len_sqr SL_i32v2len_sqr
+#define SL_iv3len_sqr SL_i32v3len_sqr
+#define SL_iv4len_sqr SL_i32v4len_sqr
+#define SL_ivlen_ SL_i32vlen_
+#define SL_ivlen SL_i32vlen
+#define SL_iv2len SL_i32v2len
+#define SL_iv3len SL_i32v3len
+#define SL_iv4len SL_i32v4len
+#define SL_ivdist_ SL_i32vdist_
+#define SL_ivdist SL_i32vdist
+#define SL_iv2dist SL_i32v2dist
+#define SL_iv3dist SL_i32v3dist
+#define SL_iv4dist SL_i32v4dist
+#define SL_iv2refl SL_i32v2refl
+#define SL_iv3refl SL_i32v3refl
+#define SL_iv4refl SL_i32v4refl
+#define SL_iv2refl_u SL_i32v2refl_u
+#define SL_iv3refl_u SL_i32v3refl_u
+#define SL_iv4refl_u SL_i32v4refl_u
+#define SL_ivmods_ SL_i32vmods_
+#define SL_ivmods SL_i32vmods
+#define SL_iv2mods SL_i32v2mods
+#define SL_iv3mods SL_i32v3mods
+#define SL_iv4mods SL_i32v4mods
+#define SL_ivmod_ SL_i32vmod_
+#define SL_ivmod SL_i32vmod
+#define SL_iv2mod SL_i32v2mod
+#define SL_iv3mod SL_i32v3mod
+#define SL_iv4mod SL_i32v4mod
+#define SL_iv2cross SL_i32v2cross
+#define SL_iv3cross SL_i32v3cross
+#pragma endregion INT
+#pragma region UINT
+
+typedef u32v uv;
+typedef u32v2 uv2;
+#define SL_uv2_zero  SL_u32v2_zero
+#define SL_uv2_one   SL_u32v2_one
+#define SL_uv2_right SL_u32v2_right
+#define SL_uv2_up    SL_u32v2_up
+typedef u32v3 uv3;
+#define SL_uv3_zero  SL_u32v3_zero
+#define SL_uv3_one   SL_u32v3_one
+#define SL_uv3_right SL_u32v3_right
+#define SL_uv3_up    SL_u32v3_up
+#define SL_uv3_forw  SL_u32v3_forw
+typedef u32v4 uv4;
+#define SL_uv4_zero  SL_u32v4_zero
+#define SL_uv4_one   SL_u32v4_one
+
+
+#define SL_uv2_(X, Y)       ((uv2){.x = X, .y = Y})
+#define SL_uv3_(X, Y, Z)    ((uv3){.x = X, .y = Y, .z = Z})
+#define SL_uv4_(X, Y, Z, W) ((uv4){.x = X, .y = Y, .z = Z, .w = W})
+
+#define SL_uv2s(S)          ((uv2){.x = S, .y = S})
+#define SL_uv3s(S)          ((uv3){.x = S, .y = S, .z = S})
+#define SL_uv4s(S)          ((uv4){.x = S, .y = S, .z = S, .w = S})
+
+#define SL_uv2v(V, ...)     ((uv2){.x = (V).x, .y = (V).y})
+#define SL_uv3v(V, ...)     ((uv3){.x = (V).x, .y = (V).y, .z = (SL_vsize(V) >= 2 ? (V).data[2] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[1]))})
+#define SL_uv4v(V, ...)     ((uv4){.x = (V).x, .y = (V).y, .z = (SL_vsize(V) >= 2 ? (V).data[2] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[1])), .w = (SL_vsize(V) >= 3 ? (V).data[3] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[2]))})
+
+
+
+#define SL_uvadd_ SL_u32vadd_
+#define SL_uvadd SL_u32vadd
+#define SL_uv2add SL_u32v2add
+#define SL_uv3add SL_u32v3add
+#define SL_uv4add SL_u32v4add
+#define SL_uvsub_ SL_u32vsub_
+#define SL_uvsub SL_u32vsub
+#define SL_uv2sub SL_u32v2sub
+#define SL_uv3sub SL_u32v3sub
+#define SL_uv4sub SL_u32v4sub
+#define SL_uvmul_ SL_u32vmul_
+#define SL_uvmul SL_u32vmul
+#define SL_uv2mul SL_u32v2mul
+#define SL_uv3mul SL_u32v3mul
+#define SL_uv4mul SL_u32v4mul
+#define SL_uvmuls_ SL_u32vmuls_
+#define SL_uvmuls SL_u32vmuls
+#define SL_uv2muls SL_u32v2muls
+#define SL_uv3muls SL_u32v3muls
+#define SL_uv4muls SL_u32v4muls
+#define SL_uvdiv_ SL_u32vdiv_
+#define SL_uvdiv SL_u32vdiv
+#define SL_uv2div SL_u32v2div
+#define SL_uv3div SL_u32v3div
+#define SL_uv4div SL_u32v4div
+#define SL_uvdivs_ SL_u32vdivs_
+#define SL_uvdivs SL_u32vdivs
+#define SL_uv2divs SL_u32v2divs
+#define SL_uv3divs SL_u32v3divs
+#define SL_uv4divs SL_u32v4divs
+#define SL_uvaddS_ SL_u32vaddS_
+#define SL_uvaddS SL_u32vaddS
+#define SL_uv2addS SL_u32v2addS
+#define SL_uv3addS SL_u32v3addS
+#define SL_uv4addS SL_u32v4addS
+#define SL_uvsubS_ SL_u32vsubS_
+#define SL_uvsubS SL_u32vsubS
+#define SL_uv2subS SL_u32v2subS
+#define SL_uv3subS SL_u32v3subS
+#define SL_uv4subS SL_u32v4subS
+#define SL_uvaddM_ SL_u32vaddM_
+#define SL_uvaddM SL_u32vaddM
+#define SL_uv2addM SL_u32v2addM
+#define SL_uv3addM SL_u32v3addM
+#define SL_uv4addM SL_u32v4addM
+#define SL_uvsubM_ SL_u32vsubM_
+#define SL_uvsubM SL_u32vsubM
+#define SL_uv2subM SL_u32v2subM
+#define SL_uv3subM SL_u32v3subM
+#define SL_uv4subM SL_u32v4subM
+#define SL_uvaddSM_ SL_u32vaddSM_
+#define SL_uvaddSM SL_u32vaddSM
+#define SL_uv2addSM SL_u32v2addSM
+#define SL_uv3addSM SL_u32v3addSM
+#define SL_uv4addSM SL_u32v4addSM
+#define SL_uvsubSM_ SL_u32vsubSM_
+#define SL_uvsubSM SL_u32vsubSM
+#define SL_uv2subSM SL_u32v2subSM
+#define SL_uv3subSM SL_u32v3subSM
+#define SL_uv4subSM SL_u32v4subSM
+#define SL_uvSadd_ SL_u32vSadd_
+#define SL_uvSadd SL_u32vSadd
+#define SL_uv2Sadd SL_u32v2Sadd
+#define SL_uv3Sadd SL_u32v3Sadd
+#define SL_uv4Sadd SL_u32v4Sadd
+#define SL_uvSsub_ SL_u32vSsub_
+#define SL_uvSsub SL_u32vSsub
+#define SL_uv2Ssub SL_u32v2Ssub
+#define SL_uv3Ssub SL_u32v3Ssub
+#define SL_uv4Ssub SL_u32v4Ssub
+#define SL_uvmin_ SL_u32vmin_
+#define SL_uvmin SL_u32vmin
+#define SL_uv2min SL_u32v2min
+#define SL_uv3min SL_u32v3min
+#define SL_uv4min SL_u32v4min
+#define SL_uvmax_ SL_u32vmax_
+#define SL_uvmax SL_u32vmax
+#define SL_uv2max SL_u32v2max
+#define SL_uv3max SL_u32v3max
+#define SL_uv4max SL_u32v4max
+#define SL_uvdot_ SL_u32vdot_
+#define SL_uvdot SL_u32vdot
+#define SL_uv2dot SL_u32v2dot
+#define SL_uv3dot SL_u32v3dot
+#define SL_uv4dot SL_u32v4dot
+#define SL_uvlen_max_ SL_u32vlen_max_
+#define SL_uvlen_max SL_u32vlen_max
+#define SL_uv2len_max SL_u32v2len_max
+#define SL_uv3len_max SL_u32v3len_max
+#define SL_uv4len_max SL_u32v4len_max
+#define SL_uvlen_manh_ SL_u32vlen_manh_
+#define SL_uvlen_manh SL_u32vlen_manh
+#define SL_uv2len_manh SL_u32v2len_manh
+#define SL_uv3len_manh SL_u32v3len_manh
+#define SL_uv4len_manh SL_u32v4len_manh
+#define SL_uvlen_srq_ SL_u32vlen_srq_
+#define SL_uvlen_srq SL_u32vlen_srq
+#define SL_uv2len_sqr SL_u32v2len_sqr
+#define SL_uv3len_sqr SL_u32v3len_sqr
+#define SL_uv4len_sqr SL_u32v4len_sqr
+#define SL_uvlen_ SL_u32vlen_
+#define SL_uvlen SL_u32vlen
+#define SL_uv2len SL_u32v2len
+#define SL_uv3len SL_u32v3len
+#define SL_uv4len SL_u32v4len
+#define SL_uvdist_ SL_u32vdist_
+#define SL_uvdist SL_u32vdist
+#define SL_uv2dist SL_u32v2dist
+#define SL_uv3dist SL_u32v3dist
+#define SL_uv4dist SL_u32v4dist
+#define SL_uv2refl SL_u32v2refl
+#define SL_uv3refl SL_u32v3refl
+#define SL_uv4refl SL_u32v4refl
+#define SL_uv2refl_u SL_u32v2refl_u
+#define SL_uv3refl_u SL_u32v3refl_u
+#define SL_uv4refl_u SL_u32v4refl_u
+#define SL_uvmods_ SL_u32vmods_
+#define SL_uvmods SL_u32vmods
+#define SL_uv2mods SL_u32v2mods
+#define SL_uv3mods SL_u32v3mods
+#define SL_uv4mods SL_u32v4mods
+#define SL_uvmod_ SL_u32vmod_
+#define SL_uvmod SL_u32vmod
+#define SL_uv2mod SL_u32v2mod
+#define SL_uv3mod SL_u32v3mod
+#define SL_uv4mod SL_u32v4mod
+#pragma endregion UINT
+#pragma region I64
+
+typedef i64v liv;
+typedef i64v2 liv2;
+#define SL_liv2_zero  SL_i64v2_zero
+#define SL_liv2_one   SL_i64v2_one
+#define SL_liv2_right SL_i64v2_right
+#define SL_liv2_up    SL_i64v2_up
+#define SL_liv2_left  SL_i64v2_left
+#define SL_liv2_down  SL_i64v2_down
+typedef i64v3 liv3;
+#define SL_liv3_zero  SL_i64v3_zero
+#define SL_liv3_one   SL_i64v3_one
+#define SL_liv3_right SL_i64v3_right
+#define SL_liv3_up    SL_i64v3_up
+#define SL_liv3_forw  SL_i64v3_forw
+#define SL_liv3_left  SL_i64v3_left
+#define SL_liv3_down  SL_i64v3_down
+#define SL_liv3_back  SL_i64v3_back
+typedef i64v4 liv4;
+#define SL_liv4_zero  SL_i64v4_zero
+#define SL_liv4_one   SL_i64v4_one
+
+
+#define SL_liv2_(X, Y)       ((liv2){.x = X, .y = Y})
+#define SL_liv3_(X, Y, Z)    ((liv3){.x = X, .y = Y, .z = Z})
+#define SL_liv4_(X, Y, Z, W) ((liv4){.x = X, .y = Y, .z = Z, .w = W})
+
+#define SL_liv2s(S)          ((liv2){.x = S, .y = S})
+#define SL_liv3s(S)          ((liv3){.x = S, .y = S, .z = S})
+#define SL_liv4s(S)          ((liv4){.x = S, .y = S, .z = S, .w = S})
+
+#define SL_liv2v(V, ...)     ((liv2){.x = (V).x, .y = (V).y})
+#define SL_liv3v(V, ...)     ((liv3){.x = (V).x, .y = (V).y, .z = (SL_vsize(V) >= 2 ? (V).data[2] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[1]))})
+#define SL_liv4v(V, ...)     ((liv4){.x = (V).x, .y = (V).y, .z = (SL_vsize(V) >= 2 ? (V).data[2] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[1])), .w = (SL_vsize(V) >= 3 ? (V).data[3] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[2]))})
+
+
+
+#define SL_livadd_ SL_i64vadd_
+#define SL_livadd SL_i64vadd
+#define SL_liv2add SL_i64v2add
+#define SL_liv3add SL_i64v3add
+#define SL_liv4add SL_i64v4add
+#define SL_livsub_ SL_i64vsub_
+#define SL_livsub SL_i64vsub
+#define SL_liv2sub SL_i64v2sub
+#define SL_liv3sub SL_i64v3sub
+#define SL_liv4sub SL_i64v4sub
+#define SL_livmul_ SL_i64vmul_
+#define SL_livmul SL_i64vmul
+#define SL_liv2mul SL_i64v2mul
+#define SL_liv3mul SL_i64v3mul
+#define SL_liv4mul SL_i64v4mul
+#define SL_livmuls_ SL_i64vmuls_
+#define SL_livmuls SL_i64vmuls
+#define SL_liv2muls SL_i64v2muls
+#define SL_liv3muls SL_i64v3muls
+#define SL_liv4muls SL_i64v4muls
+#define SL_livdiv_ SL_i64vdiv_
+#define SL_livdiv SL_i64vdiv
+#define SL_liv2div SL_i64v2div
+#define SL_liv3div SL_i64v3div
+#define SL_liv4div SL_i64v4div
+#define SL_livdivs_ SL_i64vdivs_
+#define SL_livdivs SL_i64vdivs
+#define SL_liv2divs SL_i64v2divs
+#define SL_liv3divs SL_i64v3divs
+#define SL_liv4divs SL_i64v4divs
+#define SL_livaddS_ SL_i64vaddS_
+#define SL_livaddS SL_i64vaddS
+#define SL_liv2addS SL_i64v2addS
+#define SL_liv3addS SL_i64v3addS
+#define SL_liv4addS SL_i64v4addS
+#define SL_livsubS_ SL_i64vsubS_
+#define SL_livsubS SL_i64vsubS
+#define SL_liv2subS SL_i64v2subS
+#define SL_liv3subS SL_i64v3subS
+#define SL_liv4subS SL_i64v4subS
+#define SL_livaddM_ SL_i64vaddM_
+#define SL_livaddM SL_i64vaddM
+#define SL_liv2addM SL_i64v2addM
+#define SL_liv3addM SL_i64v3addM
+#define SL_liv4addM SL_i64v4addM
+#define SL_livsubM_ SL_i64vsubM_
+#define SL_livsubM SL_i64vsubM
+#define SL_liv2subM SL_i64v2subM
+#define SL_liv3subM SL_i64v3subM
+#define SL_liv4subM SL_i64v4subM
+#define SL_livaddSM_ SL_i64vaddSM_
+#define SL_livaddSM SL_i64vaddSM
+#define SL_liv2addSM SL_i64v2addSM
+#define SL_liv3addSM SL_i64v3addSM
+#define SL_liv4addSM SL_i64v4addSM
+#define SL_livsubSM_ SL_i64vsubSM_
+#define SL_livsubSM SL_i64vsubSM
+#define SL_liv2subSM SL_i64v2subSM
+#define SL_liv3subSM SL_i64v3subSM
+#define SL_liv4subSM SL_i64v4subSM
+#define SL_livSadd_ SL_i64vSadd_
+#define SL_livSadd SL_i64vSadd
+#define SL_liv2Sadd SL_i64v2Sadd
+#define SL_liv3Sadd SL_i64v3Sadd
+#define SL_liv4Sadd SL_i64v4Sadd
+#define SL_livSsub_ SL_i64vSsub_
+#define SL_livSsub SL_i64vSsub
+#define SL_liv2Ssub SL_i64v2Ssub
+#define SL_liv3Ssub SL_i64v3Ssub
+#define SL_liv4Ssub SL_i64v4Ssub
+#define SL_livneg_ SL_i64vneg_
+#define SL_livneg SL_i64vneg
+#define SL_liv2neg SL_i64v2neg
+#define SL_liv3neg SL_i64v3neg
+#define SL_liv4neg SL_i64v4neg
+#define SL_livabs_ SL_i64vabs_
+#define SL_livabs SL_i64vabs
+#define SL_liv2abs SL_i64v2abs
+#define SL_liv3abs SL_i64v3abs
+#define SL_liv4abs SL_i64v4abs
+#define SL_livmin_ SL_i64vmin_
+#define SL_livmin SL_i64vmin
+#define SL_liv2min SL_i64v2min
+#define SL_liv3min SL_i64v3min
+#define SL_liv4min SL_i64v4min
+#define SL_livmax_ SL_i64vmax_
+#define SL_livmax SL_i64vmax
+#define SL_liv2max SL_i64v2max
+#define SL_liv3max SL_i64v3max
+#define SL_liv4max SL_i64v4max
+#define SL_livdot_ SL_i64vdot_
+#define SL_livdot SL_i64vdot
+#define SL_liv2dot SL_i64v2dot
+#define SL_liv3dot SL_i64v3dot
+#define SL_liv4dot SL_i64v4dot
+#define SL_livlen_max_ SL_i64vlen_max_
+#define SL_livlen_max SL_i64vlen_max
+#define SL_liv2len_max SL_i64v2len_max
+#define SL_liv3len_max SL_i64v3len_max
+#define SL_liv4len_max SL_i64v4len_max
+#define SL_livlen_manh_ SL_i64vlen_manh_
+#define SL_livlen_manh SL_i64vlen_manh
+#define SL_liv2len_manh SL_i64v2len_manh
+#define SL_liv3len_manh SL_i64v3len_manh
+#define SL_liv4len_manh SL_i64v4len_manh
+#define SL_livlen_srq_ SL_i64vlen_srq_
+#define SL_livlen_srq SL_i64vlen_srq
+#define SL_liv2len_sqr SL_i64v2len_sqr
+#define SL_liv3len_sqr SL_i64v3len_sqr
+#define SL_liv4len_sqr SL_i64v4len_sqr
+#define SL_livlen_ SL_i64vlen_
+#define SL_livlen SL_i64vlen
+#define SL_liv2len SL_i64v2len
+#define SL_liv3len SL_i64v3len
+#define SL_liv4len SL_i64v4len
+#define SL_livdist_ SL_i64vdist_
+#define SL_livdist SL_i64vdist
+#define SL_liv2dist SL_i64v2dist
+#define SL_liv3dist SL_i64v3dist
+#define SL_liv4dist SL_i64v4dist
+#define SL_liv2refl SL_i64v2refl
+#define SL_liv3refl SL_i64v3refl
+#define SL_liv4refl SL_i64v4refl
+#define SL_liv2refl_u SL_i64v2refl_u
+#define SL_liv3refl_u SL_i64v3refl_u
+#define SL_liv4refl_u SL_i64v4refl_u
+#define SL_livmods_ SL_i64vmods_
+#define SL_livmods SL_i64vmods
+#define SL_liv2mods SL_i64v2mods
+#define SL_liv3mods SL_i64v3mods
+#define SL_liv4mods SL_i64v4mods
+#define SL_livmod_ SL_i64vmod_
+#define SL_livmod SL_i64vmod
+#define SL_liv2mod SL_i64v2mod
+#define SL_liv3mod SL_i64v3mod
+#define SL_liv4mod SL_i64v4mod
+#define SL_liv2cross SL_i64v2cross
+#define SL_liv3cross SL_i64v3cross
+#pragma endregion I64
+#pragma region U64
+
+typedef u64v luv;
+typedef u64v2 luv2;
+#define SL_luv2_zero  SL_u64v2_zero
+#define SL_luv2_one   SL_u64v2_one
+#define SL_luv2_right SL_u64v2_right
+#define SL_luv2_up    SL_u64v2_up
+typedef u64v3 luv3;
+#define SL_luv3_zero  SL_u64v3_zero
+#define SL_luv3_one   SL_u64v3_one
+#define SL_luv3_right SL_u64v3_right
+#define SL_luv3_up    SL_u64v3_up
+#define SL_luv3_forw  SL_u64v3_forw
+typedef u64v4 luv4;
+#define SL_luv4_zero  SL_u64v4_zero
+#define SL_luv4_one   SL_u64v4_one
+
+
+#define SL_luv2_(X, Y)       ((luv2){.x = X, .y = Y})
+#define SL_luv3_(X, Y, Z)    ((luv3){.x = X, .y = Y, .z = Z})
+#define SL_luv4_(X, Y, Z, W) ((luv4){.x = X, .y = Y, .z = Z, .w = W})
+
+#define SL_luv2s(S)          ((luv2){.x = S, .y = S})
+#define SL_luv3s(S)          ((luv3){.x = S, .y = S, .z = S})
+#define SL_luv4s(S)          ((luv4){.x = S, .y = S, .z = S, .w = S})
+
+#define SL_luv2v(V, ...)     ((luv2){.x = (V).x, .y = (V).y})
+#define SL_luv3v(V, ...)     ((luv3){.x = (V).x, .y = (V).y, .z = (SL_vsize(V) >= 2 ? (V).data[2] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[1]))})
+#define SL_luv4v(V, ...)     ((luv4){.x = (V).x, .y = (V).y, .z = (SL_vsize(V) >= 2 ? (V).data[2] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[1])), .w = (SL_vsize(V) >= 3 ? (V).data[3] : (0, ((const float[]){0, ##__VA_ARGS__, 0})[2]))})
+
+
+
+#define SL_luvadd_ SL_u64vadd_
+#define SL_luvadd SL_u64vadd
+#define SL_luv2add SL_u64v2add
+#define SL_luv3add SL_u64v3add
+#define SL_luv4add SL_u64v4add
+#define SL_luvsub_ SL_u64vsub_
+#define SL_luvsub SL_u64vsub
+#define SL_luv2sub SL_u64v2sub
+#define SL_luv3sub SL_u64v3sub
+#define SL_luv4sub SL_u64v4sub
+#define SL_luvmul_ SL_u64vmul_
+#define SL_luvmul SL_u64vmul
+#define SL_luv2mul SL_u64v2mul
+#define SL_luv3mul SL_u64v3mul
+#define SL_luv4mul SL_u64v4mul
+#define SL_luvmuls_ SL_u64vmuls_
+#define SL_luvmuls SL_u64vmuls
+#define SL_luv2muls SL_u64v2muls
+#define SL_luv3muls SL_u64v3muls
+#define SL_luv4muls SL_u64v4muls
+#define SL_luvdiv_ SL_u64vdiv_
+#define SL_luvdiv SL_u64vdiv
+#define SL_luv2div SL_u64v2div
+#define SL_luv3div SL_u64v3div
+#define SL_luv4div SL_u64v4div
+#define SL_luvdivs_ SL_u64vdivs_
+#define SL_luvdivs SL_u64vdivs
+#define SL_luv2divs SL_u64v2divs
+#define SL_luv3divs SL_u64v3divs
+#define SL_luv4divs SL_u64v4divs
+#define SL_luvaddS_ SL_u64vaddS_
+#define SL_luvaddS SL_u64vaddS
+#define SL_luv2addS SL_u64v2addS
+#define SL_luv3addS SL_u64v3addS
+#define SL_luv4addS SL_u64v4addS
+#define SL_luvsubS_ SL_u64vsubS_
+#define SL_luvsubS SL_u64vsubS
+#define SL_luv2subS SL_u64v2subS
+#define SL_luv3subS SL_u64v3subS
+#define SL_luv4subS SL_u64v4subS
+#define SL_luvaddM_ SL_u64vaddM_
+#define SL_luvaddM SL_u64vaddM
+#define SL_luv2addM SL_u64v2addM
+#define SL_luv3addM SL_u64v3addM
+#define SL_luv4addM SL_u64v4addM
+#define SL_luvsubM_ SL_u64vsubM_
+#define SL_luvsubM SL_u64vsubM
+#define SL_luv2subM SL_u64v2subM
+#define SL_luv3subM SL_u64v3subM
+#define SL_luv4subM SL_u64v4subM
+#define SL_luvaddSM_ SL_u64vaddSM_
+#define SL_luvaddSM SL_u64vaddSM
+#define SL_luv2addSM SL_u64v2addSM
+#define SL_luv3addSM SL_u64v3addSM
+#define SL_luv4addSM SL_u64v4addSM
+#define SL_luvsubSM_ SL_u64vsubSM_
+#define SL_luvsubSM SL_u64vsubSM
+#define SL_luv2subSM SL_u64v2subSM
+#define SL_luv3subSM SL_u64v3subSM
+#define SL_luv4subSM SL_u64v4subSM
+#define SL_luvSadd_ SL_u64vSadd_
+#define SL_luvSadd SL_u64vSadd
+#define SL_luv2Sadd SL_u64v2Sadd
+#define SL_luv3Sadd SL_u64v3Sadd
+#define SL_luv4Sadd SL_u64v4Sadd
+#define SL_luvSsub_ SL_u64vSsub_
+#define SL_luvSsub SL_u64vSsub
+#define SL_luv2Ssub SL_u64v2Ssub
+#define SL_luv3Ssub SL_u64v3Ssub
+#define SL_luv4Ssub SL_u64v4Ssub
+#define SL_luvmin_ SL_u64vmin_
+#define SL_luvmin SL_u64vmin
+#define SL_luv2min SL_u64v2min
+#define SL_luv3min SL_u64v3min
+#define SL_luv4min SL_u64v4min
+#define SL_luvmax_ SL_u64vmax_
+#define SL_luvmax SL_u64vmax
+#define SL_luv2max SL_u64v2max
+#define SL_luv3max SL_u64v3max
+#define SL_luv4max SL_u64v4max
+#define SL_luvdot_ SL_u64vdot_
+#define SL_luvdot SL_u64vdot
+#define SL_luv2dot SL_u64v2dot
+#define SL_luv3dot SL_u64v3dot
+#define SL_luv4dot SL_u64v4dot
+#define SL_luvlen_max_ SL_u64vlen_max_
+#define SL_luvlen_max SL_u64vlen_max
+#define SL_luv2len_max SL_u64v2len_max
+#define SL_luv3len_max SL_u64v3len_max
+#define SL_luv4len_max SL_u64v4len_max
+#define SL_luvlen_manh_ SL_u64vlen_manh_
+#define SL_luvlen_manh SL_u64vlen_manh
+#define SL_luv2len_manh SL_u64v2len_manh
+#define SL_luv3len_manh SL_u64v3len_manh
+#define SL_luv4len_manh SL_u64v4len_manh
+#define SL_luvlen_srq_ SL_u64vlen_srq_
+#define SL_luvlen_srq SL_u64vlen_srq
+#define SL_luv2len_sqr SL_u64v2len_sqr
+#define SL_luv3len_sqr SL_u64v3len_sqr
+#define SL_luv4len_sqr SL_u64v4len_sqr
+#define SL_luvlen_ SL_u64vlen_
+#define SL_luvlen SL_u64vlen
+#define SL_luv2len SL_u64v2len
+#define SL_luv3len SL_u64v3len
+#define SL_luv4len SL_u64v4len
+#define SL_luvdist_ SL_u64vdist_
+#define SL_luvdist SL_u64vdist
+#define SL_luv2dist SL_u64v2dist
+#define SL_luv3dist SL_u64v3dist
+#define SL_luv4dist SL_u64v4dist
+#define SL_luv2refl SL_u64v2refl
+#define SL_luv3refl SL_u64v3refl
+#define SL_luv4refl SL_u64v4refl
+#define SL_luv2refl_u SL_u64v2refl_u
+#define SL_luv3refl_u SL_u64v3refl_u
+#define SL_luv4refl_u SL_u64v4refl_u
+#define SL_luvmods_ SL_u64vmods_
+#define SL_luvmods SL_u64vmods
+#define SL_luv2mods SL_u64v2mods
+#define SL_luv3mods SL_u64v3mods
+#define SL_luv4mods SL_u64v4mods
+#define SL_luvmod_ SL_u64vmod_
+#define SL_luvmod SL_u64vmod
+#define SL_luv2mod SL_u64v2mod
+#define SL_luv3mod SL_u64v3mod
+#define SL_luv4mod SL_u64v4mod
+#pragma endregion U64
+
+#endif // __SL_VECTOR_H
+
+
+
+
+
+// SOURCE: math/quaternion.h
+#ifndef __SL_QUATERNION_H
+#define __SL_QUATERNION_H
+
+// #include "../base.h"
+
+// #include "math.h"
+// #include "vector.h"
+
+#define SL_XPD_Q(Q) (Q).w, (Q).x, (V).y, (V).z
+#define SL_FMT_Q(fmt) "("fmt" + "fmt"i + "fmt"j + "fmt"k)"
+#pragma region ARITHMETIC
+
+/// @brief Quaternion of float
+typedef union {
+    float data[4];
+    struct { float w, x, y, z; };
+    struct { float r; union { fv3 iv; struct { float i, j, k; }; }; };
+} fq;
+
+#define SL_fq_identity  ((fq){.w = 1, .x = 0, .y = 0, .z = 0})
+
+/// @brief Quaternion of double
+typedef union {
+    double data[4];
+    struct { double w, x, y, z; };
+    struct { double r; union { dv3 iv; struct { double i, j, k; }; }; };
+} dq;
+
+#define SL_dq_identity  ((dq){.w = 1, .x = 0, .y = 0, .z = 0})
+
+
+
+#define SL_fq_(W, X, Y, Z) ((fq){.w = W, .x = X, .y = Y, .z = Z})
+#define SL_dq_(W, X, Y, Z) ((dq){.w = W, .x = X, .y = Y, .z = Z})
+
+#define SL_fqasfv4(Q)     (*(fv4*)Q.data)
+#define SL_dqasdv4(Q)     (*(dv4*)Q.data)
+
+
+
+/// @brief Addition of two fq
+SL_header fq SL_fqadd(fq lhs, fq rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fq) {
+        .w = lhs.w + rhs.w,
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y,
+        .z = lhs.z + rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two dq
+SL_header dq SL_dqadd(dq lhs, dq rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dq) {
+        .w = lhs.w + rhs.w,
+        .x = lhs.x + rhs.x,
+        .y = lhs.y + rhs.y,
+        .z = lhs.z + rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two fq
+SL_header fq SL_fqsub(fq lhs, fq rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fq) {
+        .w = lhs.w - rhs.w,
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y,
+        .z = lhs.z - rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two dq
+SL_header dq SL_dqsub(dq lhs, dq rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dq) {
+        .w = lhs.w - rhs.w,
+        .x = lhs.x - rhs.x,
+        .y = lhs.y - rhs.y,
+        .z = lhs.z - rhs.z
+    };
+}
+#else
+;
+#endif
+/// @brief Multiplication of two fq
+SL_header fq SL_fqmul(fq lhs, fq rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fq) {
+        .x = rhs.w * lhs.w - rhs.x * lhs.x - rhs.y * lhs.y - rhs.z * lhs.z,
+        .y = rhs.w * lhs.x + rhs.x * lhs.w - rhs.y * lhs.z + rhs.z * lhs.y,
+        .z = rhs.w * lhs.y + rhs.x * lhs.z + rhs.y * lhs.w - rhs.z * lhs.x,
+        .w = rhs.w * lhs.z - rhs.x * lhs.y + rhs.y * lhs.x + rhs.z * lhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Multiplication of two dq
+SL_header dq SL_dqmul(dq lhs, dq rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dq) {
+        .x = rhs.w * lhs.w - rhs.x * lhs.x - rhs.y * lhs.y - rhs.z * lhs.z,
+        .y = rhs.w * lhs.x + rhs.x * lhs.w - rhs.y * lhs.z + rhs.z * lhs.y,
+        .z = rhs.w * lhs.y + rhs.x * lhs.z + rhs.y * lhs.w - rhs.z * lhs.x,
+        .w = rhs.w * lhs.z - rhs.x * lhs.y + rhs.y * lhs.x + rhs.z * lhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Division of two fq
+SL_header fq SL_fqdiv(fq lhs, fq rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    SL_terminate(-1, "[UNIPMLEMENTED]");
+    return (fq) {
+        .x = rhs.w * lhs.w - rhs.x * lhs.x - rhs.y * lhs.y - rhs.z * lhs.z,
+        .y = rhs.w * lhs.x + rhs.x * lhs.w - rhs.y * lhs.z + rhs.z * lhs.y,
+        .z = rhs.w * lhs.y + rhs.x * lhs.z + rhs.y * lhs.w - rhs.z * lhs.x,
+        .w = rhs.w * lhs.z - rhs.x * lhs.y + rhs.y * lhs.x + rhs.z * lhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Division of two dq
+SL_header dq SL_dqdiv(dq lhs, dq rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    SL_terminate(-1, "[UNIPMLEMENTED]");
+    return (dq) {
+        .x = rhs.w * lhs.w - rhs.x * lhs.x - rhs.y * lhs.y - rhs.z * lhs.z,
+        .y = rhs.w * lhs.x + rhs.x * lhs.w - rhs.y * lhs.z + rhs.z * lhs.y,
+        .z = rhs.w * lhs.y + rhs.x * lhs.z + rhs.y * lhs.w - rhs.z * lhs.x,
+        .w = rhs.w * lhs.z - rhs.x * lhs.y + rhs.y * lhs.x + rhs.z * lhs.w
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a fq
+SL_header fq SL_fqneg(fq q)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fq) {
+        .w = -q.w,
+        .x = -q.x,
+        .y = -q.y,
+        .z = -q.z
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a dq
+SL_header dq SL_dqneg(dq q)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dq) {
+        .w = -q.w,
+        .x = -q.x,
+        .y = -q.y,
+        .z = -q.z
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a fq with a scalar
+SL_header fq SL_fqscale(fq q, float s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fq) {
+        .w = q.w * s,
+        .x = q.x * s,
+        .y = q.y * s,
+        .z = q.z * s
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a dq with a scalar
+SL_header dq SL_dqscale(dq q, double s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dq) {
+        .w = q.w * s,
+        .x = q.x * s,
+        .y = q.y * s,
+        .z = q.z * s
+    };
+}
+#else
+;
+#endif
+/// @brief Canonic length of a fq
+SL_header double SL_fqlen(fq q)
+#if defined(SL_IMPLEMENTATION)
+{
+    return q.w * q.w + q.x * q.x + q.y * q.y + q.z * q.z;
+}
+#else
+;
+#endif
+/// @brief Canonic length of a dq
+SL_header double SL_dqlen(dq q)
+#if defined(SL_IMPLEMENTATION)
+{
+    return q.w * q.w + q.x * q.x + q.y * q.y + q.z * q.z;
+}
+#else
+;
+#endif
+/// @brief Normalization of a fq
+SL_header fq SL_fqnorm(fq q)
+#if defined(SL_IMPLEMENTATION)
+{
+    double inv_len = 1.0 / SL_fqlen(q);
+    return (fq) {
+        .w = q.w * inv_len,
+        .x = q.x * inv_len,
+        .y = q.y * inv_len,
+        .z = q.z * inv_len
+    };
+}
+#else
+;
+#endif
+/// @brief Normalization of a dq
+SL_header dq SL_dqnorm(dq q)
+#if defined(SL_IMPLEMENTATION)
+{
+    double inv_len = 1.0 / SL_dqlen(q);
+    return (dq) {
+        .w = q.w * inv_len,
+        .x = q.x * inv_len,
+        .y = q.y * inv_len,
+        .z = q.z * inv_len
+    };
+}
+#else
+;
+#endif
+/// @brief Transposition of a fq
+SL_header fq SL_fqtrsp(fq q)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fq) {
+        .w = q.w,
+        .x = -q.x,
+        .y = -q.y,
+        .z = -q.z
+    };
+}
+#else
+;
+#endif
+/// @brief Transposition of a dq
+SL_header dq SL_dqtrsp(dq q)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dq) {
+        .w = q.w,
+        .x = -q.x,
+        .y = -q.y,
+        .z = -q.z
+    };
+}
+#else
+;
+#endif
+/// @brief Inversion of a fq
+SL_header fq SL_fqinv(fq q)
+#if defined(SL_IMPLEMENTATION)
+{
+    double inv_len = 1.0 / SL_fqlen(q);
+    return (fq) {
+        .w = q.w * inv_len,
+        .x = -q.x * inv_len,
+        .y = -q.y * inv_len,
+        .z = -q.z * inv_len
+    };
+}
+#else
+;
+#endif
+/// @brief Inversion of a dq
+SL_header dq SL_dqinv(dq q)
+#if defined(SL_IMPLEMENTATION)
+{
+    double inv_len = 1.0 / SL_dqlen(q);
+    return (dq) {
+        .w = q.w * inv_len,
+        .x = -q.x * inv_len,
+        .y = -q.y * inv_len,
+        .z = -q.z * inv_len
+    };
+}
+#else
+;
+#endif
+/// @brief Exponential of a fq
+SL_header fq SL_fqexp(fq q)
+#if defined(SL_IMPLEMENTATION)
+{
+    double ex = exp(q.w);
+    double angle = SL_fv3len(q.iv);
+    double sin_angle = angle == 0.0 ? 0.0 : ex * sin(angle) / angle;
+    return (fq) {
+        .w = ex * cos(angle),
+        .x = q.x * sin_angle,
+        .y = q.y * sin_angle,
+        .z = q.z * sin_angle
+    };
+}
+#else
+;
+#endif
+/// @brief Exponential of a dq
+SL_header dq SL_dqexp(dq q)
+#if defined(SL_IMPLEMENTATION)
+{
+    double ex = exp(q.w);
+    double angle = SL_dv3len(q.iv);
+    double sin_angle = angle == 0.0 ? 0.0 : ex * sin(angle) / angle;
+    return (dq) {
+        .w = ex * cos(angle),
+        .x = q.x * sin_angle,
+        .y = q.y * sin_angle,
+        .z = q.z * sin_angle
+    };
+}
+#else
+;
+#endif
+/// @brief Logarithm of a fq
+SL_header fq SL_fqln(fq q)
+#if defined(SL_IMPLEMENTATION)
+{
+    double len = SL_fqlen(q);
+    double arg = len == 0.0 ? 0.0 : acos(q.w / len) / SL_fv3len(q.iv);
+    return (fq) {
+        .w = log(len),
+        .x = q.x * arg,
+        .y = q.y * arg,
+        .z = q.z * arg
+    };
+}
+#else
+;
+#endif
+/// @brief Logarithm of a dq
+SL_header dq SL_dqln(dq q)
+#if defined(SL_IMPLEMENTATION)
+{
+    double len = SL_dqlen(q);
+    double arg = len == 0.0 ? 0.0 : acos(q.w / len) / SL_dv3len(q.iv);
+    return (dq) {
+        .w = log(len),
+        .x = q.x * arg,
+        .y = q.y * arg,
+        .z = q.z * arg
+    };
+}
+#else
+;
+#endif
+/// @brief Logarithm of a fq of assumed unit length
+SL_header fq SL_fqln_u(fq q)
+#if defined(SL_IMPLEMENTATION)
+{
+    double arg = acos(q.w) / SL_fv3len(q.iv);
+    return (fq) {
+        .w = 0,
+        .x = q.x * arg,
+        .y = q.y * arg,
+        .z = q.z * arg
+    };
+}
+#else
+;
+#endif
+/// @brief Logarithm of a dq of assumed unit length
+SL_header dq SL_dqln_u(dq q)
+#if defined(SL_IMPLEMENTATION)
+{
+    double arg = acos(q.w) / SL_dv3len(q.iv);
+    return (dq) {
+        .w = 0,
+        .x = q.x * arg,
+        .y = q.y * arg,
+        .z = q.z * arg
+    };
+}
+#else
+;
+#endif
+/// @brief fq raised to the power of a float
+SL_header fq SL_fqpow(fq q, float t)
+#if defined(SL_IMPLEMENTATION)
+{
+    double cos_angle = SL_fv3len(q.iv);
+    if (cos_angle == 0.0) return SL_fq_identity;
+    double arg = acos(q.w) * t;
+    double sin_arg = sin(arg) / cos_angle;
+    return (fq) {
+        .w = cos(arg),
+        .x = q.x * sin_arg,
+        .y = q.y * sin_arg,
+        .z = q.z * sin_arg
+    };
+}
+#else
+;
+#endif
+/// @brief dq raised to the power of a double
+SL_header dq SL_dqpow(dq q, double t)
+#if defined(SL_IMPLEMENTATION)
+{
+    double cos_angle = SL_dv3len(q.iv);
+    if (cos_angle == 0.0) return SL_dq_identity;
+    double arg = acos(q.w) * t;
+    double sin_arg = sin(arg) / cos_angle;
+    return (dq) {
+        .w = cos(arg),
+        .x = q.x * sin_arg,
+        .y = q.y * sin_arg,
+        .z = q.z * sin_arg
+    };
+}
+#else
+;
+#endif
+/// @brief Rotation of a fv3 by a fq
+SL_header fv3 SL_fqrot(fq q, fv3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    float w2 = q.w * q.w, x2 = q.x * q.x, y2 = q.y * q.y, z2 = q.z * q.z;
+    float wx = q.w * q.x, wy = q.w * q.y, wz = q.w * q.z, xy = q.x * q.y, yz = q.y * q.z, xz = q.x * q.z;
+
+    return SL_fv3_(
+        v.x * (w2 + x2 - y2 - z2) + 2 * ((xy + wz) * v.y + (xz - wy) * v.z),
+        v.y * (w2 - x2 + y2 - z2) + 2 * ((xy - wz) * v.x + (yz + wx) * v.z),
+        v.z * (w2 - x2 - y2 + z2) + 2 * ((xz + wy) * v.x + (yz - wx) * v.y)
+    );
+}
+#else
+;
+#endif
+/// @brief Rotation of a dv3 by a dq
+SL_header dv3 SL_dqrot(dq q, dv3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    double w2 = q.w * q.w, x2 = q.x * q.x, y2 = q.y * q.y, z2 = q.z * q.z;
+    double wx = q.w * q.x, wy = q.w * q.y, wz = q.w * q.z, xy = q.x * q.y, yz = q.y * q.z, xz = q.x * q.z;
+
+    return SL_dv3_(
+        v.x * (w2 + x2 - y2 - z2) + 2 * ((xy + wz) * v.y + (xz - wy) * v.z),
+        v.y * (w2 - x2 + y2 - z2) + 2 * ((xy - wz) * v.x + (yz + wx) * v.z),
+        v.z * (w2 - x2 - y2 + z2) + 2 * ((xz + wy) * v.x + (yz - wx) * v.y)
+    );
+}
+#else
+;
+#endif
+/// @brief Spherical interpolation with parameter float t from fq a to fq b
+/// @note With unit quaternions, this acts as an interpolation between two rotations
+SL_header fq SL_fqslerp(fq a, fq b, float t)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_fqmul(a, SL_fqpow(SL_fqmul(SL_fqinv(a), b), t));
+}
+#else
+;
+#endif
+/// @brief Spherical interpolation with parameter double t from dq a to dq b
+/// @note With unit quaternions, this acts as an interpolation between two rotations
+SL_header dq SL_dqslerp(dq a, dq b, double t)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_dqmul(a, SL_dqpow(SL_dqmul(SL_dqinv(a), b), t));
+}
+#else
+;
+#endif
+
+#pragma endregion ARITHMETIC
+#pragma region CONVERSION
+/// @brief Unit fq representing XYZ (yaw pitch roll) euler rotation
+SL_header fq SL_fqfrom_euler(double yaw, double pitch, double roll)
+#if defined(SL_IMPLEMENTATION)
+{
+    double sy, cy; sincos(yaw * 0.5, &sy, &cy);
+    double sp, cp; sincos(pitch * 0.5, &sp, &cp);
+    double sr, cr; sincos(roll * 0.5, &sr, &cr);
+    return (fq) {
+       .w = cy * cp * cr - sy * sp * sr,
+       .x = cy * sp * cr - sy * cp * sr,
+       .y = cy * sp * sr + sy * cp * cr,
+       .z = cy * cp * sr + sy * sp * cr
+    };
+}
+#else
+;
+#endif
+/// @brief Unit dq representing XYZ (yaw pitch roll) euler rotation
+SL_header dq SL_dqfrom_euler(double yaw, double pitch, double roll)
+#if defined(SL_IMPLEMENTATION)
+{
+    double sy, cy; sincos(yaw * 0.5, &sy, &cy);
+    double sp, cp; sincos(pitch * 0.5, &sp, &cp);
+    double sr, cr; sincos(roll * 0.5, &sr, &cr);
+    return (dq) {
+       .w = cy * cp * cr - sy * sp * sr,
+       .x = cy * sp * cr - sy * cp * sr,
+       .y = cy * sp * sr + sy * cp * cr,
+       .z = cy * cp * sr + sy * sp * cr
+    };
+}
+#else
+;
+#endif
+/// @brief Assumed unit fq to euler angles representing XYZ (yaw pitch roll) rotation
+SL_header fv3 SL_fqto_euler(fq q)
+#if defined(SL_IMPLEMENTATION)
+{
+    double a =  q.w - q.x,
+           b =  q.y - q.z,
+           c =  q.x + q.w,
+           d = -q.z - q.y;
+    
+    double t1, t3, t1h = 0.0;
+    double t2 = acos(2.0 * (a*a + b*b) / (a*a + b*b + c*c + d*d) - 1.0);
+    double tp = atan2(b, a);
+    double tm = atan2(d, c);
+    
+    if (t2 < 1e-8) {
+        t1 = t1h;
+        t3 = 2.0 * tp - t1h;
+    }
+    else if (SL_PI - t2 < 1e-8) {
+        t1 = t1h;
+        t3 = 2.0 * tm + t1h;
+    }
+    else {
+        t1 = tp - tm;
+        t3 = tp + tm;
+    }
+
+    return (fv3) {
+        .x = fmod(t1 + SL_TAU, SL_TAU),
+        .y = fmod(t2 - SL_PI/2 + SL_TAU, SL_TAU),
+        .z = fmod(SL_TAU - t3, SL_TAU)
+    };
+}
+#else
+;
+#endif
+/// @brief Assumed unit dq to euler angles representing XYZ (yaw pitch roll) rotation
+SL_header dv3 SL_dqto_euler(dq q)
+#if defined(SL_IMPLEMENTATION)
+{
+    double a =  q.w - q.x,
+           b =  q.y - q.z,
+           c =  q.x + q.w,
+           d = -q.z - q.y;
+    
+    double t1, t3, t1h = 0.0;
+    double t2 = acos(2.0 * (a*a + b*b) / (a*a + b*b + c*c + d*d) - 1.0);
+    double tp = atan2(b, a);
+    double tm = atan2(d, c);
+    
+    if (t2 < 1e-8) {
+        t1 = t1h;
+        t3 = 2.0 * tp - t1h;
+    }
+    else if (SL_PI - t2 < 1e-8) {
+        t1 = t1h;
+        t3 = 2.0 * tm + t1h;
+    }
+    else {
+        t1 = tp - tm;
+        t3 = tp + tm;
+    }
+
+    return (dv3) {
+        .x = fmod(t1 + SL_TAU, SL_TAU),
+        .y = fmod(t2 - SL_PI/2 + SL_TAU, SL_TAU),
+        .z = fmod(SL_TAU - t3, SL_TAU)
+    };
+}
+#else
+;
+#endif
+/// @brief Unit fq based on angle-axis pair
+SL_header fq SL_fqfrom_angleAxis(double angle, fv3 axis)
+#if defined(SL_IMPLEMENTATION)
+{
+    double sin_angle = sin(angle *= 0.5);
+    return (fq) {
+        .w = cos(angle),
+        .x = axis.x * sin_angle,
+        .y = axis.y * sin_angle,
+        .z = axis.z * sin_angle
+    };
+}
+#else
+;
+#endif
+/// @brief Unit dq based on angle-axis pair
+SL_header dq SL_dqfrom_angleAxis(double angle, dv3 axis)
+#if defined(SL_IMPLEMENTATION)
+{
+    double sin_angle = sin(angle *= 0.5);
+    return (dq) {
+        .w = cos(angle),
+        .x = axis.x * sin_angle,
+        .y = axis.y * sin_angle,
+        .z = axis.z * sin_angle
+    };
+}
+#else
+;
+#endif
+/// @brief Unit fq representing the rotation from one fv3 to another fv3
+SL_header fq SL_fqfrom_fromTo(fv3 from, fv3 to)
+#if defined(SL_IMPLEMENTATION)
+{
+    fv3 axis = SL_fv3cross(from, to);
+    if (axis.x || axis.y || axis.z) {
+        float angle = acos(SL_fv3dot(from, to));
+        return SL_fqfrom_angleAxis(angle, SL_fv3norm(axis));
+    }
+    return SL_fq_identity;
+}
+#else
+;
+#endif
+/// @brief Unit dq representing the rotation from one dv3 to another dv3
+SL_header dq SL_dqfrom_fromTo(dv3 from, dv3 to)
+#if defined(SL_IMPLEMENTATION)
+{
+    dv3 axis = SL_dv3cross(from, to);
+    if (axis.x || axis.y || axis.z) {
+        float angle = acos(SL_dv3dot(from, to));
+        return SL_dqfrom_angleAxis(angle, SL_dv3norm(axis));
+    }
+    return SL_dq_identity;
+}
+#else
+;
+#endif
+/// @brief fq from a fv4
+SL_header fq SL_fqfrom_v4(fv4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fq) { .w = v.x, .x = v.y, .y = v.z, .z = v.w };
+}
+#else
+;
+#endif
+/// @brief dq from a dv4
+SL_header dq SL_dqfrom_v4(dv4 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dq) { .w = v.x, .x = v.y, .y = v.z, .z = v.w };
+}
+#else
+;
+#endif
+/// @brief fq to a fv4
+SL_header fv4 SL_fqto_v4(fq q)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fv4) { .x = q.w, .y = q.x, .z = q.y, .w = q.z };
+}
+#else
+;
+#endif
+/// @brief dq to a dv4
+SL_header dv4 SL_dqto_v4(dq q)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dv4) { .x = q.w, .y = q.x, .z = q.y, .w = q.z };
+}
+#else
+;
+#endif
+
+#pragma endregion CONVERSION
+
+#endif // __SL_QUATERNION_H
+
+
+
+
+
+// SOURCE: math/matrix.h
+#ifndef __SL_MATRIX_H
+#define __SL_MATRIX_H
+
+// #include "../base.h"
+// #include "vector.h"
+// #include "quaternion.h"
+
+#define SL_msize(M)      SL_luv2_(sizeof(((typeof(M) *)NULL)->r0) / sizeof(((typeof(M) *)NULL)->m00), sizeof(((typeof(M) *)NULL)->r0) / sizeof(((typeof(M) *)NULL)->m00))
+#define SL_mget(M, i, j) ((M).data[j + i * (M).c])
+
+#define SL_XPD_M2X2(M) (M).m00, (M).m01, (M).m10, (M).m11
+#define SL_XPD_M3X3(M) (M).m00, (M).m01, (M).m02, (M).m10, (M).m11, (M).m12, (M).m20, (M).m21, (M).m22
+#define SL_XPD_M4X4(M) (M).m00, (M).m01, (M).m02, (M).m03, (M).m10, (M).m11, (M).m12, (M).m13, (M).m20, (M).m21, (M).m22, (M).m23, (M).m30, (M).m31, (M).m32, (M).m33
+
+#define SL_FMT_M2X2(fmt, ...) "[ "fmt" "fmt" ]"__VA_ARGS__"[ "fmt" "fmt" ]"
+#define SL_FMT_M3X3(fmt, ...) "[ "fmt" "fmt" "fmt" ]"__VA_ARGS__"[ "fmt" "fmt" "fmt" ]"__VA_ARGS__"[ "fmt" "fmt" "fmt" ]"
+#define SL_FMT_M4X4(fmt, ...) "[ "fmt" "fmt" "fmt" "fmt" ]"__VA_ARGS__"[ "fmt" "fmt" "fmt" "fmt" ]"__VA_ARGS__"[ "fmt" "fmt" "fmt" "fmt" ]"__VA_ARGS__"[ "fmt" "fmt" "fmt" "fmt" ]"
+
+
+#pragma region I32
+
+/// @brief Matrix of i32 with arbitrary dimensions
+typedef struct {
+    union { usize r, c; luv2 size; };
+    i32 *data;
+} i32m;
+
+#define SL_asi32m(sized_mat) ((i32m){.size = SL_msize(sized_mat), .data = sized_mat.data})
+
+
+
+
+/// @brief Matrix of i32 of size 2 x 2
+typedef union {
+    i32 data[2 * 2];
+    i32 m[2][2];
+    struct {
+        i32 m00, m01;
+        i32 m10, m11;
+    };
+    struct { i32v2 r0, r1; };
+} i32m2x2;
+
+#define SL_i32m2x2_zero ((i32m2x2){0})
+#define SL_i32m2x2_identity ((i32m2x2){ 1, 0, 0, 1 })
+
+
+/// @brief Addition of two i32m2x2
+SL_header i32m2x2 SL_i32m2x2add(i32m2x2 lhs, i32m2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32m2x2) {
+        .m00 = lhs.m00 + rhs.m00, .m01 = lhs.m01 + rhs.m01,
+        .m10 = lhs.m10 + rhs.m10, .m11 = lhs.m11 + rhs.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i32m2x2
+SL_header i32m2x2 SL_i32m2x2sub(i32m2x2 lhs, i32m2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32m2x2) {
+        .m00 = lhs.m00 - rhs.m00, .m01 = lhs.m01 - rhs.m01,
+        .m10 = lhs.m10 - rhs.m10, .m11 = lhs.m11 - rhs.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Product of two i32m2x2
+SL_header i32m2x2 SL_i32m2x2mul(i32m2x2 lhs, i32m2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    i32m2x2 res = SL_i32m2x2_zero;
+    for (usize k = 0; k < SL_msize(lhs).x; ++k)
+    for (usize j = 0; j < SL_msize(lhs).y; ++j)
+    for (usize i = 0; i < SL_msize(lhs).x; ++i)
+        res.m[i][j] += lhs.m[i][k] * rhs.m[k][j];
+
+    return res;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a i32m2x2 with a scalar
+SL_header i32m2x2 SL_i32m2x2muls(i32m2x2 lhs, i32 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32m2x2) {
+        .m00 = lhs.m00 * rhs, .m01 = lhs.m01 * rhs,
+        .m10 = lhs.m10 * rhs, .m11 = lhs.m11 * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Product of a i32m2x2 and a i32v2
+SL_header i32v2 SL_i32m2x2mulv(i32m2x2 lhs, i32v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i32v2_(SL_i32v2dot(lhs.r0, rhs), SL_i32v2dot(lhs.r1, rhs));
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a i32m2x2 with a scalar
+SL_header i32m2x2 SL_i32m2x2divs(i32m2x2 lhs, i32 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32m2x2) {
+        .m00 = lhs.m00 / rhs, .m01 = lhs.m01 / rhs,
+        .m10 = lhs.m10 / rhs, .m11 = lhs.m11 / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i32m2x2 with lhs scaled by a i32
+SL_header i32m2x2 SL_i32m2x2addS(i32m2x2 lhs, i32m2x2 rhs, i32 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32m2x2) {
+        .m00 = lhs.m00 + rhs.m00 * s, .m01 = lhs.m01 + rhs.m01 * s,
+        .m10 = lhs.m10 + rhs.m10 * s, .m11 = lhs.m11 + rhs.m11 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i32m2x2 with lhs scaled by a i32
+SL_header i32m2x2 SL_i32m2x2subS(i32m2x2 lhs, i32m2x2 rhs, i32 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32m2x2) {
+        .m00 = lhs.m00 - rhs.m00 * s, .m01 = lhs.m01 - rhs.m01 * s,
+        .m10 = lhs.m10 - rhs.m10 * s, .m11 = lhs.m11 - rhs.m11 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a i32m2x2
+SL_header i32m2x2 SL_i32m2x2neg(i32m2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32m2x2) {
+        .m00 = -m.m00, .m01 = -m.m01,
+        .m10 = -m.m10, .m11 = -m.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a i32m2x2
+SL_header i32m2x2 SL_i32m2x2abs(i32m2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32m2x2) {
+        .m00 = m.m00 < 0 ? -m.m00 : m.m00, .m01 = m.m01 < 0 ? -m.m01 : m.m01,
+        .m10 = m.m10 < 0 ? -m.m10 : m.m10, .m11 = m.m11 < 0 ? -m.m11 : m.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two i32m2x2
+SL_header i32m2x2 SL_i32m2x2min(i32m2x2 lhs, i32m2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32m2x2) {
+        .m00 = lhs.m00 < rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 < rhs.m01 ? lhs.m01 : rhs.m01,
+        .m10 = lhs.m10 < rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 < rhs.m11 ? lhs.m11 : rhs.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two i32m2x2
+SL_header i32m2x2 SL_i32m2x2max(i32m2x2 lhs, i32m2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32m2x2) {
+        .m00 = lhs.m00 > rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 > rhs.m01 ? lhs.m01 : rhs.m01,
+        .m10 = lhs.m10 > rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 > rhs.m11 ? lhs.m11 : rhs.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Transposition of a i32m2x2
+SL_header i32m2x2 SL_i32m2x2trsp(i32m2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    SL_swap(m.m10, m.m01);
+    return m;
+}
+#else
+;
+#endif
+/// @brief Trace of a i32m2x2
+SL_header i32 SL_i32m2x2trace(i32m2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m.m00 + m.m11;
+}
+#else
+;
+#endif
+/// @brief Determinant of a i32m2x2
+SL_header i32 SL_i32m2x2det_xpd(i32 m00, i32 m01, i32 m10, i32 m11)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m00 * m11 - m01 * m10;
+}
+#else
+;
+#endif
+/// @brief Determinant of a i32m2x2
+SL_header i32 SL_i32m2x2det(i32m2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i32m2x2det_xpd(SL_XPD_M2X2(m));
+}
+#else
+;
+#endif
+
+
+
+/// @brief Matrix of i32 of size 3 x 3
+typedef union {
+    i32 data[3 * 3];
+    i32 m[3][3];
+    struct {
+        i32 m00, m01, m02;
+        i32 m10, m11, m12;
+        i32 m20, m21, m22;
+    };
+    struct { i32v3 r0, r1, r2; };
+} i32m3x3;
+
+#define SL_i32m3x3_zero ((i32m3x3){0})
+#define SL_i32m3x3_identity ((i32m3x3){ 1, 0, 0, 0, 1, 0, 0, 0, 1 })
+
+
+/// @brief Addition of two i32m3x3
+SL_header i32m3x3 SL_i32m3x3add(i32m3x3 lhs, i32m3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32m3x3) {
+        .m00 = lhs.m00 + rhs.m00, .m01 = lhs.m01 + rhs.m01, .m02 = lhs.m02 + rhs.m02,
+        .m10 = lhs.m10 + rhs.m10, .m11 = lhs.m11 + rhs.m11, .m12 = lhs.m12 + rhs.m12,
+        .m20 = lhs.m20 + rhs.m20, .m21 = lhs.m21 + rhs.m21, .m22 = lhs.m22 + rhs.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i32m3x3
+SL_header i32m3x3 SL_i32m3x3sub(i32m3x3 lhs, i32m3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32m3x3) {
+        .m00 = lhs.m00 - rhs.m00, .m01 = lhs.m01 - rhs.m01, .m02 = lhs.m02 - rhs.m02,
+        .m10 = lhs.m10 - rhs.m10, .m11 = lhs.m11 - rhs.m11, .m12 = lhs.m12 - rhs.m12,
+        .m20 = lhs.m20 - rhs.m20, .m21 = lhs.m21 - rhs.m21, .m22 = lhs.m22 - rhs.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Product of two i32m3x3
+SL_header i32m3x3 SL_i32m3x3mul(i32m3x3 lhs, i32m3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    i32m3x3 res = SL_i32m3x3_zero;
+    for (usize k = 0; k < SL_msize(lhs).x; ++k)
+    for (usize j = 0; j < SL_msize(lhs).y; ++j)
+    for (usize i = 0; i < SL_msize(lhs).x; ++i)
+        res.m[i][j] += lhs.m[i][k] * rhs.m[k][j];
+
+    return res;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a i32m3x3 with a scalar
+SL_header i32m3x3 SL_i32m3x3muls(i32m3x3 lhs, i32 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32m3x3) {
+        .m00 = lhs.m00 * rhs, .m01 = lhs.m01 * rhs, .m02 = lhs.m02 * rhs,
+        .m10 = lhs.m10 * rhs, .m11 = lhs.m11 * rhs, .m12 = lhs.m12 * rhs,
+        .m20 = lhs.m20 * rhs, .m21 = lhs.m21 * rhs, .m22 = lhs.m22 * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Product of a i32m3x3 and a i32v3
+SL_header i32v3 SL_i32m3x3mulv(i32m3x3 lhs, i32v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i32v3_(SL_i32v3dot(lhs.r0, rhs), SL_i32v3dot(lhs.r1, rhs), SL_i32v3dot(lhs.r2, rhs));
+}
+#else
+;
+#endif
+/// @brief Apply transformation represented by i32m3x3 to a i32v2
+SL_header i32v2 SL_i32m3x3apply(i32m3x3 m, i32v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i32m3x3mulv(m, SL_i32v3v(v, 1)).xy;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a i32m3x3 with a scalar
+SL_header i32m3x3 SL_i32m3x3divs(i32m3x3 lhs, i32 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32m3x3) {
+        .m00 = lhs.m00 / rhs, .m01 = lhs.m01 / rhs, .m02 = lhs.m02 / rhs,
+        .m10 = lhs.m10 / rhs, .m11 = lhs.m11 / rhs, .m12 = lhs.m12 / rhs,
+        .m20 = lhs.m20 / rhs, .m21 = lhs.m21 / rhs, .m22 = lhs.m22 / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i32m3x3 with lhs scaled by a i32
+SL_header i32m3x3 SL_i32m3x3addS(i32m3x3 lhs, i32m3x3 rhs, i32 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32m3x3) {
+        .m00 = lhs.m00 + rhs.m00 * s, .m01 = lhs.m01 + rhs.m01 * s, .m02 = lhs.m02 + rhs.m02 * s,
+        .m10 = lhs.m10 + rhs.m10 * s, .m11 = lhs.m11 + rhs.m11 * s, .m12 = lhs.m12 + rhs.m12 * s,
+        .m20 = lhs.m20 + rhs.m20 * s, .m21 = lhs.m21 + rhs.m21 * s, .m22 = lhs.m22 + rhs.m22 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i32m3x3 with lhs scaled by a i32
+SL_header i32m3x3 SL_i32m3x3subS(i32m3x3 lhs, i32m3x3 rhs, i32 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32m3x3) {
+        .m00 = lhs.m00 - rhs.m00 * s, .m01 = lhs.m01 - rhs.m01 * s, .m02 = lhs.m02 - rhs.m02 * s,
+        .m10 = lhs.m10 - rhs.m10 * s, .m11 = lhs.m11 - rhs.m11 * s, .m12 = lhs.m12 - rhs.m12 * s,
+        .m20 = lhs.m20 - rhs.m20 * s, .m21 = lhs.m21 - rhs.m21 * s, .m22 = lhs.m22 - rhs.m22 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a i32m3x3
+SL_header i32m3x3 SL_i32m3x3neg(i32m3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32m3x3) {
+        .m00 = -m.m00, .m01 = -m.m01, .m02 = -m.m02,
+        .m10 = -m.m10, .m11 = -m.m11, .m12 = -m.m12,
+        .m20 = -m.m20, .m21 = -m.m21, .m22 = -m.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a i32m3x3
+SL_header i32m3x3 SL_i32m3x3abs(i32m3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32m3x3) {
+        .m00 = m.m00 < 0 ? -m.m00 : m.m00, .m01 = m.m01 < 0 ? -m.m01 : m.m01, .m02 = m.m02 < 0 ? -m.m02 : m.m02,
+        .m10 = m.m10 < 0 ? -m.m10 : m.m10, .m11 = m.m11 < 0 ? -m.m11 : m.m11, .m12 = m.m12 < 0 ? -m.m12 : m.m12,
+        .m20 = m.m20 < 0 ? -m.m20 : m.m20, .m21 = m.m21 < 0 ? -m.m21 : m.m21, .m22 = m.m22 < 0 ? -m.m22 : m.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two i32m3x3
+SL_header i32m3x3 SL_i32m3x3min(i32m3x3 lhs, i32m3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32m3x3) {
+        .m00 = lhs.m00 < rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 < rhs.m01 ? lhs.m01 : rhs.m01, .m02 = lhs.m02 < rhs.m02 ? lhs.m02 : rhs.m02,
+        .m10 = lhs.m10 < rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 < rhs.m11 ? lhs.m11 : rhs.m11, .m12 = lhs.m12 < rhs.m12 ? lhs.m12 : rhs.m12,
+        .m20 = lhs.m20 < rhs.m20 ? lhs.m20 : rhs.m20, .m21 = lhs.m21 < rhs.m21 ? lhs.m21 : rhs.m21, .m22 = lhs.m22 < rhs.m22 ? lhs.m22 : rhs.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two i32m3x3
+SL_header i32m3x3 SL_i32m3x3max(i32m3x3 lhs, i32m3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32m3x3) {
+        .m00 = lhs.m00 > rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 > rhs.m01 ? lhs.m01 : rhs.m01, .m02 = lhs.m02 > rhs.m02 ? lhs.m02 : rhs.m02,
+        .m10 = lhs.m10 > rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 > rhs.m11 ? lhs.m11 : rhs.m11, .m12 = lhs.m12 > rhs.m12 ? lhs.m12 : rhs.m12,
+        .m20 = lhs.m20 > rhs.m20 ? lhs.m20 : rhs.m20, .m21 = lhs.m21 > rhs.m21 ? lhs.m21 : rhs.m21, .m22 = lhs.m22 > rhs.m22 ? lhs.m22 : rhs.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Transposition of a i32m3x3
+SL_header i32m3x3 SL_i32m3x3trsp(i32m3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    SL_swap(m.m10, m.m01);
+    SL_swap(m.m20, m.m02); SL_swap(m.m21, m.m12);
+    return m;
+}
+#else
+;
+#endif
+/// @brief Trace of a i32m3x3
+SL_header i32 SL_i32m3x3trace(i32m3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m.m00 + m.m11 + m.m22;
+}
+#else
+;
+#endif
+/// @brief Determinant of a i32m3x3
+SL_header i32 SL_i32m3x3det_xpd(i32 m00, i32 m01, i32 m02, i32 m10, i32 m11, i32 m12, i32 m20, i32 m21, i32 m22)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m00 * m11 * m22 + m01 * m12 * m20 + m02 * m10 * m21 - m02 * m11 * m20 - m12 * m21 * m00 - m22 * m01 * m10;
+}
+#else
+;
+#endif
+/// @brief Determinant of a i32m3x3
+SL_header i32 SL_i32m3x3det(i32m3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i32m3x3det_xpd(SL_XPD_M3X3(m));
+}
+#else
+;
+#endif
+
+
+
+/// @brief Matrix of i32 of size 4 x 4
+typedef union {
+    i32 data[4 * 4];
+    i32 m[4][4];
+    struct {
+        i32 m00, m01, m02, m03;
+        i32 m10, m11, m12, m13;
+        i32 m20, m21, m22, m23;
+        i32 m30, m31, m32, m33;
+    };
+    struct { i32v4 r0, r1, r2, r3; };
+} i32m4x4;
+
+#define SL_i32m4x4_zero ((i32m4x4){0})
+#define SL_i32m4x4_identity ((i32m4x4){ 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 })
+
+
+/// @brief Addition of two i32m4x4
+SL_header i32m4x4 SL_i32m4x4add(i32m4x4 lhs, i32m4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32m4x4) {
+        .m00 = lhs.m00 + rhs.m00, .m01 = lhs.m01 + rhs.m01, .m02 = lhs.m02 + rhs.m02, .m03 = lhs.m03 + rhs.m03,
+        .m10 = lhs.m10 + rhs.m10, .m11 = lhs.m11 + rhs.m11, .m12 = lhs.m12 + rhs.m12, .m13 = lhs.m13 + rhs.m13,
+        .m20 = lhs.m20 + rhs.m20, .m21 = lhs.m21 + rhs.m21, .m22 = lhs.m22 + rhs.m22, .m23 = lhs.m23 + rhs.m23,
+        .m30 = lhs.m30 + rhs.m30, .m31 = lhs.m31 + rhs.m31, .m32 = lhs.m32 + rhs.m32, .m33 = lhs.m33 + rhs.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i32m4x4
+SL_header i32m4x4 SL_i32m4x4sub(i32m4x4 lhs, i32m4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32m4x4) {
+        .m00 = lhs.m00 - rhs.m00, .m01 = lhs.m01 - rhs.m01, .m02 = lhs.m02 - rhs.m02, .m03 = lhs.m03 - rhs.m03,
+        .m10 = lhs.m10 - rhs.m10, .m11 = lhs.m11 - rhs.m11, .m12 = lhs.m12 - rhs.m12, .m13 = lhs.m13 - rhs.m13,
+        .m20 = lhs.m20 - rhs.m20, .m21 = lhs.m21 - rhs.m21, .m22 = lhs.m22 - rhs.m22, .m23 = lhs.m23 - rhs.m23,
+        .m30 = lhs.m30 - rhs.m30, .m31 = lhs.m31 - rhs.m31, .m32 = lhs.m32 - rhs.m32, .m33 = lhs.m33 - rhs.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Product of two i32m4x4
+SL_header i32m4x4 SL_i32m4x4mul(i32m4x4 lhs, i32m4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    i32m4x4 res = SL_i32m4x4_zero;
+    for (usize k = 0; k < SL_msize(lhs).x; ++k)
+    for (usize j = 0; j < SL_msize(lhs).y; ++j)
+    for (usize i = 0; i < SL_msize(lhs).x; ++i)
+        res.m[i][j] += lhs.m[i][k] * rhs.m[k][j];
+
+    return res;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a i32m4x4 with a scalar
+SL_header i32m4x4 SL_i32m4x4muls(i32m4x4 lhs, i32 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32m4x4) {
+        .m00 = lhs.m00 * rhs, .m01 = lhs.m01 * rhs, .m02 = lhs.m02 * rhs, .m03 = lhs.m03 * rhs,
+        .m10 = lhs.m10 * rhs, .m11 = lhs.m11 * rhs, .m12 = lhs.m12 * rhs, .m13 = lhs.m13 * rhs,
+        .m20 = lhs.m20 * rhs, .m21 = lhs.m21 * rhs, .m22 = lhs.m22 * rhs, .m23 = lhs.m23 * rhs,
+        .m30 = lhs.m30 * rhs, .m31 = lhs.m31 * rhs, .m32 = lhs.m32 * rhs, .m33 = lhs.m33 * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Product of a i32m4x4 and a i32v4
+SL_header i32v4 SL_i32m4x4mulv(i32m4x4 lhs, i32v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i32v4_(SL_i32v4dot(lhs.r0, rhs), SL_i32v4dot(lhs.r1, rhs), SL_i32v4dot(lhs.r2, rhs), SL_i32v4dot(lhs.r3, rhs));
+}
+#else
+;
+#endif
+/// @brief Apply transformation represented by i32m4x4 to a i32v3
+SL_header i32v3 SL_i32m4x4apply(i32m4x4 m, i32v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i32m4x4mulv(m, SL_i32v4v(v, 1)).xyz;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a i32m4x4 with a scalar
+SL_header i32m4x4 SL_i32m4x4divs(i32m4x4 lhs, i32 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32m4x4) {
+        .m00 = lhs.m00 / rhs, .m01 = lhs.m01 / rhs, .m02 = lhs.m02 / rhs, .m03 = lhs.m03 / rhs,
+        .m10 = lhs.m10 / rhs, .m11 = lhs.m11 / rhs, .m12 = lhs.m12 / rhs, .m13 = lhs.m13 / rhs,
+        .m20 = lhs.m20 / rhs, .m21 = lhs.m21 / rhs, .m22 = lhs.m22 / rhs, .m23 = lhs.m23 / rhs,
+        .m30 = lhs.m30 / rhs, .m31 = lhs.m31 / rhs, .m32 = lhs.m32 / rhs, .m33 = lhs.m33 / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i32m4x4 with lhs scaled by a i32
+SL_header i32m4x4 SL_i32m4x4addS(i32m4x4 lhs, i32m4x4 rhs, i32 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32m4x4) {
+        .m00 = lhs.m00 + rhs.m00 * s, .m01 = lhs.m01 + rhs.m01 * s, .m02 = lhs.m02 + rhs.m02 * s, .m03 = lhs.m03 + rhs.m03 * s,
+        .m10 = lhs.m10 + rhs.m10 * s, .m11 = lhs.m11 + rhs.m11 * s, .m12 = lhs.m12 + rhs.m12 * s, .m13 = lhs.m13 + rhs.m13 * s,
+        .m20 = lhs.m20 + rhs.m20 * s, .m21 = lhs.m21 + rhs.m21 * s, .m22 = lhs.m22 + rhs.m22 * s, .m23 = lhs.m23 + rhs.m23 * s,
+        .m30 = lhs.m30 + rhs.m30 * s, .m31 = lhs.m31 + rhs.m31 * s, .m32 = lhs.m32 + rhs.m32 * s, .m33 = lhs.m33 + rhs.m33 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i32m4x4 with lhs scaled by a i32
+SL_header i32m4x4 SL_i32m4x4subS(i32m4x4 lhs, i32m4x4 rhs, i32 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32m4x4) {
+        .m00 = lhs.m00 - rhs.m00 * s, .m01 = lhs.m01 - rhs.m01 * s, .m02 = lhs.m02 - rhs.m02 * s, .m03 = lhs.m03 - rhs.m03 * s,
+        .m10 = lhs.m10 - rhs.m10 * s, .m11 = lhs.m11 - rhs.m11 * s, .m12 = lhs.m12 - rhs.m12 * s, .m13 = lhs.m13 - rhs.m13 * s,
+        .m20 = lhs.m20 - rhs.m20 * s, .m21 = lhs.m21 - rhs.m21 * s, .m22 = lhs.m22 - rhs.m22 * s, .m23 = lhs.m23 - rhs.m23 * s,
+        .m30 = lhs.m30 - rhs.m30 * s, .m31 = lhs.m31 - rhs.m31 * s, .m32 = lhs.m32 - rhs.m32 * s, .m33 = lhs.m33 - rhs.m33 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a i32m4x4
+SL_header i32m4x4 SL_i32m4x4neg(i32m4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32m4x4) {
+        .m00 = -m.m00, .m01 = -m.m01, .m02 = -m.m02, .m03 = -m.m03,
+        .m10 = -m.m10, .m11 = -m.m11, .m12 = -m.m12, .m13 = -m.m13,
+        .m20 = -m.m20, .m21 = -m.m21, .m22 = -m.m22, .m23 = -m.m23,
+        .m30 = -m.m30, .m31 = -m.m31, .m32 = -m.m32, .m33 = -m.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a i32m4x4
+SL_header i32m4x4 SL_i32m4x4abs(i32m4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32m4x4) {
+        .m00 = m.m00 < 0 ? -m.m00 : m.m00, .m01 = m.m01 < 0 ? -m.m01 : m.m01, .m02 = m.m02 < 0 ? -m.m02 : m.m02, .m03 = m.m03 < 0 ? -m.m03 : m.m03,
+        .m10 = m.m10 < 0 ? -m.m10 : m.m10, .m11 = m.m11 < 0 ? -m.m11 : m.m11, .m12 = m.m12 < 0 ? -m.m12 : m.m12, .m13 = m.m13 < 0 ? -m.m13 : m.m13,
+        .m20 = m.m20 < 0 ? -m.m20 : m.m20, .m21 = m.m21 < 0 ? -m.m21 : m.m21, .m22 = m.m22 < 0 ? -m.m22 : m.m22, .m23 = m.m23 < 0 ? -m.m23 : m.m23,
+        .m30 = m.m30 < 0 ? -m.m30 : m.m30, .m31 = m.m31 < 0 ? -m.m31 : m.m31, .m32 = m.m32 < 0 ? -m.m32 : m.m32, .m33 = m.m33 < 0 ? -m.m33 : m.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two i32m4x4
+SL_header i32m4x4 SL_i32m4x4min(i32m4x4 lhs, i32m4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32m4x4) {
+        .m00 = lhs.m00 < rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 < rhs.m01 ? lhs.m01 : rhs.m01, .m02 = lhs.m02 < rhs.m02 ? lhs.m02 : rhs.m02, .m03 = lhs.m03 < rhs.m03 ? lhs.m03 : rhs.m03,
+        .m10 = lhs.m10 < rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 < rhs.m11 ? lhs.m11 : rhs.m11, .m12 = lhs.m12 < rhs.m12 ? lhs.m12 : rhs.m12, .m13 = lhs.m13 < rhs.m13 ? lhs.m13 : rhs.m13,
+        .m20 = lhs.m20 < rhs.m20 ? lhs.m20 : rhs.m20, .m21 = lhs.m21 < rhs.m21 ? lhs.m21 : rhs.m21, .m22 = lhs.m22 < rhs.m22 ? lhs.m22 : rhs.m22, .m23 = lhs.m23 < rhs.m23 ? lhs.m23 : rhs.m23,
+        .m30 = lhs.m30 < rhs.m30 ? lhs.m30 : rhs.m30, .m31 = lhs.m31 < rhs.m31 ? lhs.m31 : rhs.m31, .m32 = lhs.m32 < rhs.m32 ? lhs.m32 : rhs.m32, .m33 = lhs.m33 < rhs.m33 ? lhs.m33 : rhs.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two i32m4x4
+SL_header i32m4x4 SL_i32m4x4max(i32m4x4 lhs, i32m4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i32m4x4) {
+        .m00 = lhs.m00 > rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 > rhs.m01 ? lhs.m01 : rhs.m01, .m02 = lhs.m02 > rhs.m02 ? lhs.m02 : rhs.m02, .m03 = lhs.m03 > rhs.m03 ? lhs.m03 : rhs.m03,
+        .m10 = lhs.m10 > rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 > rhs.m11 ? lhs.m11 : rhs.m11, .m12 = lhs.m12 > rhs.m12 ? lhs.m12 : rhs.m12, .m13 = lhs.m13 > rhs.m13 ? lhs.m13 : rhs.m13,
+        .m20 = lhs.m20 > rhs.m20 ? lhs.m20 : rhs.m20, .m21 = lhs.m21 > rhs.m21 ? lhs.m21 : rhs.m21, .m22 = lhs.m22 > rhs.m22 ? lhs.m22 : rhs.m22, .m23 = lhs.m23 > rhs.m23 ? lhs.m23 : rhs.m23,
+        .m30 = lhs.m30 > rhs.m30 ? lhs.m30 : rhs.m30, .m31 = lhs.m31 > rhs.m31 ? lhs.m31 : rhs.m31, .m32 = lhs.m32 > rhs.m32 ? lhs.m32 : rhs.m32, .m33 = lhs.m33 > rhs.m33 ? lhs.m33 : rhs.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Transposition of a i32m4x4
+SL_header i32m4x4 SL_i32m4x4trsp(i32m4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    SL_swap(m.m10, m.m01);
+    SL_swap(m.m20, m.m02); SL_swap(m.m12, m.m21);
+    SL_swap(m.m30, m.m03); SL_swap(m.m31, m.m13);SL_swap(m.m32, m.m23);
+    return m;
+}
+#else
+;
+#endif
+/// @brief Trace of a i32m4x4
+SL_header i32 SL_i32m4x4trace(i32m4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m.m00 + m.m11 + m.m22 + m.m33;
+}
+#else
+;
+#endif
+/// @brief Determinant of a i32m4x4
+SL_header i32 SL_i32m4x4det_xpd(i32 m00, i32 m01, i32 m02, i32 m03, i32 m10, i32 m11, i32 m12, i32 m13, i32 m20, i32 m21, i32 m22, i32 m23, i32 m30, i32 m31, i32 m32, i32 m33)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m00 * SL_i32m3x3det_xpd(m11, m12, m13, m21, m22, m23, m31, m32, m33)
+         + m01 * SL_i32m3x3det_xpd(m10, m12, m13, m20, m22, m23, m30, m32, m33)
+         + m02 * SL_i32m3x3det_xpd(m10, m11, m13, m20, m21, m23, m30, m31, m33)
+         + m03 * SL_i32m3x3det_xpd(m10, m11, m12, m20, m21, m22, m30, m31, m32);
+}
+#else
+;
+#endif
+/// @brief Determinant of a i32m4x4
+SL_header i32 SL_i32m4x4det(i32m4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i32m4x4det_xpd(SL_XPD_M4X4(m));
+}
+#else
+;
+#endif
+
+
+
+#pragma endregion I32
+#pragma region I64
+
+/// @brief Matrix of i64 with arbitrary dimensions
+typedef struct {
+    union { usize r, c; luv2 size; };
+    i64 *data;
+} i64m;
+
+#define SL_asi64m(sized_mat) ((i64m){.size = SL_msize(sized_mat), .data = sized_mat.data})
+
+
+
+
+/// @brief Matrix of i64 of size 2 x 2
+typedef union {
+    i64 data[2 * 2];
+    i64 m[2][2];
+    struct {
+        i64 m00, m01;
+        i64 m10, m11;
+    };
+    struct { i64v2 r0, r1; };
+} i64m2x2;
+
+#define SL_i64m2x2_zero ((i64m2x2){0})
+#define SL_i64m2x2_identity ((i64m2x2){ 1, 0, 0, 1 })
+
+
+/// @brief Addition of two i64m2x2
+SL_header i64m2x2 SL_i64m2x2add(i64m2x2 lhs, i64m2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64m2x2) {
+        .m00 = lhs.m00 + rhs.m00, .m01 = lhs.m01 + rhs.m01,
+        .m10 = lhs.m10 + rhs.m10, .m11 = lhs.m11 + rhs.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i64m2x2
+SL_header i64m2x2 SL_i64m2x2sub(i64m2x2 lhs, i64m2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64m2x2) {
+        .m00 = lhs.m00 - rhs.m00, .m01 = lhs.m01 - rhs.m01,
+        .m10 = lhs.m10 - rhs.m10, .m11 = lhs.m11 - rhs.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Product of two i64m2x2
+SL_header i64m2x2 SL_i64m2x2mul(i64m2x2 lhs, i64m2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    i64m2x2 res = SL_i64m2x2_zero;
+    for (usize k = 0; k < SL_msize(lhs).x; ++k)
+    for (usize j = 0; j < SL_msize(lhs).y; ++j)
+    for (usize i = 0; i < SL_msize(lhs).x; ++i)
+        res.m[i][j] += lhs.m[i][k] * rhs.m[k][j];
+
+    return res;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a i64m2x2 with a scalar
+SL_header i64m2x2 SL_i64m2x2muls(i64m2x2 lhs, i64 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64m2x2) {
+        .m00 = lhs.m00 * rhs, .m01 = lhs.m01 * rhs,
+        .m10 = lhs.m10 * rhs, .m11 = lhs.m11 * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Product of a i64m2x2 and a i64v2
+SL_header i64v2 SL_i64m2x2mulv(i64m2x2 lhs, i64v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i64v2_(SL_i64v2dot(lhs.r0, rhs), SL_i64v2dot(lhs.r1, rhs));
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a i64m2x2 with a scalar
+SL_header i64m2x2 SL_i64m2x2divs(i64m2x2 lhs, i64 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64m2x2) {
+        .m00 = lhs.m00 / rhs, .m01 = lhs.m01 / rhs,
+        .m10 = lhs.m10 / rhs, .m11 = lhs.m11 / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i64m2x2 with lhs scaled by a i64
+SL_header i64m2x2 SL_i64m2x2addS(i64m2x2 lhs, i64m2x2 rhs, i64 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64m2x2) {
+        .m00 = lhs.m00 + rhs.m00 * s, .m01 = lhs.m01 + rhs.m01 * s,
+        .m10 = lhs.m10 + rhs.m10 * s, .m11 = lhs.m11 + rhs.m11 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i64m2x2 with lhs scaled by a i64
+SL_header i64m2x2 SL_i64m2x2subS(i64m2x2 lhs, i64m2x2 rhs, i64 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64m2x2) {
+        .m00 = lhs.m00 - rhs.m00 * s, .m01 = lhs.m01 - rhs.m01 * s,
+        .m10 = lhs.m10 - rhs.m10 * s, .m11 = lhs.m11 - rhs.m11 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a i64m2x2
+SL_header i64m2x2 SL_i64m2x2neg(i64m2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64m2x2) {
+        .m00 = -m.m00, .m01 = -m.m01,
+        .m10 = -m.m10, .m11 = -m.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a i64m2x2
+SL_header i64m2x2 SL_i64m2x2abs(i64m2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64m2x2) {
+        .m00 = m.m00 < 0 ? -m.m00 : m.m00, .m01 = m.m01 < 0 ? -m.m01 : m.m01,
+        .m10 = m.m10 < 0 ? -m.m10 : m.m10, .m11 = m.m11 < 0 ? -m.m11 : m.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two i64m2x2
+SL_header i64m2x2 SL_i64m2x2min(i64m2x2 lhs, i64m2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64m2x2) {
+        .m00 = lhs.m00 < rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 < rhs.m01 ? lhs.m01 : rhs.m01,
+        .m10 = lhs.m10 < rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 < rhs.m11 ? lhs.m11 : rhs.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two i64m2x2
+SL_header i64m2x2 SL_i64m2x2max(i64m2x2 lhs, i64m2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64m2x2) {
+        .m00 = lhs.m00 > rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 > rhs.m01 ? lhs.m01 : rhs.m01,
+        .m10 = lhs.m10 > rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 > rhs.m11 ? lhs.m11 : rhs.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Transposition of a i64m2x2
+SL_header i64m2x2 SL_i64m2x2trsp(i64m2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    SL_swap(m.m10, m.m01);
+    return m;
+}
+#else
+;
+#endif
+/// @brief Trace of a i64m2x2
+SL_header i64 SL_i64m2x2trace(i64m2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m.m00 + m.m11;
+}
+#else
+;
+#endif
+/// @brief Determinant of a i64m2x2
+SL_header i64 SL_i64m2x2det_xpd(i64 m00, i64 m01, i64 m10, i64 m11)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m00 * m11 - m01 * m10;
+}
+#else
+;
+#endif
+/// @brief Determinant of a i64m2x2
+SL_header i64 SL_i64m2x2det(i64m2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i64m2x2det_xpd(SL_XPD_M2X2(m));
+}
+#else
+;
+#endif
+
+
+
+/// @brief Matrix of i64 of size 3 x 3
+typedef union {
+    i64 data[3 * 3];
+    i64 m[3][3];
+    struct {
+        i64 m00, m01, m02;
+        i64 m10, m11, m12;
+        i64 m20, m21, m22;
+    };
+    struct { i64v3 r0, r1, r2; };
+} i64m3x3;
+
+#define SL_i64m3x3_zero ((i64m3x3){0})
+#define SL_i64m3x3_identity ((i64m3x3){ 1, 0, 0, 0, 1, 0, 0, 0, 1 })
+
+
+/// @brief Addition of two i64m3x3
+SL_header i64m3x3 SL_i64m3x3add(i64m3x3 lhs, i64m3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64m3x3) {
+        .m00 = lhs.m00 + rhs.m00, .m01 = lhs.m01 + rhs.m01, .m02 = lhs.m02 + rhs.m02,
+        .m10 = lhs.m10 + rhs.m10, .m11 = lhs.m11 + rhs.m11, .m12 = lhs.m12 + rhs.m12,
+        .m20 = lhs.m20 + rhs.m20, .m21 = lhs.m21 + rhs.m21, .m22 = lhs.m22 + rhs.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i64m3x3
+SL_header i64m3x3 SL_i64m3x3sub(i64m3x3 lhs, i64m3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64m3x3) {
+        .m00 = lhs.m00 - rhs.m00, .m01 = lhs.m01 - rhs.m01, .m02 = lhs.m02 - rhs.m02,
+        .m10 = lhs.m10 - rhs.m10, .m11 = lhs.m11 - rhs.m11, .m12 = lhs.m12 - rhs.m12,
+        .m20 = lhs.m20 - rhs.m20, .m21 = lhs.m21 - rhs.m21, .m22 = lhs.m22 - rhs.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Product of two i64m3x3
+SL_header i64m3x3 SL_i64m3x3mul(i64m3x3 lhs, i64m3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    i64m3x3 res = SL_i64m3x3_zero;
+    for (usize k = 0; k < SL_msize(lhs).x; ++k)
+    for (usize j = 0; j < SL_msize(lhs).y; ++j)
+    for (usize i = 0; i < SL_msize(lhs).x; ++i)
+        res.m[i][j] += lhs.m[i][k] * rhs.m[k][j];
+
+    return res;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a i64m3x3 with a scalar
+SL_header i64m3x3 SL_i64m3x3muls(i64m3x3 lhs, i64 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64m3x3) {
+        .m00 = lhs.m00 * rhs, .m01 = lhs.m01 * rhs, .m02 = lhs.m02 * rhs,
+        .m10 = lhs.m10 * rhs, .m11 = lhs.m11 * rhs, .m12 = lhs.m12 * rhs,
+        .m20 = lhs.m20 * rhs, .m21 = lhs.m21 * rhs, .m22 = lhs.m22 * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Product of a i64m3x3 and a i64v3
+SL_header i64v3 SL_i64m3x3mulv(i64m3x3 lhs, i64v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i64v3_(SL_i64v3dot(lhs.r0, rhs), SL_i64v3dot(lhs.r1, rhs), SL_i64v3dot(lhs.r2, rhs));
+}
+#else
+;
+#endif
+/// @brief Apply transformation represented by i64m3x3 to a i64v2
+SL_header i64v2 SL_i64m3x3apply(i64m3x3 m, i64v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i64m3x3mulv(m, SL_i64v3v(v, 1)).xy;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a i64m3x3 with a scalar
+SL_header i64m3x3 SL_i64m3x3divs(i64m3x3 lhs, i64 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64m3x3) {
+        .m00 = lhs.m00 / rhs, .m01 = lhs.m01 / rhs, .m02 = lhs.m02 / rhs,
+        .m10 = lhs.m10 / rhs, .m11 = lhs.m11 / rhs, .m12 = lhs.m12 / rhs,
+        .m20 = lhs.m20 / rhs, .m21 = lhs.m21 / rhs, .m22 = lhs.m22 / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i64m3x3 with lhs scaled by a i64
+SL_header i64m3x3 SL_i64m3x3addS(i64m3x3 lhs, i64m3x3 rhs, i64 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64m3x3) {
+        .m00 = lhs.m00 + rhs.m00 * s, .m01 = lhs.m01 + rhs.m01 * s, .m02 = lhs.m02 + rhs.m02 * s,
+        .m10 = lhs.m10 + rhs.m10 * s, .m11 = lhs.m11 + rhs.m11 * s, .m12 = lhs.m12 + rhs.m12 * s,
+        .m20 = lhs.m20 + rhs.m20 * s, .m21 = lhs.m21 + rhs.m21 * s, .m22 = lhs.m22 + rhs.m22 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i64m3x3 with lhs scaled by a i64
+SL_header i64m3x3 SL_i64m3x3subS(i64m3x3 lhs, i64m3x3 rhs, i64 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64m3x3) {
+        .m00 = lhs.m00 - rhs.m00 * s, .m01 = lhs.m01 - rhs.m01 * s, .m02 = lhs.m02 - rhs.m02 * s,
+        .m10 = lhs.m10 - rhs.m10 * s, .m11 = lhs.m11 - rhs.m11 * s, .m12 = lhs.m12 - rhs.m12 * s,
+        .m20 = lhs.m20 - rhs.m20 * s, .m21 = lhs.m21 - rhs.m21 * s, .m22 = lhs.m22 - rhs.m22 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a i64m3x3
+SL_header i64m3x3 SL_i64m3x3neg(i64m3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64m3x3) {
+        .m00 = -m.m00, .m01 = -m.m01, .m02 = -m.m02,
+        .m10 = -m.m10, .m11 = -m.m11, .m12 = -m.m12,
+        .m20 = -m.m20, .m21 = -m.m21, .m22 = -m.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a i64m3x3
+SL_header i64m3x3 SL_i64m3x3abs(i64m3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64m3x3) {
+        .m00 = m.m00 < 0 ? -m.m00 : m.m00, .m01 = m.m01 < 0 ? -m.m01 : m.m01, .m02 = m.m02 < 0 ? -m.m02 : m.m02,
+        .m10 = m.m10 < 0 ? -m.m10 : m.m10, .m11 = m.m11 < 0 ? -m.m11 : m.m11, .m12 = m.m12 < 0 ? -m.m12 : m.m12,
+        .m20 = m.m20 < 0 ? -m.m20 : m.m20, .m21 = m.m21 < 0 ? -m.m21 : m.m21, .m22 = m.m22 < 0 ? -m.m22 : m.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two i64m3x3
+SL_header i64m3x3 SL_i64m3x3min(i64m3x3 lhs, i64m3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64m3x3) {
+        .m00 = lhs.m00 < rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 < rhs.m01 ? lhs.m01 : rhs.m01, .m02 = lhs.m02 < rhs.m02 ? lhs.m02 : rhs.m02,
+        .m10 = lhs.m10 < rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 < rhs.m11 ? lhs.m11 : rhs.m11, .m12 = lhs.m12 < rhs.m12 ? lhs.m12 : rhs.m12,
+        .m20 = lhs.m20 < rhs.m20 ? lhs.m20 : rhs.m20, .m21 = lhs.m21 < rhs.m21 ? lhs.m21 : rhs.m21, .m22 = lhs.m22 < rhs.m22 ? lhs.m22 : rhs.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two i64m3x3
+SL_header i64m3x3 SL_i64m3x3max(i64m3x3 lhs, i64m3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64m3x3) {
+        .m00 = lhs.m00 > rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 > rhs.m01 ? lhs.m01 : rhs.m01, .m02 = lhs.m02 > rhs.m02 ? lhs.m02 : rhs.m02,
+        .m10 = lhs.m10 > rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 > rhs.m11 ? lhs.m11 : rhs.m11, .m12 = lhs.m12 > rhs.m12 ? lhs.m12 : rhs.m12,
+        .m20 = lhs.m20 > rhs.m20 ? lhs.m20 : rhs.m20, .m21 = lhs.m21 > rhs.m21 ? lhs.m21 : rhs.m21, .m22 = lhs.m22 > rhs.m22 ? lhs.m22 : rhs.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Transposition of a i64m3x3
+SL_header i64m3x3 SL_i64m3x3trsp(i64m3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    SL_swap(m.m10, m.m01);
+    SL_swap(m.m20, m.m02); SL_swap(m.m21, m.m12);
+    return m;
+}
+#else
+;
+#endif
+/// @brief Trace of a i64m3x3
+SL_header i64 SL_i64m3x3trace(i64m3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m.m00 + m.m11 + m.m22;
+}
+#else
+;
+#endif
+/// @brief Determinant of a i64m3x3
+SL_header i64 SL_i64m3x3det_xpd(i64 m00, i64 m01, i64 m02, i64 m10, i64 m11, i64 m12, i64 m20, i64 m21, i64 m22)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m00 * m11 * m22 + m01 * m12 * m20 + m02 * m10 * m21 - m02 * m11 * m20 - m12 * m21 * m00 - m22 * m01 * m10;
+}
+#else
+;
+#endif
+/// @brief Determinant of a i64m3x3
+SL_header i64 SL_i64m3x3det(i64m3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i64m3x3det_xpd(SL_XPD_M3X3(m));
+}
+#else
+;
+#endif
+
+
+
+/// @brief Matrix of i64 of size 4 x 4
+typedef union {
+    i64 data[4 * 4];
+    i64 m[4][4];
+    struct {
+        i64 m00, m01, m02, m03;
+        i64 m10, m11, m12, m13;
+        i64 m20, m21, m22, m23;
+        i64 m30, m31, m32, m33;
+    };
+    struct { i64v4 r0, r1, r2, r3; };
+} i64m4x4;
+
+#define SL_i64m4x4_zero ((i64m4x4){0})
+#define SL_i64m4x4_identity ((i64m4x4){ 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 })
+
+
+/// @brief Addition of two i64m4x4
+SL_header i64m4x4 SL_i64m4x4add(i64m4x4 lhs, i64m4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64m4x4) {
+        .m00 = lhs.m00 + rhs.m00, .m01 = lhs.m01 + rhs.m01, .m02 = lhs.m02 + rhs.m02, .m03 = lhs.m03 + rhs.m03,
+        .m10 = lhs.m10 + rhs.m10, .m11 = lhs.m11 + rhs.m11, .m12 = lhs.m12 + rhs.m12, .m13 = lhs.m13 + rhs.m13,
+        .m20 = lhs.m20 + rhs.m20, .m21 = lhs.m21 + rhs.m21, .m22 = lhs.m22 + rhs.m22, .m23 = lhs.m23 + rhs.m23,
+        .m30 = lhs.m30 + rhs.m30, .m31 = lhs.m31 + rhs.m31, .m32 = lhs.m32 + rhs.m32, .m33 = lhs.m33 + rhs.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i64m4x4
+SL_header i64m4x4 SL_i64m4x4sub(i64m4x4 lhs, i64m4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64m4x4) {
+        .m00 = lhs.m00 - rhs.m00, .m01 = lhs.m01 - rhs.m01, .m02 = lhs.m02 - rhs.m02, .m03 = lhs.m03 - rhs.m03,
+        .m10 = lhs.m10 - rhs.m10, .m11 = lhs.m11 - rhs.m11, .m12 = lhs.m12 - rhs.m12, .m13 = lhs.m13 - rhs.m13,
+        .m20 = lhs.m20 - rhs.m20, .m21 = lhs.m21 - rhs.m21, .m22 = lhs.m22 - rhs.m22, .m23 = lhs.m23 - rhs.m23,
+        .m30 = lhs.m30 - rhs.m30, .m31 = lhs.m31 - rhs.m31, .m32 = lhs.m32 - rhs.m32, .m33 = lhs.m33 - rhs.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Product of two i64m4x4
+SL_header i64m4x4 SL_i64m4x4mul(i64m4x4 lhs, i64m4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    i64m4x4 res = SL_i64m4x4_zero;
+    for (usize k = 0; k < SL_msize(lhs).x; ++k)
+    for (usize j = 0; j < SL_msize(lhs).y; ++j)
+    for (usize i = 0; i < SL_msize(lhs).x; ++i)
+        res.m[i][j] += lhs.m[i][k] * rhs.m[k][j];
+
+    return res;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a i64m4x4 with a scalar
+SL_header i64m4x4 SL_i64m4x4muls(i64m4x4 lhs, i64 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64m4x4) {
+        .m00 = lhs.m00 * rhs, .m01 = lhs.m01 * rhs, .m02 = lhs.m02 * rhs, .m03 = lhs.m03 * rhs,
+        .m10 = lhs.m10 * rhs, .m11 = lhs.m11 * rhs, .m12 = lhs.m12 * rhs, .m13 = lhs.m13 * rhs,
+        .m20 = lhs.m20 * rhs, .m21 = lhs.m21 * rhs, .m22 = lhs.m22 * rhs, .m23 = lhs.m23 * rhs,
+        .m30 = lhs.m30 * rhs, .m31 = lhs.m31 * rhs, .m32 = lhs.m32 * rhs, .m33 = lhs.m33 * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Product of a i64m4x4 and a i64v4
+SL_header i64v4 SL_i64m4x4mulv(i64m4x4 lhs, i64v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i64v4_(SL_i64v4dot(lhs.r0, rhs), SL_i64v4dot(lhs.r1, rhs), SL_i64v4dot(lhs.r2, rhs), SL_i64v4dot(lhs.r3, rhs));
+}
+#else
+;
+#endif
+/// @brief Apply transformation represented by i64m4x4 to a i64v3
+SL_header i64v3 SL_i64m4x4apply(i64m4x4 m, i64v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i64m4x4mulv(m, SL_i64v4v(v, 1)).xyz;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a i64m4x4 with a scalar
+SL_header i64m4x4 SL_i64m4x4divs(i64m4x4 lhs, i64 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64m4x4) {
+        .m00 = lhs.m00 / rhs, .m01 = lhs.m01 / rhs, .m02 = lhs.m02 / rhs, .m03 = lhs.m03 / rhs,
+        .m10 = lhs.m10 / rhs, .m11 = lhs.m11 / rhs, .m12 = lhs.m12 / rhs, .m13 = lhs.m13 / rhs,
+        .m20 = lhs.m20 / rhs, .m21 = lhs.m21 / rhs, .m22 = lhs.m22 / rhs, .m23 = lhs.m23 / rhs,
+        .m30 = lhs.m30 / rhs, .m31 = lhs.m31 / rhs, .m32 = lhs.m32 / rhs, .m33 = lhs.m33 / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two i64m4x4 with lhs scaled by a i64
+SL_header i64m4x4 SL_i64m4x4addS(i64m4x4 lhs, i64m4x4 rhs, i64 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64m4x4) {
+        .m00 = lhs.m00 + rhs.m00 * s, .m01 = lhs.m01 + rhs.m01 * s, .m02 = lhs.m02 + rhs.m02 * s, .m03 = lhs.m03 + rhs.m03 * s,
+        .m10 = lhs.m10 + rhs.m10 * s, .m11 = lhs.m11 + rhs.m11 * s, .m12 = lhs.m12 + rhs.m12 * s, .m13 = lhs.m13 + rhs.m13 * s,
+        .m20 = lhs.m20 + rhs.m20 * s, .m21 = lhs.m21 + rhs.m21 * s, .m22 = lhs.m22 + rhs.m22 * s, .m23 = lhs.m23 + rhs.m23 * s,
+        .m30 = lhs.m30 + rhs.m30 * s, .m31 = lhs.m31 + rhs.m31 * s, .m32 = lhs.m32 + rhs.m32 * s, .m33 = lhs.m33 + rhs.m33 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two i64m4x4 with lhs scaled by a i64
+SL_header i64m4x4 SL_i64m4x4subS(i64m4x4 lhs, i64m4x4 rhs, i64 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64m4x4) {
+        .m00 = lhs.m00 - rhs.m00 * s, .m01 = lhs.m01 - rhs.m01 * s, .m02 = lhs.m02 - rhs.m02 * s, .m03 = lhs.m03 - rhs.m03 * s,
+        .m10 = lhs.m10 - rhs.m10 * s, .m11 = lhs.m11 - rhs.m11 * s, .m12 = lhs.m12 - rhs.m12 * s, .m13 = lhs.m13 - rhs.m13 * s,
+        .m20 = lhs.m20 - rhs.m20 * s, .m21 = lhs.m21 - rhs.m21 * s, .m22 = lhs.m22 - rhs.m22 * s, .m23 = lhs.m23 - rhs.m23 * s,
+        .m30 = lhs.m30 - rhs.m30 * s, .m31 = lhs.m31 - rhs.m31 * s, .m32 = lhs.m32 - rhs.m32 * s, .m33 = lhs.m33 - rhs.m33 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a i64m4x4
+SL_header i64m4x4 SL_i64m4x4neg(i64m4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64m4x4) {
+        .m00 = -m.m00, .m01 = -m.m01, .m02 = -m.m02, .m03 = -m.m03,
+        .m10 = -m.m10, .m11 = -m.m11, .m12 = -m.m12, .m13 = -m.m13,
+        .m20 = -m.m20, .m21 = -m.m21, .m22 = -m.m22, .m23 = -m.m23,
+        .m30 = -m.m30, .m31 = -m.m31, .m32 = -m.m32, .m33 = -m.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a i64m4x4
+SL_header i64m4x4 SL_i64m4x4abs(i64m4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64m4x4) {
+        .m00 = m.m00 < 0 ? -m.m00 : m.m00, .m01 = m.m01 < 0 ? -m.m01 : m.m01, .m02 = m.m02 < 0 ? -m.m02 : m.m02, .m03 = m.m03 < 0 ? -m.m03 : m.m03,
+        .m10 = m.m10 < 0 ? -m.m10 : m.m10, .m11 = m.m11 < 0 ? -m.m11 : m.m11, .m12 = m.m12 < 0 ? -m.m12 : m.m12, .m13 = m.m13 < 0 ? -m.m13 : m.m13,
+        .m20 = m.m20 < 0 ? -m.m20 : m.m20, .m21 = m.m21 < 0 ? -m.m21 : m.m21, .m22 = m.m22 < 0 ? -m.m22 : m.m22, .m23 = m.m23 < 0 ? -m.m23 : m.m23,
+        .m30 = m.m30 < 0 ? -m.m30 : m.m30, .m31 = m.m31 < 0 ? -m.m31 : m.m31, .m32 = m.m32 < 0 ? -m.m32 : m.m32, .m33 = m.m33 < 0 ? -m.m33 : m.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two i64m4x4
+SL_header i64m4x4 SL_i64m4x4min(i64m4x4 lhs, i64m4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64m4x4) {
+        .m00 = lhs.m00 < rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 < rhs.m01 ? lhs.m01 : rhs.m01, .m02 = lhs.m02 < rhs.m02 ? lhs.m02 : rhs.m02, .m03 = lhs.m03 < rhs.m03 ? lhs.m03 : rhs.m03,
+        .m10 = lhs.m10 < rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 < rhs.m11 ? lhs.m11 : rhs.m11, .m12 = lhs.m12 < rhs.m12 ? lhs.m12 : rhs.m12, .m13 = lhs.m13 < rhs.m13 ? lhs.m13 : rhs.m13,
+        .m20 = lhs.m20 < rhs.m20 ? lhs.m20 : rhs.m20, .m21 = lhs.m21 < rhs.m21 ? lhs.m21 : rhs.m21, .m22 = lhs.m22 < rhs.m22 ? lhs.m22 : rhs.m22, .m23 = lhs.m23 < rhs.m23 ? lhs.m23 : rhs.m23,
+        .m30 = lhs.m30 < rhs.m30 ? lhs.m30 : rhs.m30, .m31 = lhs.m31 < rhs.m31 ? lhs.m31 : rhs.m31, .m32 = lhs.m32 < rhs.m32 ? lhs.m32 : rhs.m32, .m33 = lhs.m33 < rhs.m33 ? lhs.m33 : rhs.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two i64m4x4
+SL_header i64m4x4 SL_i64m4x4max(i64m4x4 lhs, i64m4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (i64m4x4) {
+        .m00 = lhs.m00 > rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 > rhs.m01 ? lhs.m01 : rhs.m01, .m02 = lhs.m02 > rhs.m02 ? lhs.m02 : rhs.m02, .m03 = lhs.m03 > rhs.m03 ? lhs.m03 : rhs.m03,
+        .m10 = lhs.m10 > rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 > rhs.m11 ? lhs.m11 : rhs.m11, .m12 = lhs.m12 > rhs.m12 ? lhs.m12 : rhs.m12, .m13 = lhs.m13 > rhs.m13 ? lhs.m13 : rhs.m13,
+        .m20 = lhs.m20 > rhs.m20 ? lhs.m20 : rhs.m20, .m21 = lhs.m21 > rhs.m21 ? lhs.m21 : rhs.m21, .m22 = lhs.m22 > rhs.m22 ? lhs.m22 : rhs.m22, .m23 = lhs.m23 > rhs.m23 ? lhs.m23 : rhs.m23,
+        .m30 = lhs.m30 > rhs.m30 ? lhs.m30 : rhs.m30, .m31 = lhs.m31 > rhs.m31 ? lhs.m31 : rhs.m31, .m32 = lhs.m32 > rhs.m32 ? lhs.m32 : rhs.m32, .m33 = lhs.m33 > rhs.m33 ? lhs.m33 : rhs.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Transposition of a i64m4x4
+SL_header i64m4x4 SL_i64m4x4trsp(i64m4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    SL_swap(m.m10, m.m01);
+    SL_swap(m.m20, m.m02); SL_swap(m.m12, m.m21);
+    SL_swap(m.m30, m.m03); SL_swap(m.m31, m.m13);SL_swap(m.m32, m.m23);
+    return m;
+}
+#else
+;
+#endif
+/// @brief Trace of a i64m4x4
+SL_header i64 SL_i64m4x4trace(i64m4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m.m00 + m.m11 + m.m22 + m.m33;
+}
+#else
+;
+#endif
+/// @brief Determinant of a i64m4x4
+SL_header i64 SL_i64m4x4det_xpd(i64 m00, i64 m01, i64 m02, i64 m03, i64 m10, i64 m11, i64 m12, i64 m13, i64 m20, i64 m21, i64 m22, i64 m23, i64 m30, i64 m31, i64 m32, i64 m33)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m00 * SL_i64m3x3det_xpd(m11, m12, m13, m21, m22, m23, m31, m32, m33)
+         + m01 * SL_i64m3x3det_xpd(m10, m12, m13, m20, m22, m23, m30, m32, m33)
+         + m02 * SL_i64m3x3det_xpd(m10, m11, m13, m20, m21, m23, m30, m31, m33)
+         + m03 * SL_i64m3x3det_xpd(m10, m11, m12, m20, m21, m22, m30, m31, m32);
+}
+#else
+;
+#endif
+/// @brief Determinant of a i64m4x4
+SL_header i64 SL_i64m4x4det(i64m4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i64m4x4det_xpd(SL_XPD_M4X4(m));
+}
+#else
+;
+#endif
+
+
+
+#pragma endregion I64
+#pragma region U32
+
+/// @brief Matrix of u32 with arbitrary dimensions
+typedef struct {
+    union { usize r, c; luv2 size; };
+    u32 *data;
+} u32m;
+
+#define SL_asu32m(sized_mat) ((u32m){.size = SL_msize(sized_mat), .data = sized_mat.data})
+
+
+
+
+/// @brief Matrix of u32 of size 2 x 2
+typedef union {
+    u32 data[2 * 2];
+    u32 m[2][2];
+    struct {
+        u32 m00, m01;
+        u32 m10, m11;
+    };
+    struct { u32v2 r0, r1; };
+} u32m2x2;
+
+#define SL_u32m2x2_zero ((u32m2x2){0})
+#define SL_u32m2x2_identity ((u32m2x2){ 1, 0, 0, 1 })
+
+
+/// @brief Addition of two u32m2x2
+SL_header u32m2x2 SL_u32m2x2add(u32m2x2 lhs, u32m2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32m2x2) {
+        .m00 = lhs.m00 + rhs.m00, .m01 = lhs.m01 + rhs.m01,
+        .m10 = lhs.m10 + rhs.m10, .m11 = lhs.m11 + rhs.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u32m2x2
+SL_header u32m2x2 SL_u32m2x2sub(u32m2x2 lhs, u32m2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32m2x2) {
+        .m00 = lhs.m00 - rhs.m00, .m01 = lhs.m01 - rhs.m01,
+        .m10 = lhs.m10 - rhs.m10, .m11 = lhs.m11 - rhs.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Product of two u32m2x2
+SL_header u32m2x2 SL_u32m2x2mul(u32m2x2 lhs, u32m2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    u32m2x2 res = SL_u32m2x2_zero;
+    for (usize k = 0; k < SL_msize(lhs).x; ++k)
+    for (usize j = 0; j < SL_msize(lhs).y; ++j)
+    for (usize i = 0; i < SL_msize(lhs).x; ++i)
+        res.m[i][j] += lhs.m[i][k] * rhs.m[k][j];
+
+    return res;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a u32m2x2 with a scalar
+SL_header u32m2x2 SL_u32m2x2muls(u32m2x2 lhs, u32 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32m2x2) {
+        .m00 = lhs.m00 * rhs, .m01 = lhs.m01 * rhs,
+        .m10 = lhs.m10 * rhs, .m11 = lhs.m11 * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Product of a u32m2x2 and a u32v2
+SL_header u32v2 SL_u32m2x2mulv(u32m2x2 lhs, u32v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u32v2_(SL_u32v2dot(lhs.r0, rhs), SL_u32v2dot(lhs.r1, rhs));
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a u32m2x2 with a scalar
+SL_header u32m2x2 SL_u32m2x2divs(u32m2x2 lhs, u32 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32m2x2) {
+        .m00 = lhs.m00 / rhs, .m01 = lhs.m01 / rhs,
+        .m10 = lhs.m10 / rhs, .m11 = lhs.m11 / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u32m2x2 with lhs scaled by a u32
+SL_header u32m2x2 SL_u32m2x2addS(u32m2x2 lhs, u32m2x2 rhs, u32 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32m2x2) {
+        .m00 = lhs.m00 + rhs.m00 * s, .m01 = lhs.m01 + rhs.m01 * s,
+        .m10 = lhs.m10 + rhs.m10 * s, .m11 = lhs.m11 + rhs.m11 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u32m2x2 with lhs scaled by a u32
+SL_header u32m2x2 SL_u32m2x2subS(u32m2x2 lhs, u32m2x2 rhs, u32 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32m2x2) {
+        .m00 = lhs.m00 - rhs.m00 * s, .m01 = lhs.m01 - rhs.m01 * s,
+        .m10 = lhs.m10 - rhs.m10 * s, .m11 = lhs.m11 - rhs.m11 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two u32m2x2
+SL_header u32m2x2 SL_u32m2x2min(u32m2x2 lhs, u32m2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32m2x2) {
+        .m00 = lhs.m00 < rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 < rhs.m01 ? lhs.m01 : rhs.m01,
+        .m10 = lhs.m10 < rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 < rhs.m11 ? lhs.m11 : rhs.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two u32m2x2
+SL_header u32m2x2 SL_u32m2x2max(u32m2x2 lhs, u32m2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32m2x2) {
+        .m00 = lhs.m00 > rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 > rhs.m01 ? lhs.m01 : rhs.m01,
+        .m10 = lhs.m10 > rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 > rhs.m11 ? lhs.m11 : rhs.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Transposition of a u32m2x2
+SL_header u32m2x2 SL_u32m2x2trsp(u32m2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    SL_swap(m.m10, m.m01);
+    return m;
+}
+#else
+;
+#endif
+/// @brief Trace of a u32m2x2
+SL_header u32 SL_u32m2x2trace(u32m2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m.m00 + m.m11;
+}
+#else
+;
+#endif
+/// @brief Determinant of a u32m2x2
+SL_header u32 SL_u32m2x2det_xpd(u32 m00, u32 m01, u32 m10, u32 m11)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m00 * m11 - m01 * m10;
+}
+#else
+;
+#endif
+/// @brief Determinant of a u32m2x2
+SL_header u32 SL_u32m2x2det(u32m2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u32m2x2det_xpd(SL_XPD_M2X2(m));
+}
+#else
+;
+#endif
+
+
+
+/// @brief Matrix of u32 of size 3 x 3
+typedef union {
+    u32 data[3 * 3];
+    u32 m[3][3];
+    struct {
+        u32 m00, m01, m02;
+        u32 m10, m11, m12;
+        u32 m20, m21, m22;
+    };
+    struct { u32v3 r0, r1, r2; };
+} u32m3x3;
+
+#define SL_u32m3x3_zero ((u32m3x3){0})
+#define SL_u32m3x3_identity ((u32m3x3){ 1, 0, 0, 0, 1, 0, 0, 0, 1 })
+
+
+/// @brief Addition of two u32m3x3
+SL_header u32m3x3 SL_u32m3x3add(u32m3x3 lhs, u32m3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32m3x3) {
+        .m00 = lhs.m00 + rhs.m00, .m01 = lhs.m01 + rhs.m01, .m02 = lhs.m02 + rhs.m02,
+        .m10 = lhs.m10 + rhs.m10, .m11 = lhs.m11 + rhs.m11, .m12 = lhs.m12 + rhs.m12,
+        .m20 = lhs.m20 + rhs.m20, .m21 = lhs.m21 + rhs.m21, .m22 = lhs.m22 + rhs.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u32m3x3
+SL_header u32m3x3 SL_u32m3x3sub(u32m3x3 lhs, u32m3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32m3x3) {
+        .m00 = lhs.m00 - rhs.m00, .m01 = lhs.m01 - rhs.m01, .m02 = lhs.m02 - rhs.m02,
+        .m10 = lhs.m10 - rhs.m10, .m11 = lhs.m11 - rhs.m11, .m12 = lhs.m12 - rhs.m12,
+        .m20 = lhs.m20 - rhs.m20, .m21 = lhs.m21 - rhs.m21, .m22 = lhs.m22 - rhs.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Product of two u32m3x3
+SL_header u32m3x3 SL_u32m3x3mul(u32m3x3 lhs, u32m3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    u32m3x3 res = SL_u32m3x3_zero;
+    for (usize k = 0; k < SL_msize(lhs).x; ++k)
+    for (usize j = 0; j < SL_msize(lhs).y; ++j)
+    for (usize i = 0; i < SL_msize(lhs).x; ++i)
+        res.m[i][j] += lhs.m[i][k] * rhs.m[k][j];
+
+    return res;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a u32m3x3 with a scalar
+SL_header u32m3x3 SL_u32m3x3muls(u32m3x3 lhs, u32 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32m3x3) {
+        .m00 = lhs.m00 * rhs, .m01 = lhs.m01 * rhs, .m02 = lhs.m02 * rhs,
+        .m10 = lhs.m10 * rhs, .m11 = lhs.m11 * rhs, .m12 = lhs.m12 * rhs,
+        .m20 = lhs.m20 * rhs, .m21 = lhs.m21 * rhs, .m22 = lhs.m22 * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Product of a u32m3x3 and a u32v3
+SL_header u32v3 SL_u32m3x3mulv(u32m3x3 lhs, u32v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u32v3_(SL_u32v3dot(lhs.r0, rhs), SL_u32v3dot(lhs.r1, rhs), SL_u32v3dot(lhs.r2, rhs));
+}
+#else
+;
+#endif
+/// @brief Apply transformation represented by u32m3x3 to a u32v2
+SL_header u32v2 SL_u32m3x3apply(u32m3x3 m, u32v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u32m3x3mulv(m, SL_u32v3v(v, 1)).xy;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a u32m3x3 with a scalar
+SL_header u32m3x3 SL_u32m3x3divs(u32m3x3 lhs, u32 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32m3x3) {
+        .m00 = lhs.m00 / rhs, .m01 = lhs.m01 / rhs, .m02 = lhs.m02 / rhs,
+        .m10 = lhs.m10 / rhs, .m11 = lhs.m11 / rhs, .m12 = lhs.m12 / rhs,
+        .m20 = lhs.m20 / rhs, .m21 = lhs.m21 / rhs, .m22 = lhs.m22 / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u32m3x3 with lhs scaled by a u32
+SL_header u32m3x3 SL_u32m3x3addS(u32m3x3 lhs, u32m3x3 rhs, u32 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32m3x3) {
+        .m00 = lhs.m00 + rhs.m00 * s, .m01 = lhs.m01 + rhs.m01 * s, .m02 = lhs.m02 + rhs.m02 * s,
+        .m10 = lhs.m10 + rhs.m10 * s, .m11 = lhs.m11 + rhs.m11 * s, .m12 = lhs.m12 + rhs.m12 * s,
+        .m20 = lhs.m20 + rhs.m20 * s, .m21 = lhs.m21 + rhs.m21 * s, .m22 = lhs.m22 + rhs.m22 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u32m3x3 with lhs scaled by a u32
+SL_header u32m3x3 SL_u32m3x3subS(u32m3x3 lhs, u32m3x3 rhs, u32 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32m3x3) {
+        .m00 = lhs.m00 - rhs.m00 * s, .m01 = lhs.m01 - rhs.m01 * s, .m02 = lhs.m02 - rhs.m02 * s,
+        .m10 = lhs.m10 - rhs.m10 * s, .m11 = lhs.m11 - rhs.m11 * s, .m12 = lhs.m12 - rhs.m12 * s,
+        .m20 = lhs.m20 - rhs.m20 * s, .m21 = lhs.m21 - rhs.m21 * s, .m22 = lhs.m22 - rhs.m22 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two u32m3x3
+SL_header u32m3x3 SL_u32m3x3min(u32m3x3 lhs, u32m3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32m3x3) {
+        .m00 = lhs.m00 < rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 < rhs.m01 ? lhs.m01 : rhs.m01, .m02 = lhs.m02 < rhs.m02 ? lhs.m02 : rhs.m02,
+        .m10 = lhs.m10 < rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 < rhs.m11 ? lhs.m11 : rhs.m11, .m12 = lhs.m12 < rhs.m12 ? lhs.m12 : rhs.m12,
+        .m20 = lhs.m20 < rhs.m20 ? lhs.m20 : rhs.m20, .m21 = lhs.m21 < rhs.m21 ? lhs.m21 : rhs.m21, .m22 = lhs.m22 < rhs.m22 ? lhs.m22 : rhs.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two u32m3x3
+SL_header u32m3x3 SL_u32m3x3max(u32m3x3 lhs, u32m3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32m3x3) {
+        .m00 = lhs.m00 > rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 > rhs.m01 ? lhs.m01 : rhs.m01, .m02 = lhs.m02 > rhs.m02 ? lhs.m02 : rhs.m02,
+        .m10 = lhs.m10 > rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 > rhs.m11 ? lhs.m11 : rhs.m11, .m12 = lhs.m12 > rhs.m12 ? lhs.m12 : rhs.m12,
+        .m20 = lhs.m20 > rhs.m20 ? lhs.m20 : rhs.m20, .m21 = lhs.m21 > rhs.m21 ? lhs.m21 : rhs.m21, .m22 = lhs.m22 > rhs.m22 ? lhs.m22 : rhs.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Transposition of a u32m3x3
+SL_header u32m3x3 SL_u32m3x3trsp(u32m3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    SL_swap(m.m10, m.m01);
+    SL_swap(m.m20, m.m02); SL_swap(m.m21, m.m12);
+    return m;
+}
+#else
+;
+#endif
+/// @brief Trace of a u32m3x3
+SL_header u32 SL_u32m3x3trace(u32m3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m.m00 + m.m11 + m.m22;
+}
+#else
+;
+#endif
+/// @brief Determinant of a u32m3x3
+SL_header u32 SL_u32m3x3det_xpd(u32 m00, u32 m01, u32 m02, u32 m10, u32 m11, u32 m12, u32 m20, u32 m21, u32 m22)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m00 * m11 * m22 + m01 * m12 * m20 + m02 * m10 * m21 - m02 * m11 * m20 - m12 * m21 * m00 - m22 * m01 * m10;
+}
+#else
+;
+#endif
+/// @brief Determinant of a u32m3x3
+SL_header u32 SL_u32m3x3det(u32m3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u32m3x3det_xpd(SL_XPD_M3X3(m));
+}
+#else
+;
+#endif
+
+
+
+/// @brief Matrix of u32 of size 4 x 4
+typedef union {
+    u32 data[4 * 4];
+    u32 m[4][4];
+    struct {
+        u32 m00, m01, m02, m03;
+        u32 m10, m11, m12, m13;
+        u32 m20, m21, m22, m23;
+        u32 m30, m31, m32, m33;
+    };
+    struct { u32v4 r0, r1, r2, r3; };
+} u32m4x4;
+
+#define SL_u32m4x4_zero ((u32m4x4){0})
+#define SL_u32m4x4_identity ((u32m4x4){ 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 })
+
+
+/// @brief Addition of two u32m4x4
+SL_header u32m4x4 SL_u32m4x4add(u32m4x4 lhs, u32m4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32m4x4) {
+        .m00 = lhs.m00 + rhs.m00, .m01 = lhs.m01 + rhs.m01, .m02 = lhs.m02 + rhs.m02, .m03 = lhs.m03 + rhs.m03,
+        .m10 = lhs.m10 + rhs.m10, .m11 = lhs.m11 + rhs.m11, .m12 = lhs.m12 + rhs.m12, .m13 = lhs.m13 + rhs.m13,
+        .m20 = lhs.m20 + rhs.m20, .m21 = lhs.m21 + rhs.m21, .m22 = lhs.m22 + rhs.m22, .m23 = lhs.m23 + rhs.m23,
+        .m30 = lhs.m30 + rhs.m30, .m31 = lhs.m31 + rhs.m31, .m32 = lhs.m32 + rhs.m32, .m33 = lhs.m33 + rhs.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u32m4x4
+SL_header u32m4x4 SL_u32m4x4sub(u32m4x4 lhs, u32m4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32m4x4) {
+        .m00 = lhs.m00 - rhs.m00, .m01 = lhs.m01 - rhs.m01, .m02 = lhs.m02 - rhs.m02, .m03 = lhs.m03 - rhs.m03,
+        .m10 = lhs.m10 - rhs.m10, .m11 = lhs.m11 - rhs.m11, .m12 = lhs.m12 - rhs.m12, .m13 = lhs.m13 - rhs.m13,
+        .m20 = lhs.m20 - rhs.m20, .m21 = lhs.m21 - rhs.m21, .m22 = lhs.m22 - rhs.m22, .m23 = lhs.m23 - rhs.m23,
+        .m30 = lhs.m30 - rhs.m30, .m31 = lhs.m31 - rhs.m31, .m32 = lhs.m32 - rhs.m32, .m33 = lhs.m33 - rhs.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Product of two u32m4x4
+SL_header u32m4x4 SL_u32m4x4mul(u32m4x4 lhs, u32m4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    u32m4x4 res = SL_u32m4x4_zero;
+    for (usize k = 0; k < SL_msize(lhs).x; ++k)
+    for (usize j = 0; j < SL_msize(lhs).y; ++j)
+    for (usize i = 0; i < SL_msize(lhs).x; ++i)
+        res.m[i][j] += lhs.m[i][k] * rhs.m[k][j];
+
+    return res;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a u32m4x4 with a scalar
+SL_header u32m4x4 SL_u32m4x4muls(u32m4x4 lhs, u32 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32m4x4) {
+        .m00 = lhs.m00 * rhs, .m01 = lhs.m01 * rhs, .m02 = lhs.m02 * rhs, .m03 = lhs.m03 * rhs,
+        .m10 = lhs.m10 * rhs, .m11 = lhs.m11 * rhs, .m12 = lhs.m12 * rhs, .m13 = lhs.m13 * rhs,
+        .m20 = lhs.m20 * rhs, .m21 = lhs.m21 * rhs, .m22 = lhs.m22 * rhs, .m23 = lhs.m23 * rhs,
+        .m30 = lhs.m30 * rhs, .m31 = lhs.m31 * rhs, .m32 = lhs.m32 * rhs, .m33 = lhs.m33 * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Product of a u32m4x4 and a u32v4
+SL_header u32v4 SL_u32m4x4mulv(u32m4x4 lhs, u32v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u32v4_(SL_u32v4dot(lhs.r0, rhs), SL_u32v4dot(lhs.r1, rhs), SL_u32v4dot(lhs.r2, rhs), SL_u32v4dot(lhs.r3, rhs));
+}
+#else
+;
+#endif
+/// @brief Apply transformation represented by u32m4x4 to a u32v3
+SL_header u32v3 SL_u32m4x4apply(u32m4x4 m, u32v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u32m4x4mulv(m, SL_u32v4v(v, 1)).xyz;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a u32m4x4 with a scalar
+SL_header u32m4x4 SL_u32m4x4divs(u32m4x4 lhs, u32 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32m4x4) {
+        .m00 = lhs.m00 / rhs, .m01 = lhs.m01 / rhs, .m02 = lhs.m02 / rhs, .m03 = lhs.m03 / rhs,
+        .m10 = lhs.m10 / rhs, .m11 = lhs.m11 / rhs, .m12 = lhs.m12 / rhs, .m13 = lhs.m13 / rhs,
+        .m20 = lhs.m20 / rhs, .m21 = lhs.m21 / rhs, .m22 = lhs.m22 / rhs, .m23 = lhs.m23 / rhs,
+        .m30 = lhs.m30 / rhs, .m31 = lhs.m31 / rhs, .m32 = lhs.m32 / rhs, .m33 = lhs.m33 / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u32m4x4 with lhs scaled by a u32
+SL_header u32m4x4 SL_u32m4x4addS(u32m4x4 lhs, u32m4x4 rhs, u32 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32m4x4) {
+        .m00 = lhs.m00 + rhs.m00 * s, .m01 = lhs.m01 + rhs.m01 * s, .m02 = lhs.m02 + rhs.m02 * s, .m03 = lhs.m03 + rhs.m03 * s,
+        .m10 = lhs.m10 + rhs.m10 * s, .m11 = lhs.m11 + rhs.m11 * s, .m12 = lhs.m12 + rhs.m12 * s, .m13 = lhs.m13 + rhs.m13 * s,
+        .m20 = lhs.m20 + rhs.m20 * s, .m21 = lhs.m21 + rhs.m21 * s, .m22 = lhs.m22 + rhs.m22 * s, .m23 = lhs.m23 + rhs.m23 * s,
+        .m30 = lhs.m30 + rhs.m30 * s, .m31 = lhs.m31 + rhs.m31 * s, .m32 = lhs.m32 + rhs.m32 * s, .m33 = lhs.m33 + rhs.m33 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u32m4x4 with lhs scaled by a u32
+SL_header u32m4x4 SL_u32m4x4subS(u32m4x4 lhs, u32m4x4 rhs, u32 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32m4x4) {
+        .m00 = lhs.m00 - rhs.m00 * s, .m01 = lhs.m01 - rhs.m01 * s, .m02 = lhs.m02 - rhs.m02 * s, .m03 = lhs.m03 - rhs.m03 * s,
+        .m10 = lhs.m10 - rhs.m10 * s, .m11 = lhs.m11 - rhs.m11 * s, .m12 = lhs.m12 - rhs.m12 * s, .m13 = lhs.m13 - rhs.m13 * s,
+        .m20 = lhs.m20 - rhs.m20 * s, .m21 = lhs.m21 - rhs.m21 * s, .m22 = lhs.m22 - rhs.m22 * s, .m23 = lhs.m23 - rhs.m23 * s,
+        .m30 = lhs.m30 - rhs.m30 * s, .m31 = lhs.m31 - rhs.m31 * s, .m32 = lhs.m32 - rhs.m32 * s, .m33 = lhs.m33 - rhs.m33 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two u32m4x4
+SL_header u32m4x4 SL_u32m4x4min(u32m4x4 lhs, u32m4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32m4x4) {
+        .m00 = lhs.m00 < rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 < rhs.m01 ? lhs.m01 : rhs.m01, .m02 = lhs.m02 < rhs.m02 ? lhs.m02 : rhs.m02, .m03 = lhs.m03 < rhs.m03 ? lhs.m03 : rhs.m03,
+        .m10 = lhs.m10 < rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 < rhs.m11 ? lhs.m11 : rhs.m11, .m12 = lhs.m12 < rhs.m12 ? lhs.m12 : rhs.m12, .m13 = lhs.m13 < rhs.m13 ? lhs.m13 : rhs.m13,
+        .m20 = lhs.m20 < rhs.m20 ? lhs.m20 : rhs.m20, .m21 = lhs.m21 < rhs.m21 ? lhs.m21 : rhs.m21, .m22 = lhs.m22 < rhs.m22 ? lhs.m22 : rhs.m22, .m23 = lhs.m23 < rhs.m23 ? lhs.m23 : rhs.m23,
+        .m30 = lhs.m30 < rhs.m30 ? lhs.m30 : rhs.m30, .m31 = lhs.m31 < rhs.m31 ? lhs.m31 : rhs.m31, .m32 = lhs.m32 < rhs.m32 ? lhs.m32 : rhs.m32, .m33 = lhs.m33 < rhs.m33 ? lhs.m33 : rhs.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two u32m4x4
+SL_header u32m4x4 SL_u32m4x4max(u32m4x4 lhs, u32m4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u32m4x4) {
+        .m00 = lhs.m00 > rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 > rhs.m01 ? lhs.m01 : rhs.m01, .m02 = lhs.m02 > rhs.m02 ? lhs.m02 : rhs.m02, .m03 = lhs.m03 > rhs.m03 ? lhs.m03 : rhs.m03,
+        .m10 = lhs.m10 > rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 > rhs.m11 ? lhs.m11 : rhs.m11, .m12 = lhs.m12 > rhs.m12 ? lhs.m12 : rhs.m12, .m13 = lhs.m13 > rhs.m13 ? lhs.m13 : rhs.m13,
+        .m20 = lhs.m20 > rhs.m20 ? lhs.m20 : rhs.m20, .m21 = lhs.m21 > rhs.m21 ? lhs.m21 : rhs.m21, .m22 = lhs.m22 > rhs.m22 ? lhs.m22 : rhs.m22, .m23 = lhs.m23 > rhs.m23 ? lhs.m23 : rhs.m23,
+        .m30 = lhs.m30 > rhs.m30 ? lhs.m30 : rhs.m30, .m31 = lhs.m31 > rhs.m31 ? lhs.m31 : rhs.m31, .m32 = lhs.m32 > rhs.m32 ? lhs.m32 : rhs.m32, .m33 = lhs.m33 > rhs.m33 ? lhs.m33 : rhs.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Transposition of a u32m4x4
+SL_header u32m4x4 SL_u32m4x4trsp(u32m4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    SL_swap(m.m10, m.m01);
+    SL_swap(m.m20, m.m02); SL_swap(m.m12, m.m21);
+    SL_swap(m.m30, m.m03); SL_swap(m.m31, m.m13);SL_swap(m.m32, m.m23);
+    return m;
+}
+#else
+;
+#endif
+/// @brief Trace of a u32m4x4
+SL_header u32 SL_u32m4x4trace(u32m4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m.m00 + m.m11 + m.m22 + m.m33;
+}
+#else
+;
+#endif
+/// @brief Determinant of a u32m4x4
+SL_header u32 SL_u32m4x4det_xpd(u32 m00, u32 m01, u32 m02, u32 m03, u32 m10, u32 m11, u32 m12, u32 m13, u32 m20, u32 m21, u32 m22, u32 m23, u32 m30, u32 m31, u32 m32, u32 m33)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m00 * SL_u32m3x3det_xpd(m11, m12, m13, m21, m22, m23, m31, m32, m33)
+         + m01 * SL_u32m3x3det_xpd(m10, m12, m13, m20, m22, m23, m30, m32, m33)
+         + m02 * SL_u32m3x3det_xpd(m10, m11, m13, m20, m21, m23, m30, m31, m33)
+         + m03 * SL_u32m3x3det_xpd(m10, m11, m12, m20, m21, m22, m30, m31, m32);
+}
+#else
+;
+#endif
+/// @brief Determinant of a u32m4x4
+SL_header u32 SL_u32m4x4det(u32m4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u32m4x4det_xpd(SL_XPD_M4X4(m));
+}
+#else
+;
+#endif
+
+
+
+#pragma endregion U32
+#pragma region U64
+
+/// @brief Matrix of u64 with arbitrary dimensions
+typedef struct {
+    union { usize r, c; luv2 size; };
+    u64 *data;
+} u64m;
+
+#define SL_asu64m(sized_mat) ((u64m){.size = SL_msize(sized_mat), .data = sized_mat.data})
+
+
+
+
+/// @brief Matrix of u64 of size 2 x 2
+typedef union {
+    u64 data[2 * 2];
+    u64 m[2][2];
+    struct {
+        u64 m00, m01;
+        u64 m10, m11;
+    };
+    struct { u64v2 r0, r1; };
+} u64m2x2;
+
+#define SL_u64m2x2_zero ((u64m2x2){0})
+#define SL_u64m2x2_identity ((u64m2x2){ 1, 0, 0, 1 })
+
+
+/// @brief Addition of two u64m2x2
+SL_header u64m2x2 SL_u64m2x2add(u64m2x2 lhs, u64m2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64m2x2) {
+        .m00 = lhs.m00 + rhs.m00, .m01 = lhs.m01 + rhs.m01,
+        .m10 = lhs.m10 + rhs.m10, .m11 = lhs.m11 + rhs.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u64m2x2
+SL_header u64m2x2 SL_u64m2x2sub(u64m2x2 lhs, u64m2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64m2x2) {
+        .m00 = lhs.m00 - rhs.m00, .m01 = lhs.m01 - rhs.m01,
+        .m10 = lhs.m10 - rhs.m10, .m11 = lhs.m11 - rhs.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Product of two u64m2x2
+SL_header u64m2x2 SL_u64m2x2mul(u64m2x2 lhs, u64m2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    u64m2x2 res = SL_u64m2x2_zero;
+    for (usize k = 0; k < SL_msize(lhs).x; ++k)
+    for (usize j = 0; j < SL_msize(lhs).y; ++j)
+    for (usize i = 0; i < SL_msize(lhs).x; ++i)
+        res.m[i][j] += lhs.m[i][k] * rhs.m[k][j];
+
+    return res;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a u64m2x2 with a scalar
+SL_header u64m2x2 SL_u64m2x2muls(u64m2x2 lhs, u64 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64m2x2) {
+        .m00 = lhs.m00 * rhs, .m01 = lhs.m01 * rhs,
+        .m10 = lhs.m10 * rhs, .m11 = lhs.m11 * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Product of a u64m2x2 and a u64v2
+SL_header u64v2 SL_u64m2x2mulv(u64m2x2 lhs, u64v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u64v2_(SL_u64v2dot(lhs.r0, rhs), SL_u64v2dot(lhs.r1, rhs));
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a u64m2x2 with a scalar
+SL_header u64m2x2 SL_u64m2x2divs(u64m2x2 lhs, u64 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64m2x2) {
+        .m00 = lhs.m00 / rhs, .m01 = lhs.m01 / rhs,
+        .m10 = lhs.m10 / rhs, .m11 = lhs.m11 / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u64m2x2 with lhs scaled by a u64
+SL_header u64m2x2 SL_u64m2x2addS(u64m2x2 lhs, u64m2x2 rhs, u64 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64m2x2) {
+        .m00 = lhs.m00 + rhs.m00 * s, .m01 = lhs.m01 + rhs.m01 * s,
+        .m10 = lhs.m10 + rhs.m10 * s, .m11 = lhs.m11 + rhs.m11 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u64m2x2 with lhs scaled by a u64
+SL_header u64m2x2 SL_u64m2x2subS(u64m2x2 lhs, u64m2x2 rhs, u64 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64m2x2) {
+        .m00 = lhs.m00 - rhs.m00 * s, .m01 = lhs.m01 - rhs.m01 * s,
+        .m10 = lhs.m10 - rhs.m10 * s, .m11 = lhs.m11 - rhs.m11 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two u64m2x2
+SL_header u64m2x2 SL_u64m2x2min(u64m2x2 lhs, u64m2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64m2x2) {
+        .m00 = lhs.m00 < rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 < rhs.m01 ? lhs.m01 : rhs.m01,
+        .m10 = lhs.m10 < rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 < rhs.m11 ? lhs.m11 : rhs.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two u64m2x2
+SL_header u64m2x2 SL_u64m2x2max(u64m2x2 lhs, u64m2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64m2x2) {
+        .m00 = lhs.m00 > rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 > rhs.m01 ? lhs.m01 : rhs.m01,
+        .m10 = lhs.m10 > rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 > rhs.m11 ? lhs.m11 : rhs.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Transposition of a u64m2x2
+SL_header u64m2x2 SL_u64m2x2trsp(u64m2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    SL_swap(m.m10, m.m01);
+    return m;
+}
+#else
+;
+#endif
+/// @brief Trace of a u64m2x2
+SL_header u64 SL_u64m2x2trace(u64m2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m.m00 + m.m11;
+}
+#else
+;
+#endif
+/// @brief Determinant of a u64m2x2
+SL_header u64 SL_u64m2x2det_xpd(u64 m00, u64 m01, u64 m10, u64 m11)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m00 * m11 - m01 * m10;
+}
+#else
+;
+#endif
+/// @brief Determinant of a u64m2x2
+SL_header u64 SL_u64m2x2det(u64m2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u64m2x2det_xpd(SL_XPD_M2X2(m));
+}
+#else
+;
+#endif
+
+
+
+/// @brief Matrix of u64 of size 3 x 3
+typedef union {
+    u64 data[3 * 3];
+    u64 m[3][3];
+    struct {
+        u64 m00, m01, m02;
+        u64 m10, m11, m12;
+        u64 m20, m21, m22;
+    };
+    struct { u64v3 r0, r1, r2; };
+} u64m3x3;
+
+#define SL_u64m3x3_zero ((u64m3x3){0})
+#define SL_u64m3x3_identity ((u64m3x3){ 1, 0, 0, 0, 1, 0, 0, 0, 1 })
+
+
+/// @brief Addition of two u64m3x3
+SL_header u64m3x3 SL_u64m3x3add(u64m3x3 lhs, u64m3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64m3x3) {
+        .m00 = lhs.m00 + rhs.m00, .m01 = lhs.m01 + rhs.m01, .m02 = lhs.m02 + rhs.m02,
+        .m10 = lhs.m10 + rhs.m10, .m11 = lhs.m11 + rhs.m11, .m12 = lhs.m12 + rhs.m12,
+        .m20 = lhs.m20 + rhs.m20, .m21 = lhs.m21 + rhs.m21, .m22 = lhs.m22 + rhs.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u64m3x3
+SL_header u64m3x3 SL_u64m3x3sub(u64m3x3 lhs, u64m3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64m3x3) {
+        .m00 = lhs.m00 - rhs.m00, .m01 = lhs.m01 - rhs.m01, .m02 = lhs.m02 - rhs.m02,
+        .m10 = lhs.m10 - rhs.m10, .m11 = lhs.m11 - rhs.m11, .m12 = lhs.m12 - rhs.m12,
+        .m20 = lhs.m20 - rhs.m20, .m21 = lhs.m21 - rhs.m21, .m22 = lhs.m22 - rhs.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Product of two u64m3x3
+SL_header u64m3x3 SL_u64m3x3mul(u64m3x3 lhs, u64m3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    u64m3x3 res = SL_u64m3x3_zero;
+    for (usize k = 0; k < SL_msize(lhs).x; ++k)
+    for (usize j = 0; j < SL_msize(lhs).y; ++j)
+    for (usize i = 0; i < SL_msize(lhs).x; ++i)
+        res.m[i][j] += lhs.m[i][k] * rhs.m[k][j];
+
+    return res;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a u64m3x3 with a scalar
+SL_header u64m3x3 SL_u64m3x3muls(u64m3x3 lhs, u64 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64m3x3) {
+        .m00 = lhs.m00 * rhs, .m01 = lhs.m01 * rhs, .m02 = lhs.m02 * rhs,
+        .m10 = lhs.m10 * rhs, .m11 = lhs.m11 * rhs, .m12 = lhs.m12 * rhs,
+        .m20 = lhs.m20 * rhs, .m21 = lhs.m21 * rhs, .m22 = lhs.m22 * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Product of a u64m3x3 and a u64v3
+SL_header u64v3 SL_u64m3x3mulv(u64m3x3 lhs, u64v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u64v3_(SL_u64v3dot(lhs.r0, rhs), SL_u64v3dot(lhs.r1, rhs), SL_u64v3dot(lhs.r2, rhs));
+}
+#else
+;
+#endif
+/// @brief Apply transformation represented by u64m3x3 to a u64v2
+SL_header u64v2 SL_u64m3x3apply(u64m3x3 m, u64v2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u64m3x3mulv(m, SL_u64v3v(v, 1)).xy;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a u64m3x3 with a scalar
+SL_header u64m3x3 SL_u64m3x3divs(u64m3x3 lhs, u64 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64m3x3) {
+        .m00 = lhs.m00 / rhs, .m01 = lhs.m01 / rhs, .m02 = lhs.m02 / rhs,
+        .m10 = lhs.m10 / rhs, .m11 = lhs.m11 / rhs, .m12 = lhs.m12 / rhs,
+        .m20 = lhs.m20 / rhs, .m21 = lhs.m21 / rhs, .m22 = lhs.m22 / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u64m3x3 with lhs scaled by a u64
+SL_header u64m3x3 SL_u64m3x3addS(u64m3x3 lhs, u64m3x3 rhs, u64 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64m3x3) {
+        .m00 = lhs.m00 + rhs.m00 * s, .m01 = lhs.m01 + rhs.m01 * s, .m02 = lhs.m02 + rhs.m02 * s,
+        .m10 = lhs.m10 + rhs.m10 * s, .m11 = lhs.m11 + rhs.m11 * s, .m12 = lhs.m12 + rhs.m12 * s,
+        .m20 = lhs.m20 + rhs.m20 * s, .m21 = lhs.m21 + rhs.m21 * s, .m22 = lhs.m22 + rhs.m22 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u64m3x3 with lhs scaled by a u64
+SL_header u64m3x3 SL_u64m3x3subS(u64m3x3 lhs, u64m3x3 rhs, u64 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64m3x3) {
+        .m00 = lhs.m00 - rhs.m00 * s, .m01 = lhs.m01 - rhs.m01 * s, .m02 = lhs.m02 - rhs.m02 * s,
+        .m10 = lhs.m10 - rhs.m10 * s, .m11 = lhs.m11 - rhs.m11 * s, .m12 = lhs.m12 - rhs.m12 * s,
+        .m20 = lhs.m20 - rhs.m20 * s, .m21 = lhs.m21 - rhs.m21 * s, .m22 = lhs.m22 - rhs.m22 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two u64m3x3
+SL_header u64m3x3 SL_u64m3x3min(u64m3x3 lhs, u64m3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64m3x3) {
+        .m00 = lhs.m00 < rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 < rhs.m01 ? lhs.m01 : rhs.m01, .m02 = lhs.m02 < rhs.m02 ? lhs.m02 : rhs.m02,
+        .m10 = lhs.m10 < rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 < rhs.m11 ? lhs.m11 : rhs.m11, .m12 = lhs.m12 < rhs.m12 ? lhs.m12 : rhs.m12,
+        .m20 = lhs.m20 < rhs.m20 ? lhs.m20 : rhs.m20, .m21 = lhs.m21 < rhs.m21 ? lhs.m21 : rhs.m21, .m22 = lhs.m22 < rhs.m22 ? lhs.m22 : rhs.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two u64m3x3
+SL_header u64m3x3 SL_u64m3x3max(u64m3x3 lhs, u64m3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64m3x3) {
+        .m00 = lhs.m00 > rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 > rhs.m01 ? lhs.m01 : rhs.m01, .m02 = lhs.m02 > rhs.m02 ? lhs.m02 : rhs.m02,
+        .m10 = lhs.m10 > rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 > rhs.m11 ? lhs.m11 : rhs.m11, .m12 = lhs.m12 > rhs.m12 ? lhs.m12 : rhs.m12,
+        .m20 = lhs.m20 > rhs.m20 ? lhs.m20 : rhs.m20, .m21 = lhs.m21 > rhs.m21 ? lhs.m21 : rhs.m21, .m22 = lhs.m22 > rhs.m22 ? lhs.m22 : rhs.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Transposition of a u64m3x3
+SL_header u64m3x3 SL_u64m3x3trsp(u64m3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    SL_swap(m.m10, m.m01);
+    SL_swap(m.m20, m.m02); SL_swap(m.m21, m.m12);
+    return m;
+}
+#else
+;
+#endif
+/// @brief Trace of a u64m3x3
+SL_header u64 SL_u64m3x3trace(u64m3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m.m00 + m.m11 + m.m22;
+}
+#else
+;
+#endif
+/// @brief Determinant of a u64m3x3
+SL_header u64 SL_u64m3x3det_xpd(u64 m00, u64 m01, u64 m02, u64 m10, u64 m11, u64 m12, u64 m20, u64 m21, u64 m22)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m00 * m11 * m22 + m01 * m12 * m20 + m02 * m10 * m21 - m02 * m11 * m20 - m12 * m21 * m00 - m22 * m01 * m10;
+}
+#else
+;
+#endif
+/// @brief Determinant of a u64m3x3
+SL_header u64 SL_u64m3x3det(u64m3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u64m3x3det_xpd(SL_XPD_M3X3(m));
+}
+#else
+;
+#endif
+
+
+
+/// @brief Matrix of u64 of size 4 x 4
+typedef union {
+    u64 data[4 * 4];
+    u64 m[4][4];
+    struct {
+        u64 m00, m01, m02, m03;
+        u64 m10, m11, m12, m13;
+        u64 m20, m21, m22, m23;
+        u64 m30, m31, m32, m33;
+    };
+    struct { u64v4 r0, r1, r2, r3; };
+} u64m4x4;
+
+#define SL_u64m4x4_zero ((u64m4x4){0})
+#define SL_u64m4x4_identity ((u64m4x4){ 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 })
+
+
+/// @brief Addition of two u64m4x4
+SL_header u64m4x4 SL_u64m4x4add(u64m4x4 lhs, u64m4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64m4x4) {
+        .m00 = lhs.m00 + rhs.m00, .m01 = lhs.m01 + rhs.m01, .m02 = lhs.m02 + rhs.m02, .m03 = lhs.m03 + rhs.m03,
+        .m10 = lhs.m10 + rhs.m10, .m11 = lhs.m11 + rhs.m11, .m12 = lhs.m12 + rhs.m12, .m13 = lhs.m13 + rhs.m13,
+        .m20 = lhs.m20 + rhs.m20, .m21 = lhs.m21 + rhs.m21, .m22 = lhs.m22 + rhs.m22, .m23 = lhs.m23 + rhs.m23,
+        .m30 = lhs.m30 + rhs.m30, .m31 = lhs.m31 + rhs.m31, .m32 = lhs.m32 + rhs.m32, .m33 = lhs.m33 + rhs.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u64m4x4
+SL_header u64m4x4 SL_u64m4x4sub(u64m4x4 lhs, u64m4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64m4x4) {
+        .m00 = lhs.m00 - rhs.m00, .m01 = lhs.m01 - rhs.m01, .m02 = lhs.m02 - rhs.m02, .m03 = lhs.m03 - rhs.m03,
+        .m10 = lhs.m10 - rhs.m10, .m11 = lhs.m11 - rhs.m11, .m12 = lhs.m12 - rhs.m12, .m13 = lhs.m13 - rhs.m13,
+        .m20 = lhs.m20 - rhs.m20, .m21 = lhs.m21 - rhs.m21, .m22 = lhs.m22 - rhs.m22, .m23 = lhs.m23 - rhs.m23,
+        .m30 = lhs.m30 - rhs.m30, .m31 = lhs.m31 - rhs.m31, .m32 = lhs.m32 - rhs.m32, .m33 = lhs.m33 - rhs.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Product of two u64m4x4
+SL_header u64m4x4 SL_u64m4x4mul(u64m4x4 lhs, u64m4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    u64m4x4 res = SL_u64m4x4_zero;
+    for (usize k = 0; k < SL_msize(lhs).x; ++k)
+    for (usize j = 0; j < SL_msize(lhs).y; ++j)
+    for (usize i = 0; i < SL_msize(lhs).x; ++i)
+        res.m[i][j] += lhs.m[i][k] * rhs.m[k][j];
+
+    return res;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a u64m4x4 with a scalar
+SL_header u64m4x4 SL_u64m4x4muls(u64m4x4 lhs, u64 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64m4x4) {
+        .m00 = lhs.m00 * rhs, .m01 = lhs.m01 * rhs, .m02 = lhs.m02 * rhs, .m03 = lhs.m03 * rhs,
+        .m10 = lhs.m10 * rhs, .m11 = lhs.m11 * rhs, .m12 = lhs.m12 * rhs, .m13 = lhs.m13 * rhs,
+        .m20 = lhs.m20 * rhs, .m21 = lhs.m21 * rhs, .m22 = lhs.m22 * rhs, .m23 = lhs.m23 * rhs,
+        .m30 = lhs.m30 * rhs, .m31 = lhs.m31 * rhs, .m32 = lhs.m32 * rhs, .m33 = lhs.m33 * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Product of a u64m4x4 and a u64v4
+SL_header u64v4 SL_u64m4x4mulv(u64m4x4 lhs, u64v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u64v4_(SL_u64v4dot(lhs.r0, rhs), SL_u64v4dot(lhs.r1, rhs), SL_u64v4dot(lhs.r2, rhs), SL_u64v4dot(lhs.r3, rhs));
+}
+#else
+;
+#endif
+/// @brief Apply transformation represented by u64m4x4 to a u64v3
+SL_header u64v3 SL_u64m4x4apply(u64m4x4 m, u64v3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u64m4x4mulv(m, SL_u64v4v(v, 1)).xyz;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a u64m4x4 with a scalar
+SL_header u64m4x4 SL_u64m4x4divs(u64m4x4 lhs, u64 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64m4x4) {
+        .m00 = lhs.m00 / rhs, .m01 = lhs.m01 / rhs, .m02 = lhs.m02 / rhs, .m03 = lhs.m03 / rhs,
+        .m10 = lhs.m10 / rhs, .m11 = lhs.m11 / rhs, .m12 = lhs.m12 / rhs, .m13 = lhs.m13 / rhs,
+        .m20 = lhs.m20 / rhs, .m21 = lhs.m21 / rhs, .m22 = lhs.m22 / rhs, .m23 = lhs.m23 / rhs,
+        .m30 = lhs.m30 / rhs, .m31 = lhs.m31 / rhs, .m32 = lhs.m32 / rhs, .m33 = lhs.m33 / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two u64m4x4 with lhs scaled by a u64
+SL_header u64m4x4 SL_u64m4x4addS(u64m4x4 lhs, u64m4x4 rhs, u64 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64m4x4) {
+        .m00 = lhs.m00 + rhs.m00 * s, .m01 = lhs.m01 + rhs.m01 * s, .m02 = lhs.m02 + rhs.m02 * s, .m03 = lhs.m03 + rhs.m03 * s,
+        .m10 = lhs.m10 + rhs.m10 * s, .m11 = lhs.m11 + rhs.m11 * s, .m12 = lhs.m12 + rhs.m12 * s, .m13 = lhs.m13 + rhs.m13 * s,
+        .m20 = lhs.m20 + rhs.m20 * s, .m21 = lhs.m21 + rhs.m21 * s, .m22 = lhs.m22 + rhs.m22 * s, .m23 = lhs.m23 + rhs.m23 * s,
+        .m30 = lhs.m30 + rhs.m30 * s, .m31 = lhs.m31 + rhs.m31 * s, .m32 = lhs.m32 + rhs.m32 * s, .m33 = lhs.m33 + rhs.m33 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two u64m4x4 with lhs scaled by a u64
+SL_header u64m4x4 SL_u64m4x4subS(u64m4x4 lhs, u64m4x4 rhs, u64 s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64m4x4) {
+        .m00 = lhs.m00 - rhs.m00 * s, .m01 = lhs.m01 - rhs.m01 * s, .m02 = lhs.m02 - rhs.m02 * s, .m03 = lhs.m03 - rhs.m03 * s,
+        .m10 = lhs.m10 - rhs.m10 * s, .m11 = lhs.m11 - rhs.m11 * s, .m12 = lhs.m12 - rhs.m12 * s, .m13 = lhs.m13 - rhs.m13 * s,
+        .m20 = lhs.m20 - rhs.m20 * s, .m21 = lhs.m21 - rhs.m21 * s, .m22 = lhs.m22 - rhs.m22 * s, .m23 = lhs.m23 - rhs.m23 * s,
+        .m30 = lhs.m30 - rhs.m30 * s, .m31 = lhs.m31 - rhs.m31 * s, .m32 = lhs.m32 - rhs.m32 * s, .m33 = lhs.m33 - rhs.m33 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two u64m4x4
+SL_header u64m4x4 SL_u64m4x4min(u64m4x4 lhs, u64m4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64m4x4) {
+        .m00 = lhs.m00 < rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 < rhs.m01 ? lhs.m01 : rhs.m01, .m02 = lhs.m02 < rhs.m02 ? lhs.m02 : rhs.m02, .m03 = lhs.m03 < rhs.m03 ? lhs.m03 : rhs.m03,
+        .m10 = lhs.m10 < rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 < rhs.m11 ? lhs.m11 : rhs.m11, .m12 = lhs.m12 < rhs.m12 ? lhs.m12 : rhs.m12, .m13 = lhs.m13 < rhs.m13 ? lhs.m13 : rhs.m13,
+        .m20 = lhs.m20 < rhs.m20 ? lhs.m20 : rhs.m20, .m21 = lhs.m21 < rhs.m21 ? lhs.m21 : rhs.m21, .m22 = lhs.m22 < rhs.m22 ? lhs.m22 : rhs.m22, .m23 = lhs.m23 < rhs.m23 ? lhs.m23 : rhs.m23,
+        .m30 = lhs.m30 < rhs.m30 ? lhs.m30 : rhs.m30, .m31 = lhs.m31 < rhs.m31 ? lhs.m31 : rhs.m31, .m32 = lhs.m32 < rhs.m32 ? lhs.m32 : rhs.m32, .m33 = lhs.m33 < rhs.m33 ? lhs.m33 : rhs.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two u64m4x4
+SL_header u64m4x4 SL_u64m4x4max(u64m4x4 lhs, u64m4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (u64m4x4) {
+        .m00 = lhs.m00 > rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 > rhs.m01 ? lhs.m01 : rhs.m01, .m02 = lhs.m02 > rhs.m02 ? lhs.m02 : rhs.m02, .m03 = lhs.m03 > rhs.m03 ? lhs.m03 : rhs.m03,
+        .m10 = lhs.m10 > rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 > rhs.m11 ? lhs.m11 : rhs.m11, .m12 = lhs.m12 > rhs.m12 ? lhs.m12 : rhs.m12, .m13 = lhs.m13 > rhs.m13 ? lhs.m13 : rhs.m13,
+        .m20 = lhs.m20 > rhs.m20 ? lhs.m20 : rhs.m20, .m21 = lhs.m21 > rhs.m21 ? lhs.m21 : rhs.m21, .m22 = lhs.m22 > rhs.m22 ? lhs.m22 : rhs.m22, .m23 = lhs.m23 > rhs.m23 ? lhs.m23 : rhs.m23,
+        .m30 = lhs.m30 > rhs.m30 ? lhs.m30 : rhs.m30, .m31 = lhs.m31 > rhs.m31 ? lhs.m31 : rhs.m31, .m32 = lhs.m32 > rhs.m32 ? lhs.m32 : rhs.m32, .m33 = lhs.m33 > rhs.m33 ? lhs.m33 : rhs.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Transposition of a u64m4x4
+SL_header u64m4x4 SL_u64m4x4trsp(u64m4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    SL_swap(m.m10, m.m01);
+    SL_swap(m.m20, m.m02); SL_swap(m.m12, m.m21);
+    SL_swap(m.m30, m.m03); SL_swap(m.m31, m.m13);SL_swap(m.m32, m.m23);
+    return m;
+}
+#else
+;
+#endif
+/// @brief Trace of a u64m4x4
+SL_header u64 SL_u64m4x4trace(u64m4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m.m00 + m.m11 + m.m22 + m.m33;
+}
+#else
+;
+#endif
+/// @brief Determinant of a u64m4x4
+SL_header u64 SL_u64m4x4det_xpd(u64 m00, u64 m01, u64 m02, u64 m03, u64 m10, u64 m11, u64 m12, u64 m13, u64 m20, u64 m21, u64 m22, u64 m23, u64 m30, u64 m31, u64 m32, u64 m33)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m00 * SL_u64m3x3det_xpd(m11, m12, m13, m21, m22, m23, m31, m32, m33)
+         + m01 * SL_u64m3x3det_xpd(m10, m12, m13, m20, m22, m23, m30, m32, m33)
+         + m02 * SL_u64m3x3det_xpd(m10, m11, m13, m20, m21, m23, m30, m31, m33)
+         + m03 * SL_u64m3x3det_xpd(m10, m11, m12, m20, m21, m22, m30, m31, m32);
+}
+#else
+;
+#endif
+/// @brief Determinant of a u64m4x4
+SL_header u64 SL_u64m4x4det(u64m4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u64m4x4det_xpd(SL_XPD_M4X4(m));
+}
+#else
+;
+#endif
+
+
+
+#pragma endregion U64
+#pragma region FLOAT
+
+/// @brief Matrix of float with arbitrary dimensions
+typedef struct {
+    union { usize r, c; luv2 size; };
+    float *data;
+} fm;
+
+#define SL_asfm(sized_mat) ((fm){.size = SL_msize(sized_mat), .data = sized_mat.data})
+
+
+
+
+/// @brief Matrix of float of size 2 x 2
+typedef union {
+    float data[2 * 2];
+    float m[2][2];
+    struct {
+        float m00, m01;
+        float m10, m11;
+    };
+    struct { fv2 r0, r1; };
+} fm2x2;
+
+#define SL_fm2x2_zero ((fm2x2){0})
+#define SL_fm2x2_identity ((fm2x2){ 1, 0, 0, 1 })
+
+
+/// @brief Addition of two fm2x2
+SL_header fm2x2 SL_fm2x2add(fm2x2 lhs, fm2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fm2x2) {
+        .m00 = lhs.m00 + rhs.m00, .m01 = lhs.m01 + rhs.m01,
+        .m10 = lhs.m10 + rhs.m10, .m11 = lhs.m11 + rhs.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two fm2x2
+SL_header fm2x2 SL_fm2x2sub(fm2x2 lhs, fm2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fm2x2) {
+        .m00 = lhs.m00 - rhs.m00, .m01 = lhs.m01 - rhs.m01,
+        .m10 = lhs.m10 - rhs.m10, .m11 = lhs.m11 - rhs.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Product of two fm2x2
+SL_header fm2x2 SL_fm2x2mul(fm2x2 lhs, fm2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    fm2x2 res = SL_fm2x2_zero;
+    for (usize k = 0; k < SL_msize(lhs).x; ++k)
+    for (usize j = 0; j < SL_msize(lhs).y; ++j)
+    for (usize i = 0; i < SL_msize(lhs).x; ++i)
+        res.m[i][j] += lhs.m[i][k] * rhs.m[k][j];
+
+    return res;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a fm2x2 with a scalar
+SL_header fm2x2 SL_fm2x2muls(fm2x2 lhs, float rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fm2x2) {
+        .m00 = lhs.m00 * rhs, .m01 = lhs.m01 * rhs,
+        .m10 = lhs.m10 * rhs, .m11 = lhs.m11 * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Product of a fm2x2 and a fv2
+SL_header fv2 SL_fm2x2mulv(fm2x2 lhs, fv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_fv2_(SL_fv2dot(lhs.r0, rhs), SL_fv2dot(lhs.r1, rhs));
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a fm2x2 with a scalar
+SL_header fm2x2 SL_fm2x2divs(fm2x2 lhs, float rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fm2x2) {
+        .m00 = lhs.m00 / rhs, .m01 = lhs.m01 / rhs,
+        .m10 = lhs.m10 / rhs, .m11 = lhs.m11 / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two fm2x2 with lhs scaled by a float
+SL_header fm2x2 SL_fm2x2addS(fm2x2 lhs, fm2x2 rhs, float s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fm2x2) {
+        .m00 = lhs.m00 + rhs.m00 * s, .m01 = lhs.m01 + rhs.m01 * s,
+        .m10 = lhs.m10 + rhs.m10 * s, .m11 = lhs.m11 + rhs.m11 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two fm2x2 with lhs scaled by a float
+SL_header fm2x2 SL_fm2x2subS(fm2x2 lhs, fm2x2 rhs, float s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fm2x2) {
+        .m00 = lhs.m00 - rhs.m00 * s, .m01 = lhs.m01 - rhs.m01 * s,
+        .m10 = lhs.m10 - rhs.m10 * s, .m11 = lhs.m11 - rhs.m11 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a fm2x2
+SL_header fm2x2 SL_fm2x2neg(fm2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fm2x2) {
+        .m00 = -m.m00, .m01 = -m.m01,
+        .m10 = -m.m10, .m11 = -m.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a fm2x2
+SL_header fm2x2 SL_fm2x2abs(fm2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fm2x2) {
+        .m00 = fabs(m.m00), .m01 = fabs(m.m01),
+        .m10 = fabs(m.m10), .m11 = fabs(m.m11)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two fm2x2
+SL_header fm2x2 SL_fm2x2min(fm2x2 lhs, fm2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fm2x2) {
+        .m00 = lhs.m00 < rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 < rhs.m01 ? lhs.m01 : rhs.m01,
+        .m10 = lhs.m10 < rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 < rhs.m11 ? lhs.m11 : rhs.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two fm2x2
+SL_header fm2x2 SL_fm2x2max(fm2x2 lhs, fm2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fm2x2) {
+        .m00 = lhs.m00 > rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 > rhs.m01 ? lhs.m01 : rhs.m01,
+        .m10 = lhs.m10 > rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 > rhs.m11 ? lhs.m11 : rhs.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Transposition of a fm2x2
+SL_header fm2x2 SL_fm2x2trsp(fm2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    SL_swap(m.m10, m.m01);
+    return m;
+}
+#else
+;
+#endif
+/// @brief Trace of a fm2x2
+SL_header float SL_fm2x2trace(fm2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m.m00 + m.m11;
+}
+#else
+;
+#endif
+/// @brief Determinant of a fm2x2
+SL_header float SL_fm2x2det_xpd(float m00, float m01, float m10, float m11)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m00 * m11 - m01 * m10;
+}
+#else
+;
+#endif
+/// @brief Determinant of a fm2x2
+SL_header float SL_fm2x2det(fm2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_fm2x2det_xpd(SL_XPD_M2X2(m));
+}
+#else
+;
+#endif
+/// @brief Inverse of a fm2x2
+SL_header fm2x2 SL_fm2x2inv(fm2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    fm2x2 trsp_comat = { .m00 = m.m11, .m10 = -m.m10, .m10 = -m.m10, .m11 = m.m00 };
+    
+    float det = trsp_comat.m00 * m.m00 + trsp_comat.m01 * m.m10;
+    if (det == 0.0) return __SL_ERROR(SL_ERR_DIVISION_BY_ZERO), SL_fm2x2_zero;
+
+    return SL_fm2x2muls(trsp_comat, 1.0 / det);
+}
+#else
+;
+#endif
+/// @brief Matrix fm2x2 representing a 2D rotation
+SL_header fm2x2 SL_fm2x2from_angle(float angle)
+#if defined(SL_IMPLEMENTATION)
+{
+    double sin, cos; sincos(angle, &sin, &cos);
+
+    return (fm2x2) {
+        .m00 = -sin, .m01 = cos,
+        .m10 =  cos, .m11 = sin
+    };
+}
+#else
+;
+#endif
+
+
+
+/// @brief Matrix of float of size 3 x 3
+typedef union {
+    float data[3 * 3];
+    float m[3][3];
+    struct {
+        float m00, m01, m02;
+        float m10, m11, m12;
+        float m20, m21, m22;
+    };
+    struct { fv3 r0, r1, r2; };
+} fm3x3;
+
+#define SL_fm3x3_zero ((fm3x3){0})
+#define SL_fm3x3_identity ((fm3x3){ 1, 0, 0, 0, 1, 0, 0, 0, 1 })
+
+
+/// @brief Addition of two fm3x3
+SL_header fm3x3 SL_fm3x3add(fm3x3 lhs, fm3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fm3x3) {
+        .m00 = lhs.m00 + rhs.m00, .m01 = lhs.m01 + rhs.m01, .m02 = lhs.m02 + rhs.m02,
+        .m10 = lhs.m10 + rhs.m10, .m11 = lhs.m11 + rhs.m11, .m12 = lhs.m12 + rhs.m12,
+        .m20 = lhs.m20 + rhs.m20, .m21 = lhs.m21 + rhs.m21, .m22 = lhs.m22 + rhs.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two fm3x3
+SL_header fm3x3 SL_fm3x3sub(fm3x3 lhs, fm3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fm3x3) {
+        .m00 = lhs.m00 - rhs.m00, .m01 = lhs.m01 - rhs.m01, .m02 = lhs.m02 - rhs.m02,
+        .m10 = lhs.m10 - rhs.m10, .m11 = lhs.m11 - rhs.m11, .m12 = lhs.m12 - rhs.m12,
+        .m20 = lhs.m20 - rhs.m20, .m21 = lhs.m21 - rhs.m21, .m22 = lhs.m22 - rhs.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Product of two fm3x3
+SL_header fm3x3 SL_fm3x3mul(fm3x3 lhs, fm3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    fm3x3 res = SL_fm3x3_zero;
+    for (usize k = 0; k < SL_msize(lhs).x; ++k)
+    for (usize j = 0; j < SL_msize(lhs).y; ++j)
+    for (usize i = 0; i < SL_msize(lhs).x; ++i)
+        res.m[i][j] += lhs.m[i][k] * rhs.m[k][j];
+
+    return res;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a fm3x3 with a scalar
+SL_header fm3x3 SL_fm3x3muls(fm3x3 lhs, float rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fm3x3) {
+        .m00 = lhs.m00 * rhs, .m01 = lhs.m01 * rhs, .m02 = lhs.m02 * rhs,
+        .m10 = lhs.m10 * rhs, .m11 = lhs.m11 * rhs, .m12 = lhs.m12 * rhs,
+        .m20 = lhs.m20 * rhs, .m21 = lhs.m21 * rhs, .m22 = lhs.m22 * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Product of a fm3x3 and a fv3
+SL_header fv3 SL_fm3x3mulv(fm3x3 lhs, fv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_fv3_(SL_fv3dot(lhs.r0, rhs), SL_fv3dot(lhs.r1, rhs), SL_fv3dot(lhs.r2, rhs));
+}
+#else
+;
+#endif
+/// @brief Apply transformation represented by fm3x3 to a fv2
+SL_header fv2 SL_fm3x3apply(fm3x3 m, fv2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_fm3x3mulv(m, SL_fv3v(v, 1)).xy;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a fm3x3 with a scalar
+SL_header fm3x3 SL_fm3x3divs(fm3x3 lhs, float rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fm3x3) {
+        .m00 = lhs.m00 / rhs, .m01 = lhs.m01 / rhs, .m02 = lhs.m02 / rhs,
+        .m10 = lhs.m10 / rhs, .m11 = lhs.m11 / rhs, .m12 = lhs.m12 / rhs,
+        .m20 = lhs.m20 / rhs, .m21 = lhs.m21 / rhs, .m22 = lhs.m22 / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two fm3x3 with lhs scaled by a float
+SL_header fm3x3 SL_fm3x3addS(fm3x3 lhs, fm3x3 rhs, float s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fm3x3) {
+        .m00 = lhs.m00 + rhs.m00 * s, .m01 = lhs.m01 + rhs.m01 * s, .m02 = lhs.m02 + rhs.m02 * s,
+        .m10 = lhs.m10 + rhs.m10 * s, .m11 = lhs.m11 + rhs.m11 * s, .m12 = lhs.m12 + rhs.m12 * s,
+        .m20 = lhs.m20 + rhs.m20 * s, .m21 = lhs.m21 + rhs.m21 * s, .m22 = lhs.m22 + rhs.m22 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two fm3x3 with lhs scaled by a float
+SL_header fm3x3 SL_fm3x3subS(fm3x3 lhs, fm3x3 rhs, float s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fm3x3) {
+        .m00 = lhs.m00 - rhs.m00 * s, .m01 = lhs.m01 - rhs.m01 * s, .m02 = lhs.m02 - rhs.m02 * s,
+        .m10 = lhs.m10 - rhs.m10 * s, .m11 = lhs.m11 - rhs.m11 * s, .m12 = lhs.m12 - rhs.m12 * s,
+        .m20 = lhs.m20 - rhs.m20 * s, .m21 = lhs.m21 - rhs.m21 * s, .m22 = lhs.m22 - rhs.m22 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a fm3x3
+SL_header fm3x3 SL_fm3x3neg(fm3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fm3x3) {
+        .m00 = -m.m00, .m01 = -m.m01, .m02 = -m.m02,
+        .m10 = -m.m10, .m11 = -m.m11, .m12 = -m.m12,
+        .m20 = -m.m20, .m21 = -m.m21, .m22 = -m.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a fm3x3
+SL_header fm3x3 SL_fm3x3abs(fm3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fm3x3) {
+        .m00 = fabs(m.m00), .m01 = fabs(m.m01), .m02 = fabs(m.m02),
+        .m10 = fabs(m.m10), .m11 = fabs(m.m11), .m12 = fabs(m.m12),
+        .m20 = fabs(m.m20), .m21 = fabs(m.m21), .m22 = fabs(m.m22)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two fm3x3
+SL_header fm3x3 SL_fm3x3min(fm3x3 lhs, fm3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fm3x3) {
+        .m00 = lhs.m00 < rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 < rhs.m01 ? lhs.m01 : rhs.m01, .m02 = lhs.m02 < rhs.m02 ? lhs.m02 : rhs.m02,
+        .m10 = lhs.m10 < rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 < rhs.m11 ? lhs.m11 : rhs.m11, .m12 = lhs.m12 < rhs.m12 ? lhs.m12 : rhs.m12,
+        .m20 = lhs.m20 < rhs.m20 ? lhs.m20 : rhs.m20, .m21 = lhs.m21 < rhs.m21 ? lhs.m21 : rhs.m21, .m22 = lhs.m22 < rhs.m22 ? lhs.m22 : rhs.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two fm3x3
+SL_header fm3x3 SL_fm3x3max(fm3x3 lhs, fm3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fm3x3) {
+        .m00 = lhs.m00 > rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 > rhs.m01 ? lhs.m01 : rhs.m01, .m02 = lhs.m02 > rhs.m02 ? lhs.m02 : rhs.m02,
+        .m10 = lhs.m10 > rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 > rhs.m11 ? lhs.m11 : rhs.m11, .m12 = lhs.m12 > rhs.m12 ? lhs.m12 : rhs.m12,
+        .m20 = lhs.m20 > rhs.m20 ? lhs.m20 : rhs.m20, .m21 = lhs.m21 > rhs.m21 ? lhs.m21 : rhs.m21, .m22 = lhs.m22 > rhs.m22 ? lhs.m22 : rhs.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Transposition of a fm3x3
+SL_header fm3x3 SL_fm3x3trsp(fm3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    SL_swap(m.m10, m.m01);
+    SL_swap(m.m20, m.m02); SL_swap(m.m21, m.m12);
+    return m;
+}
+#else
+;
+#endif
+/// @brief Trace of a fm3x3
+SL_header float SL_fm3x3trace(fm3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m.m00 + m.m11 + m.m22;
+}
+#else
+;
+#endif
+/// @brief Determinant of a fm3x3
+SL_header float SL_fm3x3det_xpd(float m00, float m01, float m02, float m10, float m11, float m12, float m20, float m21, float m22)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m00 * m11 * m22 + m01 * m12 * m20 + m02 * m10 * m21 - m02 * m11 * m20 - m12 * m21 * m00 - m22 * m01 * m10;
+}
+#else
+;
+#endif
+/// @brief Determinant of a fm3x3
+SL_header float SL_fm3x3det(fm3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_fm3x3det_xpd(SL_XPD_M3X3(m));
+}
+#else
+;
+#endif
+/// @brief Inverse of a fm3x3
+SL_header fm3x3 SL_fm3x3inv(fm3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    fm3x3 trsp_comat;
+    for (int i = 0; i < 3; ++i)
+    for (int j = 0; j < 3; ++j)
+    {
+        trsp_comat.m[j][i] = ((i + j) & 1 ? -1 : 1) *
+            SL_fm2x2det_xpd(
+                m.m[1 - (i >= 1)][1 - (j >= 1)], m.m[1 - (i >= 1)][2 - (j >= 2)],
+                m.m[2 - (i >= 2)][1 - (j >= 1)], m.m[2 - (i >= 2)][2 - (j >= 2)]
+            );
+    }
+    
+    float det = trsp_comat.m00 * m.m00 + trsp_comat.m01 * m.m10 + trsp_comat.m02 * m.m20;
+    if (det == 0.0) return __SL_ERROR(SL_ERR_DIVISION_BY_ZERO), SL_fm3x3_zero;
+
+    return SL_fm3x3muls(trsp_comat, 1.0 / det);
+}
+#else
+;
+#endif
+/// @brief Matrix fm3x3 from a void
+SL_header fm3x3 SL_fm3x3from_quat(fq quat)
+#if defined(SL_IMPLEMENTATION)
+{
+    float wx = quat.w*quat.x, wy = quat.w*quat.y, wz = quat.w*quat.z, xy = quat.x*quat.y, yz = quat.y*quat.z, xz = quat.x*quat.z;
+    float w2 = quat.w*quat.w, x2 = quat.x*quat.x, y2 = quat.y*quat.y, z2 = quat.z*quat.z;
+
+    return (fm3x3) {
+        .m00 = w2 + x2 - y2 - z2, .m10 = 2 * (xy - wz),     .m20 = 2 * (xz + wy),
+        .m01 = 2 * (xy + wz),     .m11 = w2 - x2 + y2 - z2, .m21 = 2 * (yz - wx),
+        .m02 = 2 * (xz - wy),     .m12 = 2 * (yz + wx),     .m22 = w2 - x2 - y2 + z2
+    };
+}
+#else
+;
+#endif
+/// @brief Matrix fm3x3 representing a transformation
+SL_header fm3x3 SL_fm3x3from_transform(fv2 position, float rotation, fv2 scale)
+#if defined(SL_IMPLEMENTATION)
+{
+    double sin, cos; sincos(rotation, &sin, &cos);
+
+    return (fm3x3) {
+        .m00 = scale.x * cos, .m01 = scale.y * -sin, .m02 = position.x,
+        .m10 = scale.x * sin, .m11 = scale.y *  cos, .m12 = position.y,
+        .m20 =           0.0, .m21 =            0.0, .m22 =        1.0
+    };
+}
+#else
+;
+#endif
+
+
+
+/// @brief Matrix of float of size 4 x 4
+typedef union {
+    float data[4 * 4];
+    float m[4][4];
+    struct {
+        float m00, m01, m02, m03;
+        float m10, m11, m12, m13;
+        float m20, m21, m22, m23;
+        float m30, m31, m32, m33;
+    };
+    struct { fv4 r0, r1, r2, r3; };
+} fm4x4;
+
+#define SL_fm4x4_zero ((fm4x4){0})
+#define SL_fm4x4_identity ((fm4x4){ 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 })
+
+
+/// @brief Addition of two fm4x4
+SL_header fm4x4 SL_fm4x4add(fm4x4 lhs, fm4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fm4x4) {
+        .m00 = lhs.m00 + rhs.m00, .m01 = lhs.m01 + rhs.m01, .m02 = lhs.m02 + rhs.m02, .m03 = lhs.m03 + rhs.m03,
+        .m10 = lhs.m10 + rhs.m10, .m11 = lhs.m11 + rhs.m11, .m12 = lhs.m12 + rhs.m12, .m13 = lhs.m13 + rhs.m13,
+        .m20 = lhs.m20 + rhs.m20, .m21 = lhs.m21 + rhs.m21, .m22 = lhs.m22 + rhs.m22, .m23 = lhs.m23 + rhs.m23,
+        .m30 = lhs.m30 + rhs.m30, .m31 = lhs.m31 + rhs.m31, .m32 = lhs.m32 + rhs.m32, .m33 = lhs.m33 + rhs.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two fm4x4
+SL_header fm4x4 SL_fm4x4sub(fm4x4 lhs, fm4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fm4x4) {
+        .m00 = lhs.m00 - rhs.m00, .m01 = lhs.m01 - rhs.m01, .m02 = lhs.m02 - rhs.m02, .m03 = lhs.m03 - rhs.m03,
+        .m10 = lhs.m10 - rhs.m10, .m11 = lhs.m11 - rhs.m11, .m12 = lhs.m12 - rhs.m12, .m13 = lhs.m13 - rhs.m13,
+        .m20 = lhs.m20 - rhs.m20, .m21 = lhs.m21 - rhs.m21, .m22 = lhs.m22 - rhs.m22, .m23 = lhs.m23 - rhs.m23,
+        .m30 = lhs.m30 - rhs.m30, .m31 = lhs.m31 - rhs.m31, .m32 = lhs.m32 - rhs.m32, .m33 = lhs.m33 - rhs.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Product of two fm4x4
+SL_header fm4x4 SL_fm4x4mul(fm4x4 lhs, fm4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    fm4x4 res = SL_fm4x4_zero;
+    for (usize k = 0; k < SL_msize(lhs).x; ++k)
+    for (usize j = 0; j < SL_msize(lhs).y; ++j)
+    for (usize i = 0; i < SL_msize(lhs).x; ++i)
+        res.m[i][j] += lhs.m[i][k] * rhs.m[k][j];
+
+    return res;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a fm4x4 with a scalar
+SL_header fm4x4 SL_fm4x4muls(fm4x4 lhs, float rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fm4x4) {
+        .m00 = lhs.m00 * rhs, .m01 = lhs.m01 * rhs, .m02 = lhs.m02 * rhs, .m03 = lhs.m03 * rhs,
+        .m10 = lhs.m10 * rhs, .m11 = lhs.m11 * rhs, .m12 = lhs.m12 * rhs, .m13 = lhs.m13 * rhs,
+        .m20 = lhs.m20 * rhs, .m21 = lhs.m21 * rhs, .m22 = lhs.m22 * rhs, .m23 = lhs.m23 * rhs,
+        .m30 = lhs.m30 * rhs, .m31 = lhs.m31 * rhs, .m32 = lhs.m32 * rhs, .m33 = lhs.m33 * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Product of a fm4x4 and a fv4
+SL_header fv4 SL_fm4x4mulv(fm4x4 lhs, fv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_fv4_(SL_fv4dot(lhs.r0, rhs), SL_fv4dot(lhs.r1, rhs), SL_fv4dot(lhs.r2, rhs), SL_fv4dot(lhs.r3, rhs));
+}
+#else
+;
+#endif
+/// @brief Apply transformation represented by fm4x4 to a fv3
+SL_header fv3 SL_fm4x4apply(fm4x4 m, fv3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_fm4x4mulv(m, SL_fv4v(v, 1)).xyz;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a fm4x4 with a scalar
+SL_header fm4x4 SL_fm4x4divs(fm4x4 lhs, float rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fm4x4) {
+        .m00 = lhs.m00 / rhs, .m01 = lhs.m01 / rhs, .m02 = lhs.m02 / rhs, .m03 = lhs.m03 / rhs,
+        .m10 = lhs.m10 / rhs, .m11 = lhs.m11 / rhs, .m12 = lhs.m12 / rhs, .m13 = lhs.m13 / rhs,
+        .m20 = lhs.m20 / rhs, .m21 = lhs.m21 / rhs, .m22 = lhs.m22 / rhs, .m23 = lhs.m23 / rhs,
+        .m30 = lhs.m30 / rhs, .m31 = lhs.m31 / rhs, .m32 = lhs.m32 / rhs, .m33 = lhs.m33 / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two fm4x4 with lhs scaled by a float
+SL_header fm4x4 SL_fm4x4addS(fm4x4 lhs, fm4x4 rhs, float s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fm4x4) {
+        .m00 = lhs.m00 + rhs.m00 * s, .m01 = lhs.m01 + rhs.m01 * s, .m02 = lhs.m02 + rhs.m02 * s, .m03 = lhs.m03 + rhs.m03 * s,
+        .m10 = lhs.m10 + rhs.m10 * s, .m11 = lhs.m11 + rhs.m11 * s, .m12 = lhs.m12 + rhs.m12 * s, .m13 = lhs.m13 + rhs.m13 * s,
+        .m20 = lhs.m20 + rhs.m20 * s, .m21 = lhs.m21 + rhs.m21 * s, .m22 = lhs.m22 + rhs.m22 * s, .m23 = lhs.m23 + rhs.m23 * s,
+        .m30 = lhs.m30 + rhs.m30 * s, .m31 = lhs.m31 + rhs.m31 * s, .m32 = lhs.m32 + rhs.m32 * s, .m33 = lhs.m33 + rhs.m33 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two fm4x4 with lhs scaled by a float
+SL_header fm4x4 SL_fm4x4subS(fm4x4 lhs, fm4x4 rhs, float s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fm4x4) {
+        .m00 = lhs.m00 - rhs.m00 * s, .m01 = lhs.m01 - rhs.m01 * s, .m02 = lhs.m02 - rhs.m02 * s, .m03 = lhs.m03 - rhs.m03 * s,
+        .m10 = lhs.m10 - rhs.m10 * s, .m11 = lhs.m11 - rhs.m11 * s, .m12 = lhs.m12 - rhs.m12 * s, .m13 = lhs.m13 - rhs.m13 * s,
+        .m20 = lhs.m20 - rhs.m20 * s, .m21 = lhs.m21 - rhs.m21 * s, .m22 = lhs.m22 - rhs.m22 * s, .m23 = lhs.m23 - rhs.m23 * s,
+        .m30 = lhs.m30 - rhs.m30 * s, .m31 = lhs.m31 - rhs.m31 * s, .m32 = lhs.m32 - rhs.m32 * s, .m33 = lhs.m33 - rhs.m33 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a fm4x4
+SL_header fm4x4 SL_fm4x4neg(fm4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fm4x4) {
+        .m00 = -m.m00, .m01 = -m.m01, .m02 = -m.m02, .m03 = -m.m03,
+        .m10 = -m.m10, .m11 = -m.m11, .m12 = -m.m12, .m13 = -m.m13,
+        .m20 = -m.m20, .m21 = -m.m21, .m22 = -m.m22, .m23 = -m.m23,
+        .m30 = -m.m30, .m31 = -m.m31, .m32 = -m.m32, .m33 = -m.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a fm4x4
+SL_header fm4x4 SL_fm4x4abs(fm4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fm4x4) {
+        .m00 = fabs(m.m00), .m01 = fabs(m.m01), .m02 = fabs(m.m02), .m03 = fabs(m.m03),
+        .m10 = fabs(m.m10), .m11 = fabs(m.m11), .m12 = fabs(m.m12), .m13 = fabs(m.m13),
+        .m20 = fabs(m.m20), .m21 = fabs(m.m21), .m22 = fabs(m.m22), .m23 = fabs(m.m23),
+        .m30 = fabs(m.m30), .m31 = fabs(m.m31), .m32 = fabs(m.m32), .m33 = fabs(m.m33)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two fm4x4
+SL_header fm4x4 SL_fm4x4min(fm4x4 lhs, fm4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fm4x4) {
+        .m00 = lhs.m00 < rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 < rhs.m01 ? lhs.m01 : rhs.m01, .m02 = lhs.m02 < rhs.m02 ? lhs.m02 : rhs.m02, .m03 = lhs.m03 < rhs.m03 ? lhs.m03 : rhs.m03,
+        .m10 = lhs.m10 < rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 < rhs.m11 ? lhs.m11 : rhs.m11, .m12 = lhs.m12 < rhs.m12 ? lhs.m12 : rhs.m12, .m13 = lhs.m13 < rhs.m13 ? lhs.m13 : rhs.m13,
+        .m20 = lhs.m20 < rhs.m20 ? lhs.m20 : rhs.m20, .m21 = lhs.m21 < rhs.m21 ? lhs.m21 : rhs.m21, .m22 = lhs.m22 < rhs.m22 ? lhs.m22 : rhs.m22, .m23 = lhs.m23 < rhs.m23 ? lhs.m23 : rhs.m23,
+        .m30 = lhs.m30 < rhs.m30 ? lhs.m30 : rhs.m30, .m31 = lhs.m31 < rhs.m31 ? lhs.m31 : rhs.m31, .m32 = lhs.m32 < rhs.m32 ? lhs.m32 : rhs.m32, .m33 = lhs.m33 < rhs.m33 ? lhs.m33 : rhs.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two fm4x4
+SL_header fm4x4 SL_fm4x4max(fm4x4 lhs, fm4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fm4x4) {
+        .m00 = lhs.m00 > rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 > rhs.m01 ? lhs.m01 : rhs.m01, .m02 = lhs.m02 > rhs.m02 ? lhs.m02 : rhs.m02, .m03 = lhs.m03 > rhs.m03 ? lhs.m03 : rhs.m03,
+        .m10 = lhs.m10 > rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 > rhs.m11 ? lhs.m11 : rhs.m11, .m12 = lhs.m12 > rhs.m12 ? lhs.m12 : rhs.m12, .m13 = lhs.m13 > rhs.m13 ? lhs.m13 : rhs.m13,
+        .m20 = lhs.m20 > rhs.m20 ? lhs.m20 : rhs.m20, .m21 = lhs.m21 > rhs.m21 ? lhs.m21 : rhs.m21, .m22 = lhs.m22 > rhs.m22 ? lhs.m22 : rhs.m22, .m23 = lhs.m23 > rhs.m23 ? lhs.m23 : rhs.m23,
+        .m30 = lhs.m30 > rhs.m30 ? lhs.m30 : rhs.m30, .m31 = lhs.m31 > rhs.m31 ? lhs.m31 : rhs.m31, .m32 = lhs.m32 > rhs.m32 ? lhs.m32 : rhs.m32, .m33 = lhs.m33 > rhs.m33 ? lhs.m33 : rhs.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Transposition of a fm4x4
+SL_header fm4x4 SL_fm4x4trsp(fm4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    SL_swap(m.m10, m.m01);
+    SL_swap(m.m20, m.m02); SL_swap(m.m12, m.m21);
+    SL_swap(m.m30, m.m03); SL_swap(m.m31, m.m13);SL_swap(m.m32, m.m23);
+    return m;
+}
+#else
+;
+#endif
+/// @brief Trace of a fm4x4
+SL_header float SL_fm4x4trace(fm4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m.m00 + m.m11 + m.m22 + m.m33;
+}
+#else
+;
+#endif
+/// @brief Determinant of a fm4x4
+SL_header float SL_fm4x4det_xpd(float m00, float m01, float m02, float m03, float m10, float m11, float m12, float m13, float m20, float m21, float m22, float m23, float m30, float m31, float m32, float m33)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m00 * SL_fm3x3det_xpd(m11, m12, m13, m21, m22, m23, m31, m32, m33)
+         + m01 * SL_fm3x3det_xpd(m10, m12, m13, m20, m22, m23, m30, m32, m33)
+         + m02 * SL_fm3x3det_xpd(m10, m11, m13, m20, m21, m23, m30, m31, m33)
+         + m03 * SL_fm3x3det_xpd(m10, m11, m12, m20, m21, m22, m30, m31, m32);
+}
+#else
+;
+#endif
+/// @brief Determinant of a fm4x4
+SL_header float SL_fm4x4det(fm4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_fm4x4det_xpd(SL_XPD_M4X4(m));
+}
+#else
+;
+#endif
+/// @brief Inverse of a fm4x4
+SL_header fm4x4 SL_fm4x4inv(fm4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    fm4x4 trsp_comat;
+    for (int i = 0; i < 4; ++i)
+    for (int j = 0; j < 4; ++j)
+    {
+        trsp_comat.m[j][i] = ((i + j) & 1 ? -1 : 1) *
+            SL_fm3x3det_xpd(
+                m.m[1 - (i >= 1)][1 - (j >= 1)], m.m[1 - (i >= 1)][2 - (j >= 2)], m.m[1 - (i >= 1)][3 - (j >= 3)],
+                m.m[2 - (i >= 2)][1 - (j >= 1)], m.m[2 - (i >= 2)][2 - (j >= 2)], m.m[2 - (i >= 2)][3 - (j >= 3)],
+                m.m[3 - (i >= 3)][1 - (j >= 1)], m.m[3 - (i >= 3)][2 - (j >= 2)], m.m[3 - (i >= 3)][3 - (j >= 3)]
+            );
+    }
+    
+    float det = trsp_comat.m00 * m.m00 + trsp_comat.m01 * m.m10 + trsp_comat.m02 * m.m20 + trsp_comat.m03 * m.m30;
+    if (det == 0.0) return __SL_ERROR(SL_ERR_DIVISION_BY_ZERO), SL_fm4x4_zero;
+
+    return SL_fm4x4muls(trsp_comat, 1.0 / det);
+}
+#else
+;
+#endif
+/// @brief Matrix fm4x4 representing a transformation
+SL_header fm4x4 SL_fm4x4from_transform(fv3 position, fq rotation, fv3 scale)
+#if defined(SL_IMPLEMENTATION)
+{
+    fm3x3 rot = SL_fm3x3from_quat(rotation);
+
+    return (fm4x4) {
+        .m00 = scale.x * rot.m00, .m01 = scale.y * rot.m01, .m02 = scale.z * rot.m02, .m03 = position.x,
+        .m10 = scale.x * rot.m10, .m11 = scale.y * rot.m11, .m12 = scale.z * rot.m12, .m13 = position.y,
+        .m20 = scale.x * rot.m20, .m21 = scale.y * rot.m21, .m22 = scale.z * rot.m22, .m23 = position.z,
+        .m30 =               0.0, .m31 =               0.0, .m32 =               0.0, .m33 =        1.0
+    };
+}
+#else
+;
+#endif
+
+
+
+#pragma endregion FLOAT
+#pragma region DOUBLE
+
+/// @brief Matrix of double with arbitrary dimensions
+typedef struct {
+    union { usize r, c; luv2 size; };
+    double *data;
+} dm;
+
+#define SL_asdm(sized_mat) ((dm){.size = SL_msize(sized_mat), .data = sized_mat.data})
+
+
+
+
+/// @brief Matrix of double of size 2 x 2
+typedef union {
+    double data[2 * 2];
+    double m[2][2];
+    struct {
+        double m00, m01;
+        double m10, m11;
+    };
+    struct { dv2 r0, r1; };
+} dm2x2;
+
+#define SL_dm2x2_zero ((dm2x2){0})
+#define SL_dm2x2_identity ((dm2x2){ 1, 0, 0, 1 })
+
+
+/// @brief Addition of two dm2x2
+SL_header dm2x2 SL_dm2x2add(dm2x2 lhs, dm2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dm2x2) {
+        .m00 = lhs.m00 + rhs.m00, .m01 = lhs.m01 + rhs.m01,
+        .m10 = lhs.m10 + rhs.m10, .m11 = lhs.m11 + rhs.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two dm2x2
+SL_header dm2x2 SL_dm2x2sub(dm2x2 lhs, dm2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dm2x2) {
+        .m00 = lhs.m00 - rhs.m00, .m01 = lhs.m01 - rhs.m01,
+        .m10 = lhs.m10 - rhs.m10, .m11 = lhs.m11 - rhs.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Product of two dm2x2
+SL_header dm2x2 SL_dm2x2mul(dm2x2 lhs, dm2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    dm2x2 res = SL_dm2x2_zero;
+    for (usize k = 0; k < SL_msize(lhs).x; ++k)
+    for (usize j = 0; j < SL_msize(lhs).y; ++j)
+    for (usize i = 0; i < SL_msize(lhs).x; ++i)
+        res.m[i][j] += lhs.m[i][k] * rhs.m[k][j];
+
+    return res;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a dm2x2 with a scalar
+SL_header dm2x2 SL_dm2x2muls(dm2x2 lhs, double rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dm2x2) {
+        .m00 = lhs.m00 * rhs, .m01 = lhs.m01 * rhs,
+        .m10 = lhs.m10 * rhs, .m11 = lhs.m11 * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Product of a dm2x2 and a dv2
+SL_header dv2 SL_dm2x2mulv(dm2x2 lhs, dv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_dv2_(SL_dv2dot(lhs.r0, rhs), SL_dv2dot(lhs.r1, rhs));
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a dm2x2 with a scalar
+SL_header dm2x2 SL_dm2x2divs(dm2x2 lhs, double rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dm2x2) {
+        .m00 = lhs.m00 / rhs, .m01 = lhs.m01 / rhs,
+        .m10 = lhs.m10 / rhs, .m11 = lhs.m11 / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two dm2x2 with lhs scaled by a double
+SL_header dm2x2 SL_dm2x2addS(dm2x2 lhs, dm2x2 rhs, double s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dm2x2) {
+        .m00 = lhs.m00 + rhs.m00 * s, .m01 = lhs.m01 + rhs.m01 * s,
+        .m10 = lhs.m10 + rhs.m10 * s, .m11 = lhs.m11 + rhs.m11 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two dm2x2 with lhs scaled by a double
+SL_header dm2x2 SL_dm2x2subS(dm2x2 lhs, dm2x2 rhs, double s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dm2x2) {
+        .m00 = lhs.m00 - rhs.m00 * s, .m01 = lhs.m01 - rhs.m01 * s,
+        .m10 = lhs.m10 - rhs.m10 * s, .m11 = lhs.m11 - rhs.m11 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a dm2x2
+SL_header dm2x2 SL_dm2x2neg(dm2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dm2x2) {
+        .m00 = -m.m00, .m01 = -m.m01,
+        .m10 = -m.m10, .m11 = -m.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a dm2x2
+SL_header dm2x2 SL_dm2x2abs(dm2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dm2x2) {
+        .m00 = fabs(m.m00), .m01 = fabs(m.m01),
+        .m10 = fabs(m.m10), .m11 = fabs(m.m11)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two dm2x2
+SL_header dm2x2 SL_dm2x2min(dm2x2 lhs, dm2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dm2x2) {
+        .m00 = lhs.m00 < rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 < rhs.m01 ? lhs.m01 : rhs.m01,
+        .m10 = lhs.m10 < rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 < rhs.m11 ? lhs.m11 : rhs.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two dm2x2
+SL_header dm2x2 SL_dm2x2max(dm2x2 lhs, dm2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dm2x2) {
+        .m00 = lhs.m00 > rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 > rhs.m01 ? lhs.m01 : rhs.m01,
+        .m10 = lhs.m10 > rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 > rhs.m11 ? lhs.m11 : rhs.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Transposition of a dm2x2
+SL_header dm2x2 SL_dm2x2trsp(dm2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    SL_swap(m.m10, m.m01);
+    return m;
+}
+#else
+;
+#endif
+/// @brief Trace of a dm2x2
+SL_header double SL_dm2x2trace(dm2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m.m00 + m.m11;
+}
+#else
+;
+#endif
+/// @brief Determinant of a dm2x2
+SL_header double SL_dm2x2det_xpd(double m00, double m01, double m10, double m11)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m00 * m11 - m01 * m10;
+}
+#else
+;
+#endif
+/// @brief Determinant of a dm2x2
+SL_header double SL_dm2x2det(dm2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_dm2x2det_xpd(SL_XPD_M2X2(m));
+}
+#else
+;
+#endif
+/// @brief Inverse of a dm2x2
+SL_header dm2x2 SL_dm2x2inv(dm2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    dm2x2 trsp_comat = { .m00 = m.m11, .m10 = -m.m10, .m10 = -m.m10, .m11 = m.m00 };
+    
+    double det = trsp_comat.m00 * m.m00 + trsp_comat.m01 * m.m10;
+    if (det == 0.0) return __SL_ERROR(SL_ERR_DIVISION_BY_ZERO), SL_dm2x2_zero;
+
+    return SL_dm2x2muls(trsp_comat, 1.0 / det);
+}
+#else
+;
+#endif
+/// @brief Matrix dm2x2 representing a 2D rotation
+SL_header dm2x2 SL_dm2x2from_angle(double angle)
+#if defined(SL_IMPLEMENTATION)
+{
+    double sin, cos; sincos(angle, &sin, &cos);
+
+    return (dm2x2) {
+        .m00 = -sin, .m01 = cos,
+        .m10 =  cos, .m11 = sin
+    };
+}
+#else
+;
+#endif
+
+
+
+/// @brief Matrix of double of size 3 x 3
+typedef union {
+    double data[3 * 3];
+    double m[3][3];
+    struct {
+        double m00, m01, m02;
+        double m10, m11, m12;
+        double m20, m21, m22;
+    };
+    struct { dv3 r0, r1, r2; };
+} dm3x3;
+
+#define SL_dm3x3_zero ((dm3x3){0})
+#define SL_dm3x3_identity ((dm3x3){ 1, 0, 0, 0, 1, 0, 0, 0, 1 })
+
+
+/// @brief Addition of two dm3x3
+SL_header dm3x3 SL_dm3x3add(dm3x3 lhs, dm3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dm3x3) {
+        .m00 = lhs.m00 + rhs.m00, .m01 = lhs.m01 + rhs.m01, .m02 = lhs.m02 + rhs.m02,
+        .m10 = lhs.m10 + rhs.m10, .m11 = lhs.m11 + rhs.m11, .m12 = lhs.m12 + rhs.m12,
+        .m20 = lhs.m20 + rhs.m20, .m21 = lhs.m21 + rhs.m21, .m22 = lhs.m22 + rhs.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two dm3x3
+SL_header dm3x3 SL_dm3x3sub(dm3x3 lhs, dm3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dm3x3) {
+        .m00 = lhs.m00 - rhs.m00, .m01 = lhs.m01 - rhs.m01, .m02 = lhs.m02 - rhs.m02,
+        .m10 = lhs.m10 - rhs.m10, .m11 = lhs.m11 - rhs.m11, .m12 = lhs.m12 - rhs.m12,
+        .m20 = lhs.m20 - rhs.m20, .m21 = lhs.m21 - rhs.m21, .m22 = lhs.m22 - rhs.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Product of two dm3x3
+SL_header dm3x3 SL_dm3x3mul(dm3x3 lhs, dm3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    dm3x3 res = SL_dm3x3_zero;
+    for (usize k = 0; k < SL_msize(lhs).x; ++k)
+    for (usize j = 0; j < SL_msize(lhs).y; ++j)
+    for (usize i = 0; i < SL_msize(lhs).x; ++i)
+        res.m[i][j] += lhs.m[i][k] * rhs.m[k][j];
+
+    return res;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a dm3x3 with a scalar
+SL_header dm3x3 SL_dm3x3muls(dm3x3 lhs, double rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dm3x3) {
+        .m00 = lhs.m00 * rhs, .m01 = lhs.m01 * rhs, .m02 = lhs.m02 * rhs,
+        .m10 = lhs.m10 * rhs, .m11 = lhs.m11 * rhs, .m12 = lhs.m12 * rhs,
+        .m20 = lhs.m20 * rhs, .m21 = lhs.m21 * rhs, .m22 = lhs.m22 * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Product of a dm3x3 and a dv3
+SL_header dv3 SL_dm3x3mulv(dm3x3 lhs, dv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_dv3_(SL_dv3dot(lhs.r0, rhs), SL_dv3dot(lhs.r1, rhs), SL_dv3dot(lhs.r2, rhs));
+}
+#else
+;
+#endif
+/// @brief Apply transformation represented by dm3x3 to a dv2
+SL_header dv2 SL_dm3x3apply(dm3x3 m, dv2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_dm3x3mulv(m, SL_dv3v(v, 1)).xy;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a dm3x3 with a scalar
+SL_header dm3x3 SL_dm3x3divs(dm3x3 lhs, double rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dm3x3) {
+        .m00 = lhs.m00 / rhs, .m01 = lhs.m01 / rhs, .m02 = lhs.m02 / rhs,
+        .m10 = lhs.m10 / rhs, .m11 = lhs.m11 / rhs, .m12 = lhs.m12 / rhs,
+        .m20 = lhs.m20 / rhs, .m21 = lhs.m21 / rhs, .m22 = lhs.m22 / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two dm3x3 with lhs scaled by a double
+SL_header dm3x3 SL_dm3x3addS(dm3x3 lhs, dm3x3 rhs, double s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dm3x3) {
+        .m00 = lhs.m00 + rhs.m00 * s, .m01 = lhs.m01 + rhs.m01 * s, .m02 = lhs.m02 + rhs.m02 * s,
+        .m10 = lhs.m10 + rhs.m10 * s, .m11 = lhs.m11 + rhs.m11 * s, .m12 = lhs.m12 + rhs.m12 * s,
+        .m20 = lhs.m20 + rhs.m20 * s, .m21 = lhs.m21 + rhs.m21 * s, .m22 = lhs.m22 + rhs.m22 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two dm3x3 with lhs scaled by a double
+SL_header dm3x3 SL_dm3x3subS(dm3x3 lhs, dm3x3 rhs, double s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dm3x3) {
+        .m00 = lhs.m00 - rhs.m00 * s, .m01 = lhs.m01 - rhs.m01 * s, .m02 = lhs.m02 - rhs.m02 * s,
+        .m10 = lhs.m10 - rhs.m10 * s, .m11 = lhs.m11 - rhs.m11 * s, .m12 = lhs.m12 - rhs.m12 * s,
+        .m20 = lhs.m20 - rhs.m20 * s, .m21 = lhs.m21 - rhs.m21 * s, .m22 = lhs.m22 - rhs.m22 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a dm3x3
+SL_header dm3x3 SL_dm3x3neg(dm3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dm3x3) {
+        .m00 = -m.m00, .m01 = -m.m01, .m02 = -m.m02,
+        .m10 = -m.m10, .m11 = -m.m11, .m12 = -m.m12,
+        .m20 = -m.m20, .m21 = -m.m21, .m22 = -m.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a dm3x3
+SL_header dm3x3 SL_dm3x3abs(dm3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dm3x3) {
+        .m00 = fabs(m.m00), .m01 = fabs(m.m01), .m02 = fabs(m.m02),
+        .m10 = fabs(m.m10), .m11 = fabs(m.m11), .m12 = fabs(m.m12),
+        .m20 = fabs(m.m20), .m21 = fabs(m.m21), .m22 = fabs(m.m22)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two dm3x3
+SL_header dm3x3 SL_dm3x3min(dm3x3 lhs, dm3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dm3x3) {
+        .m00 = lhs.m00 < rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 < rhs.m01 ? lhs.m01 : rhs.m01, .m02 = lhs.m02 < rhs.m02 ? lhs.m02 : rhs.m02,
+        .m10 = lhs.m10 < rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 < rhs.m11 ? lhs.m11 : rhs.m11, .m12 = lhs.m12 < rhs.m12 ? lhs.m12 : rhs.m12,
+        .m20 = lhs.m20 < rhs.m20 ? lhs.m20 : rhs.m20, .m21 = lhs.m21 < rhs.m21 ? lhs.m21 : rhs.m21, .m22 = lhs.m22 < rhs.m22 ? lhs.m22 : rhs.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two dm3x3
+SL_header dm3x3 SL_dm3x3max(dm3x3 lhs, dm3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dm3x3) {
+        .m00 = lhs.m00 > rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 > rhs.m01 ? lhs.m01 : rhs.m01, .m02 = lhs.m02 > rhs.m02 ? lhs.m02 : rhs.m02,
+        .m10 = lhs.m10 > rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 > rhs.m11 ? lhs.m11 : rhs.m11, .m12 = lhs.m12 > rhs.m12 ? lhs.m12 : rhs.m12,
+        .m20 = lhs.m20 > rhs.m20 ? lhs.m20 : rhs.m20, .m21 = lhs.m21 > rhs.m21 ? lhs.m21 : rhs.m21, .m22 = lhs.m22 > rhs.m22 ? lhs.m22 : rhs.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Transposition of a dm3x3
+SL_header dm3x3 SL_dm3x3trsp(dm3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    SL_swap(m.m10, m.m01);
+    SL_swap(m.m20, m.m02); SL_swap(m.m21, m.m12);
+    return m;
+}
+#else
+;
+#endif
+/// @brief Trace of a dm3x3
+SL_header double SL_dm3x3trace(dm3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m.m00 + m.m11 + m.m22;
+}
+#else
+;
+#endif
+/// @brief Determinant of a dm3x3
+SL_header double SL_dm3x3det_xpd(double m00, double m01, double m02, double m10, double m11, double m12, double m20, double m21, double m22)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m00 * m11 * m22 + m01 * m12 * m20 + m02 * m10 * m21 - m02 * m11 * m20 - m12 * m21 * m00 - m22 * m01 * m10;
+}
+#else
+;
+#endif
+/// @brief Determinant of a dm3x3
+SL_header double SL_dm3x3det(dm3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_dm3x3det_xpd(SL_XPD_M3X3(m));
+}
+#else
+;
+#endif
+/// @brief Inverse of a dm3x3
+SL_header dm3x3 SL_dm3x3inv(dm3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    dm3x3 trsp_comat;
+    for (int i = 0; i < 3; ++i)
+    for (int j = 0; j < 3; ++j)
+    {
+        trsp_comat.m[j][i] = ((i + j) & 1 ? -1 : 1) *
+            SL_dm2x2det_xpd(
+                m.m[1 - (i >= 1)][1 - (j >= 1)], m.m[1 - (i >= 1)][2 - (j >= 2)],
+                m.m[2 - (i >= 2)][1 - (j >= 1)], m.m[2 - (i >= 2)][2 - (j >= 2)]
+            );
+    }
+    
+    double det = trsp_comat.m00 * m.m00 + trsp_comat.m01 * m.m10 + trsp_comat.m02 * m.m20;
+    if (det == 0.0) return __SL_ERROR(SL_ERR_DIVISION_BY_ZERO), SL_dm3x3_zero;
+
+    return SL_dm3x3muls(trsp_comat, 1.0 / det);
+}
+#else
+;
+#endif
+/// @brief Matrix dm3x3 from a void
+SL_header dm3x3 SL_dm3x3from_quat(dq quat)
+#if defined(SL_IMPLEMENTATION)
+{
+    double wx = quat.w*quat.x, wy = quat.w*quat.y, wz = quat.w*quat.z, xy = quat.x*quat.y, yz = quat.y*quat.z, xz = quat.x*quat.z;
+    double w2 = quat.w*quat.w, x2 = quat.x*quat.x, y2 = quat.y*quat.y, z2 = quat.z*quat.z;
+
+    return (dm3x3) {
+        .m00 = w2 + x2 - y2 - z2, .m10 = 2 * (xy - wz),     .m20 = 2 * (xz + wy),
+        .m01 = 2 * (xy + wz),     .m11 = w2 - x2 + y2 - z2, .m21 = 2 * (yz - wx),
+        .m02 = 2 * (xz - wy),     .m12 = 2 * (yz + wx),     .m22 = w2 - x2 - y2 + z2
+    };
+}
+#else
+;
+#endif
+/// @brief Matrix dm3x3 representing a transformation
+SL_header dm3x3 SL_dm3x3from_transform(dv2 position, double rotation, dv2 scale)
+#if defined(SL_IMPLEMENTATION)
+{
+    double sin, cos; sincos(rotation, &sin, &cos);
+
+    return (dm3x3) {
+        .m00 = scale.x * cos, .m01 = scale.y * -sin, .m02 = position.x,
+        .m10 = scale.x * sin, .m11 = scale.y *  cos, .m12 = position.y,
+        .m20 =           0.0, .m21 =            0.0, .m22 =        1.0
+    };
+}
+#else
+;
+#endif
+
+
+
+/// @brief Matrix of double of size 4 x 4
+typedef union {
+    double data[4 * 4];
+    double m[4][4];
+    struct {
+        double m00, m01, m02, m03;
+        double m10, m11, m12, m13;
+        double m20, m21, m22, m23;
+        double m30, m31, m32, m33;
+    };
+    struct { dv4 r0, r1, r2, r3; };
+} dm4x4;
+
+#define SL_dm4x4_zero ((dm4x4){0})
+#define SL_dm4x4_identity ((dm4x4){ 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 })
+
+
+/// @brief Addition of two dm4x4
+SL_header dm4x4 SL_dm4x4add(dm4x4 lhs, dm4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dm4x4) {
+        .m00 = lhs.m00 + rhs.m00, .m01 = lhs.m01 + rhs.m01, .m02 = lhs.m02 + rhs.m02, .m03 = lhs.m03 + rhs.m03,
+        .m10 = lhs.m10 + rhs.m10, .m11 = lhs.m11 + rhs.m11, .m12 = lhs.m12 + rhs.m12, .m13 = lhs.m13 + rhs.m13,
+        .m20 = lhs.m20 + rhs.m20, .m21 = lhs.m21 + rhs.m21, .m22 = lhs.m22 + rhs.m22, .m23 = lhs.m23 + rhs.m23,
+        .m30 = lhs.m30 + rhs.m30, .m31 = lhs.m31 + rhs.m31, .m32 = lhs.m32 + rhs.m32, .m33 = lhs.m33 + rhs.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two dm4x4
+SL_header dm4x4 SL_dm4x4sub(dm4x4 lhs, dm4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dm4x4) {
+        .m00 = lhs.m00 - rhs.m00, .m01 = lhs.m01 - rhs.m01, .m02 = lhs.m02 - rhs.m02, .m03 = lhs.m03 - rhs.m03,
+        .m10 = lhs.m10 - rhs.m10, .m11 = lhs.m11 - rhs.m11, .m12 = lhs.m12 - rhs.m12, .m13 = lhs.m13 - rhs.m13,
+        .m20 = lhs.m20 - rhs.m20, .m21 = lhs.m21 - rhs.m21, .m22 = lhs.m22 - rhs.m22, .m23 = lhs.m23 - rhs.m23,
+        .m30 = lhs.m30 - rhs.m30, .m31 = lhs.m31 - rhs.m31, .m32 = lhs.m32 - rhs.m32, .m33 = lhs.m33 - rhs.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Product of two dm4x4
+SL_header dm4x4 SL_dm4x4mul(dm4x4 lhs, dm4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    dm4x4 res = SL_dm4x4_zero;
+    for (usize k = 0; k < SL_msize(lhs).x; ++k)
+    for (usize j = 0; j < SL_msize(lhs).y; ++j)
+    for (usize i = 0; i < SL_msize(lhs).x; ++i)
+        res.m[i][j] += lhs.m[i][k] * rhs.m[k][j];
+
+    return res;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a dm4x4 with a scalar
+SL_header dm4x4 SL_dm4x4muls(dm4x4 lhs, double rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dm4x4) {
+        .m00 = lhs.m00 * rhs, .m01 = lhs.m01 * rhs, .m02 = lhs.m02 * rhs, .m03 = lhs.m03 * rhs,
+        .m10 = lhs.m10 * rhs, .m11 = lhs.m11 * rhs, .m12 = lhs.m12 * rhs, .m13 = lhs.m13 * rhs,
+        .m20 = lhs.m20 * rhs, .m21 = lhs.m21 * rhs, .m22 = lhs.m22 * rhs, .m23 = lhs.m23 * rhs,
+        .m30 = lhs.m30 * rhs, .m31 = lhs.m31 * rhs, .m32 = lhs.m32 * rhs, .m33 = lhs.m33 * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Product of a dm4x4 and a dv4
+SL_header dv4 SL_dm4x4mulv(dm4x4 lhs, dv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_dv4_(SL_dv4dot(lhs.r0, rhs), SL_dv4dot(lhs.r1, rhs), SL_dv4dot(lhs.r2, rhs), SL_dv4dot(lhs.r3, rhs));
+}
+#else
+;
+#endif
+/// @brief Apply transformation represented by dm4x4 to a dv3
+SL_header dv3 SL_dm4x4apply(dm4x4 m, dv3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_dm4x4mulv(m, SL_dv4v(v, 1)).xyz;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a dm4x4 with a scalar
+SL_header dm4x4 SL_dm4x4divs(dm4x4 lhs, double rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dm4x4) {
+        .m00 = lhs.m00 / rhs, .m01 = lhs.m01 / rhs, .m02 = lhs.m02 / rhs, .m03 = lhs.m03 / rhs,
+        .m10 = lhs.m10 / rhs, .m11 = lhs.m11 / rhs, .m12 = lhs.m12 / rhs, .m13 = lhs.m13 / rhs,
+        .m20 = lhs.m20 / rhs, .m21 = lhs.m21 / rhs, .m22 = lhs.m22 / rhs, .m23 = lhs.m23 / rhs,
+        .m30 = lhs.m30 / rhs, .m31 = lhs.m31 / rhs, .m32 = lhs.m32 / rhs, .m33 = lhs.m33 / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two dm4x4 with lhs scaled by a double
+SL_header dm4x4 SL_dm4x4addS(dm4x4 lhs, dm4x4 rhs, double s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dm4x4) {
+        .m00 = lhs.m00 + rhs.m00 * s, .m01 = lhs.m01 + rhs.m01 * s, .m02 = lhs.m02 + rhs.m02 * s, .m03 = lhs.m03 + rhs.m03 * s,
+        .m10 = lhs.m10 + rhs.m10 * s, .m11 = lhs.m11 + rhs.m11 * s, .m12 = lhs.m12 + rhs.m12 * s, .m13 = lhs.m13 + rhs.m13 * s,
+        .m20 = lhs.m20 + rhs.m20 * s, .m21 = lhs.m21 + rhs.m21 * s, .m22 = lhs.m22 + rhs.m22 * s, .m23 = lhs.m23 + rhs.m23 * s,
+        .m30 = lhs.m30 + rhs.m30 * s, .m31 = lhs.m31 + rhs.m31 * s, .m32 = lhs.m32 + rhs.m32 * s, .m33 = lhs.m33 + rhs.m33 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two dm4x4 with lhs scaled by a double
+SL_header dm4x4 SL_dm4x4subS(dm4x4 lhs, dm4x4 rhs, double s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dm4x4) {
+        .m00 = lhs.m00 - rhs.m00 * s, .m01 = lhs.m01 - rhs.m01 * s, .m02 = lhs.m02 - rhs.m02 * s, .m03 = lhs.m03 - rhs.m03 * s,
+        .m10 = lhs.m10 - rhs.m10 * s, .m11 = lhs.m11 - rhs.m11 * s, .m12 = lhs.m12 - rhs.m12 * s, .m13 = lhs.m13 - rhs.m13 * s,
+        .m20 = lhs.m20 - rhs.m20 * s, .m21 = lhs.m21 - rhs.m21 * s, .m22 = lhs.m22 - rhs.m22 * s, .m23 = lhs.m23 - rhs.m23 * s,
+        .m30 = lhs.m30 - rhs.m30 * s, .m31 = lhs.m31 - rhs.m31 * s, .m32 = lhs.m32 - rhs.m32 * s, .m33 = lhs.m33 - rhs.m33 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Negation of a dm4x4
+SL_header dm4x4 SL_dm4x4neg(dm4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dm4x4) {
+        .m00 = -m.m00, .m01 = -m.m01, .m02 = -m.m02, .m03 = -m.m03,
+        .m10 = -m.m10, .m11 = -m.m11, .m12 = -m.m12, .m13 = -m.m13,
+        .m20 = -m.m20, .m21 = -m.m21, .m22 = -m.m22, .m23 = -m.m23,
+        .m30 = -m.m30, .m31 = -m.m31, .m32 = -m.m32, .m33 = -m.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise absolute value of a dm4x4
+SL_header dm4x4 SL_dm4x4abs(dm4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dm4x4) {
+        .m00 = fabs(m.m00), .m01 = fabs(m.m01), .m02 = fabs(m.m02), .m03 = fabs(m.m03),
+        .m10 = fabs(m.m10), .m11 = fabs(m.m11), .m12 = fabs(m.m12), .m13 = fabs(m.m13),
+        .m20 = fabs(m.m20), .m21 = fabs(m.m21), .m22 = fabs(m.m22), .m23 = fabs(m.m23),
+        .m30 = fabs(m.m30), .m31 = fabs(m.m31), .m32 = fabs(m.m32), .m33 = fabs(m.m33)
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two dm4x4
+SL_header dm4x4 SL_dm4x4min(dm4x4 lhs, dm4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dm4x4) {
+        .m00 = lhs.m00 < rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 < rhs.m01 ? lhs.m01 : rhs.m01, .m02 = lhs.m02 < rhs.m02 ? lhs.m02 : rhs.m02, .m03 = lhs.m03 < rhs.m03 ? lhs.m03 : rhs.m03,
+        .m10 = lhs.m10 < rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 < rhs.m11 ? lhs.m11 : rhs.m11, .m12 = lhs.m12 < rhs.m12 ? lhs.m12 : rhs.m12, .m13 = lhs.m13 < rhs.m13 ? lhs.m13 : rhs.m13,
+        .m20 = lhs.m20 < rhs.m20 ? lhs.m20 : rhs.m20, .m21 = lhs.m21 < rhs.m21 ? lhs.m21 : rhs.m21, .m22 = lhs.m22 < rhs.m22 ? lhs.m22 : rhs.m22, .m23 = lhs.m23 < rhs.m23 ? lhs.m23 : rhs.m23,
+        .m30 = lhs.m30 < rhs.m30 ? lhs.m30 : rhs.m30, .m31 = lhs.m31 < rhs.m31 ? lhs.m31 : rhs.m31, .m32 = lhs.m32 < rhs.m32 ? lhs.m32 : rhs.m32, .m33 = lhs.m33 < rhs.m33 ? lhs.m33 : rhs.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two dm4x4
+SL_header dm4x4 SL_dm4x4max(dm4x4 lhs, dm4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dm4x4) {
+        .m00 = lhs.m00 > rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 > rhs.m01 ? lhs.m01 : rhs.m01, .m02 = lhs.m02 > rhs.m02 ? lhs.m02 : rhs.m02, .m03 = lhs.m03 > rhs.m03 ? lhs.m03 : rhs.m03,
+        .m10 = lhs.m10 > rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 > rhs.m11 ? lhs.m11 : rhs.m11, .m12 = lhs.m12 > rhs.m12 ? lhs.m12 : rhs.m12, .m13 = lhs.m13 > rhs.m13 ? lhs.m13 : rhs.m13,
+        .m20 = lhs.m20 > rhs.m20 ? lhs.m20 : rhs.m20, .m21 = lhs.m21 > rhs.m21 ? lhs.m21 : rhs.m21, .m22 = lhs.m22 > rhs.m22 ? lhs.m22 : rhs.m22, .m23 = lhs.m23 > rhs.m23 ? lhs.m23 : rhs.m23,
+        .m30 = lhs.m30 > rhs.m30 ? lhs.m30 : rhs.m30, .m31 = lhs.m31 > rhs.m31 ? lhs.m31 : rhs.m31, .m32 = lhs.m32 > rhs.m32 ? lhs.m32 : rhs.m32, .m33 = lhs.m33 > rhs.m33 ? lhs.m33 : rhs.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Transposition of a dm4x4
+SL_header dm4x4 SL_dm4x4trsp(dm4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    SL_swap(m.m10, m.m01);
+    SL_swap(m.m20, m.m02); SL_swap(m.m12, m.m21);
+    SL_swap(m.m30, m.m03); SL_swap(m.m31, m.m13);SL_swap(m.m32, m.m23);
+    return m;
+}
+#else
+;
+#endif
+/// @brief Trace of a dm4x4
+SL_header double SL_dm4x4trace(dm4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m.m00 + m.m11 + m.m22 + m.m33;
+}
+#else
+;
+#endif
+/// @brief Determinant of a dm4x4
+SL_header double SL_dm4x4det_xpd(double m00, double m01, double m02, double m03, double m10, double m11, double m12, double m13, double m20, double m21, double m22, double m23, double m30, double m31, double m32, double m33)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m00 * SL_dm3x3det_xpd(m11, m12, m13, m21, m22, m23, m31, m32, m33)
+         + m01 * SL_dm3x3det_xpd(m10, m12, m13, m20, m22, m23, m30, m32, m33)
+         + m02 * SL_dm3x3det_xpd(m10, m11, m13, m20, m21, m23, m30, m31, m33)
+         + m03 * SL_dm3x3det_xpd(m10, m11, m12, m20, m21, m22, m30, m31, m32);
+}
+#else
+;
+#endif
+/// @brief Determinant of a dm4x4
+SL_header double SL_dm4x4det(dm4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_dm4x4det_xpd(SL_XPD_M4X4(m));
+}
+#else
+;
+#endif
+/// @brief Inverse of a dm4x4
+SL_header dm4x4 SL_dm4x4inv(dm4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    dm4x4 trsp_comat;
+    for (int i = 0; i < 4; ++i)
+    for (int j = 0; j < 4; ++j)
+    {
+        trsp_comat.m[j][i] = ((i + j) & 1 ? -1 : 1) *
+            SL_dm3x3det_xpd(
+                m.m[1 - (i >= 1)][1 - (j >= 1)], m.m[1 - (i >= 1)][2 - (j >= 2)], m.m[1 - (i >= 1)][3 - (j >= 3)],
+                m.m[2 - (i >= 2)][1 - (j >= 1)], m.m[2 - (i >= 2)][2 - (j >= 2)], m.m[2 - (i >= 2)][3 - (j >= 3)],
+                m.m[3 - (i >= 3)][1 - (j >= 1)], m.m[3 - (i >= 3)][2 - (j >= 2)], m.m[3 - (i >= 3)][3 - (j >= 3)]
+            );
+    }
+    
+    double det = trsp_comat.m00 * m.m00 + trsp_comat.m01 * m.m10 + trsp_comat.m02 * m.m20 + trsp_comat.m03 * m.m30;
+    if (det == 0.0) return __SL_ERROR(SL_ERR_DIVISION_BY_ZERO), SL_dm4x4_zero;
+
+    return SL_dm4x4muls(trsp_comat, 1.0 / det);
+}
+#else
+;
+#endif
+/// @brief Matrix dm4x4 representing a transformation
+SL_header dm4x4 SL_dm4x4from_transform(dv3 position, dq rotation, dv3 scale)
+#if defined(SL_IMPLEMENTATION)
+{
+    dm3x3 rot = SL_dm3x3from_quat(rotation);
+
+    return (dm4x4) {
+        .m00 = scale.x * rot.m00, .m01 = scale.y * rot.m01, .m02 = scale.z * rot.m02, .m03 = position.x,
+        .m10 = scale.x * rot.m10, .m11 = scale.y * rot.m11, .m12 = scale.z * rot.m12, .m13 = position.y,
+        .m20 = scale.x * rot.m20, .m21 = scale.y * rot.m21, .m22 = scale.z * rot.m22, .m23 = position.z,
+        .m30 =               0.0, .m31 =               0.0, .m32 =               0.0, .m33 =        1.0
+    };
+}
+#else
+;
+#endif
+
+
+
+#pragma endregion DOUBLE
+#pragma region BOOL
+
+/// @brief Matrix of bool with arbitrary dimensions
+typedef struct {
+    union { usize r, c; luv2 size; };
+    bool *data;
+} bm;
+
+#define SL_asbm(sized_mat) ((bm){.size = SL_msize(sized_mat), .data = sized_mat.data})
+
+
+
+
+/// @brief Matrix of bool of size 2 x 2
+typedef union {
+    bool data[2 * 2];
+    bool m[2][2];
+    struct {
+        bool m00, m01;
+        bool m10, m11;
+    };
+    struct { bv2 r0, r1; };
+} bm2x2;
+
+#define SL_bm2x2_zero ((bm2x2){0})
+#define SL_bm2x2_identity ((bm2x2){ 1, 0, 0, 1 })
+
+
+/// @brief Addition of two bm2x2
+SL_header bm2x2 SL_bm2x2add(bm2x2 lhs, bm2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bm2x2) {
+        .m00 = lhs.m00 + rhs.m00, .m01 = lhs.m01 + rhs.m01,
+        .m10 = lhs.m10 + rhs.m10, .m11 = lhs.m11 + rhs.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two bm2x2
+SL_header bm2x2 SL_bm2x2sub(bm2x2 lhs, bm2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bm2x2) {
+        .m00 = lhs.m00 - rhs.m00, .m01 = lhs.m01 - rhs.m01,
+        .m10 = lhs.m10 - rhs.m10, .m11 = lhs.m11 - rhs.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Product of two bm2x2
+SL_header bm2x2 SL_bm2x2mul(bm2x2 lhs, bm2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    bm2x2 res = SL_bm2x2_zero;
+    for (usize k = 0; k < SL_msize(lhs).x; ++k)
+    for (usize j = 0; j < SL_msize(lhs).y; ++j)
+    for (usize i = 0; i < SL_msize(lhs).x; ++i)
+        res.m[i][j] += lhs.m[i][k] * rhs.m[k][j];
+
+    return res;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a bm2x2 with a scalar
+SL_header bm2x2 SL_bm2x2muls(bm2x2 lhs, bool rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bm2x2) {
+        .m00 = lhs.m00 * rhs, .m01 = lhs.m01 * rhs,
+        .m10 = lhs.m10 * rhs, .m11 = lhs.m11 * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Product of a bm2x2 and a bv2
+SL_header bv2 SL_bm2x2mulv(bm2x2 lhs, bv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_bv2_(SL_bv2dot(lhs.r0, rhs), SL_bv2dot(lhs.r1, rhs));
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a bm2x2 with a scalar
+SL_header bm2x2 SL_bm2x2divs(bm2x2 lhs, bool rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bm2x2) {
+        .m00 = lhs.m00 / rhs, .m01 = lhs.m01 / rhs,
+        .m10 = lhs.m10 / rhs, .m11 = lhs.m11 / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two bm2x2 with lhs scaled by a bool
+SL_header bm2x2 SL_bm2x2addS(bm2x2 lhs, bm2x2 rhs, bool s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bm2x2) {
+        .m00 = lhs.m00 + rhs.m00 * s, .m01 = lhs.m01 + rhs.m01 * s,
+        .m10 = lhs.m10 + rhs.m10 * s, .m11 = lhs.m11 + rhs.m11 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two bm2x2 with lhs scaled by a bool
+SL_header bm2x2 SL_bm2x2subS(bm2x2 lhs, bm2x2 rhs, bool s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bm2x2) {
+        .m00 = lhs.m00 - rhs.m00 * s, .m01 = lhs.m01 - rhs.m01 * s,
+        .m10 = lhs.m10 - rhs.m10 * s, .m11 = lhs.m11 - rhs.m11 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two bm2x2
+SL_header bm2x2 SL_bm2x2min(bm2x2 lhs, bm2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bm2x2) {
+        .m00 = lhs.m00 < rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 < rhs.m01 ? lhs.m01 : rhs.m01,
+        .m10 = lhs.m10 < rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 < rhs.m11 ? lhs.m11 : rhs.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two bm2x2
+SL_header bm2x2 SL_bm2x2max(bm2x2 lhs, bm2x2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bm2x2) {
+        .m00 = lhs.m00 > rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 > rhs.m01 ? lhs.m01 : rhs.m01,
+        .m10 = lhs.m10 > rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 > rhs.m11 ? lhs.m11 : rhs.m11
+    };
+}
+#else
+;
+#endif
+/// @brief Transposition of a bm2x2
+SL_header bm2x2 SL_bm2x2trsp(bm2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    SL_swap(m.m10, m.m01);
+    return m;
+}
+#else
+;
+#endif
+/// @brief Trace of a bm2x2
+SL_header bool SL_bm2x2trace(bm2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m.m00 + m.m11;
+}
+#else
+;
+#endif
+/// @brief Determinant of a bm2x2
+SL_header bool SL_bm2x2det_xpd(bool m00, bool m01, bool m10, bool m11)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m00 * m11 - m01 * m10;
+}
+#else
+;
+#endif
+/// @brief Determinant of a bm2x2
+SL_header bool SL_bm2x2det(bm2x2 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_bm2x2det_xpd(SL_XPD_M2X2(m));
+}
+#else
+;
+#endif
+
+
+
+/// @brief Matrix of bool of size 3 x 3
+typedef union {
+    bool data[3 * 3];
+    bool m[3][3];
+    struct {
+        bool m00, m01, m02;
+        bool m10, m11, m12;
+        bool m20, m21, m22;
+    };
+    struct { bv3 r0, r1, r2; };
+} bm3x3;
+
+#define SL_bm3x3_zero ((bm3x3){0})
+#define SL_bm3x3_identity ((bm3x3){ 1, 0, 0, 0, 1, 0, 0, 0, 1 })
+
+
+/// @brief Addition of two bm3x3
+SL_header bm3x3 SL_bm3x3add(bm3x3 lhs, bm3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bm3x3) {
+        .m00 = lhs.m00 + rhs.m00, .m01 = lhs.m01 + rhs.m01, .m02 = lhs.m02 + rhs.m02,
+        .m10 = lhs.m10 + rhs.m10, .m11 = lhs.m11 + rhs.m11, .m12 = lhs.m12 + rhs.m12,
+        .m20 = lhs.m20 + rhs.m20, .m21 = lhs.m21 + rhs.m21, .m22 = lhs.m22 + rhs.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two bm3x3
+SL_header bm3x3 SL_bm3x3sub(bm3x3 lhs, bm3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bm3x3) {
+        .m00 = lhs.m00 - rhs.m00, .m01 = lhs.m01 - rhs.m01, .m02 = lhs.m02 - rhs.m02,
+        .m10 = lhs.m10 - rhs.m10, .m11 = lhs.m11 - rhs.m11, .m12 = lhs.m12 - rhs.m12,
+        .m20 = lhs.m20 - rhs.m20, .m21 = lhs.m21 - rhs.m21, .m22 = lhs.m22 - rhs.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Product of two bm3x3
+SL_header bm3x3 SL_bm3x3mul(bm3x3 lhs, bm3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    bm3x3 res = SL_bm3x3_zero;
+    for (usize k = 0; k < SL_msize(lhs).x; ++k)
+    for (usize j = 0; j < SL_msize(lhs).y; ++j)
+    for (usize i = 0; i < SL_msize(lhs).x; ++i)
+        res.m[i][j] += lhs.m[i][k] * rhs.m[k][j];
+
+    return res;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a bm3x3 with a scalar
+SL_header bm3x3 SL_bm3x3muls(bm3x3 lhs, bool rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bm3x3) {
+        .m00 = lhs.m00 * rhs, .m01 = lhs.m01 * rhs, .m02 = lhs.m02 * rhs,
+        .m10 = lhs.m10 * rhs, .m11 = lhs.m11 * rhs, .m12 = lhs.m12 * rhs,
+        .m20 = lhs.m20 * rhs, .m21 = lhs.m21 * rhs, .m22 = lhs.m22 * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Product of a bm3x3 and a bv3
+SL_header bv3 SL_bm3x3mulv(bm3x3 lhs, bv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_bv3_(SL_bv3dot(lhs.r0, rhs), SL_bv3dot(lhs.r1, rhs), SL_bv3dot(lhs.r2, rhs));
+}
+#else
+;
+#endif
+/// @brief Apply transformation represented by bm3x3 to a bv2
+SL_header bv2 SL_bm3x3apply(bm3x3 m, bv2 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_bm3x3mulv(m, SL_bv3v(v, 1)).xy;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a bm3x3 with a scalar
+SL_header bm3x3 SL_bm3x3divs(bm3x3 lhs, bool rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bm3x3) {
+        .m00 = lhs.m00 / rhs, .m01 = lhs.m01 / rhs, .m02 = lhs.m02 / rhs,
+        .m10 = lhs.m10 / rhs, .m11 = lhs.m11 / rhs, .m12 = lhs.m12 / rhs,
+        .m20 = lhs.m20 / rhs, .m21 = lhs.m21 / rhs, .m22 = lhs.m22 / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two bm3x3 with lhs scaled by a bool
+SL_header bm3x3 SL_bm3x3addS(bm3x3 lhs, bm3x3 rhs, bool s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bm3x3) {
+        .m00 = lhs.m00 + rhs.m00 * s, .m01 = lhs.m01 + rhs.m01 * s, .m02 = lhs.m02 + rhs.m02 * s,
+        .m10 = lhs.m10 + rhs.m10 * s, .m11 = lhs.m11 + rhs.m11 * s, .m12 = lhs.m12 + rhs.m12 * s,
+        .m20 = lhs.m20 + rhs.m20 * s, .m21 = lhs.m21 + rhs.m21 * s, .m22 = lhs.m22 + rhs.m22 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two bm3x3 with lhs scaled by a bool
+SL_header bm3x3 SL_bm3x3subS(bm3x3 lhs, bm3x3 rhs, bool s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bm3x3) {
+        .m00 = lhs.m00 - rhs.m00 * s, .m01 = lhs.m01 - rhs.m01 * s, .m02 = lhs.m02 - rhs.m02 * s,
+        .m10 = lhs.m10 - rhs.m10 * s, .m11 = lhs.m11 - rhs.m11 * s, .m12 = lhs.m12 - rhs.m12 * s,
+        .m20 = lhs.m20 - rhs.m20 * s, .m21 = lhs.m21 - rhs.m21 * s, .m22 = lhs.m22 - rhs.m22 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two bm3x3
+SL_header bm3x3 SL_bm3x3min(bm3x3 lhs, bm3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bm3x3) {
+        .m00 = lhs.m00 < rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 < rhs.m01 ? lhs.m01 : rhs.m01, .m02 = lhs.m02 < rhs.m02 ? lhs.m02 : rhs.m02,
+        .m10 = lhs.m10 < rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 < rhs.m11 ? lhs.m11 : rhs.m11, .m12 = lhs.m12 < rhs.m12 ? lhs.m12 : rhs.m12,
+        .m20 = lhs.m20 < rhs.m20 ? lhs.m20 : rhs.m20, .m21 = lhs.m21 < rhs.m21 ? lhs.m21 : rhs.m21, .m22 = lhs.m22 < rhs.m22 ? lhs.m22 : rhs.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two bm3x3
+SL_header bm3x3 SL_bm3x3max(bm3x3 lhs, bm3x3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bm3x3) {
+        .m00 = lhs.m00 > rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 > rhs.m01 ? lhs.m01 : rhs.m01, .m02 = lhs.m02 > rhs.m02 ? lhs.m02 : rhs.m02,
+        .m10 = lhs.m10 > rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 > rhs.m11 ? lhs.m11 : rhs.m11, .m12 = lhs.m12 > rhs.m12 ? lhs.m12 : rhs.m12,
+        .m20 = lhs.m20 > rhs.m20 ? lhs.m20 : rhs.m20, .m21 = lhs.m21 > rhs.m21 ? lhs.m21 : rhs.m21, .m22 = lhs.m22 > rhs.m22 ? lhs.m22 : rhs.m22
+    };
+}
+#else
+;
+#endif
+/// @brief Transposition of a bm3x3
+SL_header bm3x3 SL_bm3x3trsp(bm3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    SL_swap(m.m10, m.m01);
+    SL_swap(m.m20, m.m02); SL_swap(m.m21, m.m12);
+    return m;
+}
+#else
+;
+#endif
+/// @brief Trace of a bm3x3
+SL_header bool SL_bm3x3trace(bm3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m.m00 + m.m11 + m.m22;
+}
+#else
+;
+#endif
+/// @brief Determinant of a bm3x3
+SL_header bool SL_bm3x3det_xpd(bool m00, bool m01, bool m02, bool m10, bool m11, bool m12, bool m20, bool m21, bool m22)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m00 * m11 * m22 + m01 * m12 * m20 + m02 * m10 * m21 - m02 * m11 * m20 - m12 * m21 * m00 - m22 * m01 * m10;
+}
+#else
+;
+#endif
+/// @brief Determinant of a bm3x3
+SL_header bool SL_bm3x3det(bm3x3 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_bm3x3det_xpd(SL_XPD_M3X3(m));
+}
+#else
+;
+#endif
+
+
+
+/// @brief Matrix of bool of size 4 x 4
+typedef union {
+    bool data[4 * 4];
+    bool m[4][4];
+    struct {
+        bool m00, m01, m02, m03;
+        bool m10, m11, m12, m13;
+        bool m20, m21, m22, m23;
+        bool m30, m31, m32, m33;
+    };
+    struct { bv4 r0, r1, r2, r3; };
+} bm4x4;
+
+#define SL_bm4x4_zero ((bm4x4){0})
+#define SL_bm4x4_identity ((bm4x4){ 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 })
+
+
+/// @brief Addition of two bm4x4
+SL_header bm4x4 SL_bm4x4add(bm4x4 lhs, bm4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bm4x4) {
+        .m00 = lhs.m00 + rhs.m00, .m01 = lhs.m01 + rhs.m01, .m02 = lhs.m02 + rhs.m02, .m03 = lhs.m03 + rhs.m03,
+        .m10 = lhs.m10 + rhs.m10, .m11 = lhs.m11 + rhs.m11, .m12 = lhs.m12 + rhs.m12, .m13 = lhs.m13 + rhs.m13,
+        .m20 = lhs.m20 + rhs.m20, .m21 = lhs.m21 + rhs.m21, .m22 = lhs.m22 + rhs.m22, .m23 = lhs.m23 + rhs.m23,
+        .m30 = lhs.m30 + rhs.m30, .m31 = lhs.m31 + rhs.m31, .m32 = lhs.m32 + rhs.m32, .m33 = lhs.m33 + rhs.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two bm4x4
+SL_header bm4x4 SL_bm4x4sub(bm4x4 lhs, bm4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bm4x4) {
+        .m00 = lhs.m00 - rhs.m00, .m01 = lhs.m01 - rhs.m01, .m02 = lhs.m02 - rhs.m02, .m03 = lhs.m03 - rhs.m03,
+        .m10 = lhs.m10 - rhs.m10, .m11 = lhs.m11 - rhs.m11, .m12 = lhs.m12 - rhs.m12, .m13 = lhs.m13 - rhs.m13,
+        .m20 = lhs.m20 - rhs.m20, .m21 = lhs.m21 - rhs.m21, .m22 = lhs.m22 - rhs.m22, .m23 = lhs.m23 - rhs.m23,
+        .m30 = lhs.m30 - rhs.m30, .m31 = lhs.m31 - rhs.m31, .m32 = lhs.m32 - rhs.m32, .m33 = lhs.m33 - rhs.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Product of two bm4x4
+SL_header bm4x4 SL_bm4x4mul(bm4x4 lhs, bm4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    bm4x4 res = SL_bm4x4_zero;
+    for (usize k = 0; k < SL_msize(lhs).x; ++k)
+    for (usize j = 0; j < SL_msize(lhs).y; ++j)
+    for (usize i = 0; i < SL_msize(lhs).x; ++i)
+        res.m[i][j] += lhs.m[i][k] * rhs.m[k][j];
+
+    return res;
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a bm4x4 with a scalar
+SL_header bm4x4 SL_bm4x4muls(bm4x4 lhs, bool rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bm4x4) {
+        .m00 = lhs.m00 * rhs, .m01 = lhs.m01 * rhs, .m02 = lhs.m02 * rhs, .m03 = lhs.m03 * rhs,
+        .m10 = lhs.m10 * rhs, .m11 = lhs.m11 * rhs, .m12 = lhs.m12 * rhs, .m13 = lhs.m13 * rhs,
+        .m20 = lhs.m20 * rhs, .m21 = lhs.m21 * rhs, .m22 = lhs.m22 * rhs, .m23 = lhs.m23 * rhs,
+        .m30 = lhs.m30 * rhs, .m31 = lhs.m31 * rhs, .m32 = lhs.m32 * rhs, .m33 = lhs.m33 * rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Product of a bm4x4 and a bv4
+SL_header bv4 SL_bm4x4mulv(bm4x4 lhs, bv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_bv4_(SL_bv4dot(lhs.r0, rhs), SL_bv4dot(lhs.r1, rhs), SL_bv4dot(lhs.r2, rhs), SL_bv4dot(lhs.r3, rhs));
+}
+#else
+;
+#endif
+/// @brief Apply transformation represented by bm4x4 to a bv3
+SL_header bv3 SL_bm4x4apply(bm4x4 m, bv3 v)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_bm4x4mulv(m, SL_bv4v(v, 1)).xyz;
+}
+#else
+;
+#endif
+/// @brief Component-wise division of a bm4x4 with a scalar
+SL_header bm4x4 SL_bm4x4divs(bm4x4 lhs, bool rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bm4x4) {
+        .m00 = lhs.m00 / rhs, .m01 = lhs.m01 / rhs, .m02 = lhs.m02 / rhs, .m03 = lhs.m03 / rhs,
+        .m10 = lhs.m10 / rhs, .m11 = lhs.m11 / rhs, .m12 = lhs.m12 / rhs, .m13 = lhs.m13 / rhs,
+        .m20 = lhs.m20 / rhs, .m21 = lhs.m21 / rhs, .m22 = lhs.m22 / rhs, .m23 = lhs.m23 / rhs,
+        .m30 = lhs.m30 / rhs, .m31 = lhs.m31 / rhs, .m32 = lhs.m32 / rhs, .m33 = lhs.m33 / rhs
+    };
+}
+#else
+;
+#endif
+/// @brief Addition of two bm4x4 with lhs scaled by a bool
+SL_header bm4x4 SL_bm4x4addS(bm4x4 lhs, bm4x4 rhs, bool s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bm4x4) {
+        .m00 = lhs.m00 + rhs.m00 * s, .m01 = lhs.m01 + rhs.m01 * s, .m02 = lhs.m02 + rhs.m02 * s, .m03 = lhs.m03 + rhs.m03 * s,
+        .m10 = lhs.m10 + rhs.m10 * s, .m11 = lhs.m11 + rhs.m11 * s, .m12 = lhs.m12 + rhs.m12 * s, .m13 = lhs.m13 + rhs.m13 * s,
+        .m20 = lhs.m20 + rhs.m20 * s, .m21 = lhs.m21 + rhs.m21 * s, .m22 = lhs.m22 + rhs.m22 * s, .m23 = lhs.m23 + rhs.m23 * s,
+        .m30 = lhs.m30 + rhs.m30 * s, .m31 = lhs.m31 + rhs.m31 * s, .m32 = lhs.m32 + rhs.m32 * s, .m33 = lhs.m33 + rhs.m33 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Difference of two bm4x4 with lhs scaled by a bool
+SL_header bm4x4 SL_bm4x4subS(bm4x4 lhs, bm4x4 rhs, bool s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bm4x4) {
+        .m00 = lhs.m00 - rhs.m00 * s, .m01 = lhs.m01 - rhs.m01 * s, .m02 = lhs.m02 - rhs.m02 * s, .m03 = lhs.m03 - rhs.m03 * s,
+        .m10 = lhs.m10 - rhs.m10 * s, .m11 = lhs.m11 - rhs.m11 * s, .m12 = lhs.m12 - rhs.m12 * s, .m13 = lhs.m13 - rhs.m13 * s,
+        .m20 = lhs.m20 - rhs.m20 * s, .m21 = lhs.m21 - rhs.m21 * s, .m22 = lhs.m22 - rhs.m22 * s, .m23 = lhs.m23 - rhs.m23 * s,
+        .m30 = lhs.m30 - rhs.m30 * s, .m31 = lhs.m31 - rhs.m31 * s, .m32 = lhs.m32 - rhs.m32 * s, .m33 = lhs.m33 - rhs.m33 * s
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise minimum of two bm4x4
+SL_header bm4x4 SL_bm4x4min(bm4x4 lhs, bm4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bm4x4) {
+        .m00 = lhs.m00 < rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 < rhs.m01 ? lhs.m01 : rhs.m01, .m02 = lhs.m02 < rhs.m02 ? lhs.m02 : rhs.m02, .m03 = lhs.m03 < rhs.m03 ? lhs.m03 : rhs.m03,
+        .m10 = lhs.m10 < rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 < rhs.m11 ? lhs.m11 : rhs.m11, .m12 = lhs.m12 < rhs.m12 ? lhs.m12 : rhs.m12, .m13 = lhs.m13 < rhs.m13 ? lhs.m13 : rhs.m13,
+        .m20 = lhs.m20 < rhs.m20 ? lhs.m20 : rhs.m20, .m21 = lhs.m21 < rhs.m21 ? lhs.m21 : rhs.m21, .m22 = lhs.m22 < rhs.m22 ? lhs.m22 : rhs.m22, .m23 = lhs.m23 < rhs.m23 ? lhs.m23 : rhs.m23,
+        .m30 = lhs.m30 < rhs.m30 ? lhs.m30 : rhs.m30, .m31 = lhs.m31 < rhs.m31 ? lhs.m31 : rhs.m31, .m32 = lhs.m32 < rhs.m32 ? lhs.m32 : rhs.m32, .m33 = lhs.m33 < rhs.m33 ? lhs.m33 : rhs.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise maximum of two bm4x4
+SL_header bm4x4 SL_bm4x4max(bm4x4 lhs, bm4x4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (bm4x4) {
+        .m00 = lhs.m00 > rhs.m00 ? lhs.m00 : rhs.m00, .m01 = lhs.m01 > rhs.m01 ? lhs.m01 : rhs.m01, .m02 = lhs.m02 > rhs.m02 ? lhs.m02 : rhs.m02, .m03 = lhs.m03 > rhs.m03 ? lhs.m03 : rhs.m03,
+        .m10 = lhs.m10 > rhs.m10 ? lhs.m10 : rhs.m10, .m11 = lhs.m11 > rhs.m11 ? lhs.m11 : rhs.m11, .m12 = lhs.m12 > rhs.m12 ? lhs.m12 : rhs.m12, .m13 = lhs.m13 > rhs.m13 ? lhs.m13 : rhs.m13,
+        .m20 = lhs.m20 > rhs.m20 ? lhs.m20 : rhs.m20, .m21 = lhs.m21 > rhs.m21 ? lhs.m21 : rhs.m21, .m22 = lhs.m22 > rhs.m22 ? lhs.m22 : rhs.m22, .m23 = lhs.m23 > rhs.m23 ? lhs.m23 : rhs.m23,
+        .m30 = lhs.m30 > rhs.m30 ? lhs.m30 : rhs.m30, .m31 = lhs.m31 > rhs.m31 ? lhs.m31 : rhs.m31, .m32 = lhs.m32 > rhs.m32 ? lhs.m32 : rhs.m32, .m33 = lhs.m33 > rhs.m33 ? lhs.m33 : rhs.m33
+    };
+}
+#else
+;
+#endif
+/// @brief Transposition of a bm4x4
+SL_header bm4x4 SL_bm4x4trsp(bm4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    SL_swap(m.m10, m.m01);
+    SL_swap(m.m20, m.m02); SL_swap(m.m12, m.m21);
+    SL_swap(m.m30, m.m03); SL_swap(m.m31, m.m13);SL_swap(m.m32, m.m23);
+    return m;
+}
+#else
+;
+#endif
+/// @brief Trace of a bm4x4
+SL_header bool SL_bm4x4trace(bm4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m.m00 + m.m11 + m.m22 + m.m33;
+}
+#else
+;
+#endif
+/// @brief Determinant of a bm4x4
+SL_header bool SL_bm4x4det_xpd(bool m00, bool m01, bool m02, bool m03, bool m10, bool m11, bool m12, bool m13, bool m20, bool m21, bool m22, bool m23, bool m30, bool m31, bool m32, bool m33)
+#if defined(SL_IMPLEMENTATION)
+{
+    return m00 * SL_bm3x3det_xpd(m11, m12, m13, m21, m22, m23, m31, m32, m33)
+         + m01 * SL_bm3x3det_xpd(m10, m12, m13, m20, m22, m23, m30, m32, m33)
+         + m02 * SL_bm3x3det_xpd(m10, m11, m13, m20, m21, m23, m30, m31, m33)
+         + m03 * SL_bm3x3det_xpd(m10, m11, m12, m20, m21, m22, m30, m31, m32);
+}
+#else
+;
+#endif
+/// @brief Determinant of a bm4x4
+SL_header bool SL_bm4x4det(bm4x4 m)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_bm4x4det_xpd(SL_XPD_M4X4(m));
+}
+#else
+;
+#endif
+
+
+
+#pragma endregion BOOL
+
+#endif // __SL_MATRIX_H
+
+
+
+
+
+// SOURCE: math/noise.h
+#ifndef __SL_NOISE_H
+#define __SL_NOISE_H
+
+/*
+ *  NOISE: basic noise generating functions. 
+ *  
+ *  TODO:
+ *  - Perlin noise
+ *  - Octave perlin noise
+ *  - Voronoi noise
+ *  - Octave voronoi noise
+ * 
+*/
+
+// #include "vector.h"
+
+
+
+#endif // __SL_NOISE_H
+
+
+
+
+
+// SOURCE: math/algorithm.h
+#ifndef _SL_ALGORITHM_H_
+#define _SL_ALGORITHM_H_
+
+// #include "math.h"
+// #include "vector.h"
+// #include "quaternion.h"
+// #include "matrix.h"
+
+// Row reduction algorithm (I think)
+// /!\ O(n^3), really slow for big systems (n = systemMatrix.r)
+bool fmSolve_pivot(fm lhs, fv* rhs) {
+
+    usize r = lhs.r;
+    usize c = lhs.c;
+    if (r != c || r != rhs->count) return __SL_ERROR(SL_ERR_MISSMATCHING_DIMENSIONS), false;
+
+    // Make diagonal 1 and triangular
+    for (usize t = 0; t < c; t++) {
+
+        float vtt = SL_mget(lhs, t, t);
+        if (vtt == 0.0) { // We have to find another factor for term t
+            usize nt = 0;
+            for (; nt < r && SL_mget(lhs, nt, t) == 0.0; nt++);
+
+            // The entire column is 0
+            if (nt >= r) __SL_ERROR(SL_ERR_DIVISION_BY_ZERO), false;
+
+            // Set (t, t) to one using this new-found row
+            float l = 1.0 / SL_mget(lhs, nt, t);
+            for (usize j = t; j < c; j++) SL_mget(lhs, t, j) += l * SL_mget(lhs, nt, j);
+            rhs->data[t] += rhs->data[nt] * l;
+        }
+        else { // Just divide the entire row
+            float l = 1.0 / vtt;
+            for (usize j = t; j < c; j++) SL_mget(lhs, t, j) *= l;
+            rhs->data[t] *= l;
+        }
+
+        // Set all value under (t, t) to zero
+        for (usize i = t + 1; i < r; i++) {
+            float l = SL_mget(lhs, i, t); // Scalar for entire row
+            if (l == 0.0) continue; // There is nothing to remove here
+
+            for (usize j = t; j < r; j++) SL_mget(lhs, i, j) -= SL_mget(lhs, t, j) * l;
+            rhs->data[i] -= rhs->data[t] * l;
+        }
+    }
+
+    // Make diagonal
+    for (usize j = c - 1; j > 0; j--) {
+        for (usize i = 0; i < j; i++) {
+            rhs->data[i] -= SL_mget(lhs, i, j) * rhs->data[j];
+            SL_mget(lhs, i, j) = 0.0;
+        }
+    }
+
+    // Tada!!!
+    return true;
+}
+bool fmSolve_GaussSeidel(fm lhs, fv* rhs, float* x, float maxError, uint maxIter) {
+
+    int size = lhs.r;
+    if (lhs.c != size || rhs->count != size) return __SL_ERROR(SL_ERR_MISSMATCHING_DIMENSIONS), false;
+    size = lhs.r;
+
+    if (!x) x = (float*)malloc(sizeof(usize) + sizeof(float) * size);
+
+    for (usize k = 0; k < maxIter; k++) {
+        // Calc next generation
+        for (usize i = 0; i < size; i++) {
+            float new = rhs->data[i];
+
+            usize j = 0;
+            for (; j < i; j++) new -= SL_mget(lhs, i, j) * x[j]; // x[j] k+1
+            for (j++; j < size; j++) new -= SL_mget(lhs, i, j) * x[j]; // x[j] k
+            
+            float vii = SL_mget(lhs, i, i);
+            if (vii == 0.0) SL_throwError("System is not solvable (Zeros in diagonal)");
+            x[i] = new / vii;
+        }
+
+        // Calc error
+        float e = 0.0;
+        for (usize i = 0; i < size; i++) {
+            float dist = -rhs->data[i];
+            for (usize j = 0; j < size; j++) dist += SL_mget(lhs, i, j) * x[j];
+            float newError = fabs(dist);
+            e = __max(e, newError);
+            if (e > maxError) goto NEXT;
+        }
+        if (e <= maxError) break;
+        NEXT:
+    }
+
+    return x;
+}
+
+
+
+#endif // _SL_ALGORITHM_H_
+
+
+
+
+
+#ifdef SL_IMPLEMENTATION
+sl_error __SL_ERROR(sl_error new_error)
+{
+    static sl_error error = SL_ERR_NONE;
+
+    sl_error cur_error = error;
+    error = new_error;
+    return cur_error;
+}
+
+SL_header const char *SL_strerr(sl_error error)
+{
+    switch (error) {
+        case SL_ERR_NONE:                    return "NO ERROR";
+        case SL_ERR_OUT_OF_BOUNDS:           return "SL_ERR_OUT_OF_BOUNDS";
+        case SL_ERR_MEMORY:                  return "SL_ERR_MEMORY";
+        case SL_ERR_DIVISION_BY_ZERO:        return "SL_ERR_DIVISION_BY_ZERO";
+        case SL_ERR_MISSMATCHING_DIMENSIONS: return "SL_ERR_MISSMATCHING_DIMENSIONS";
+        case SL_ERR_THREAD_CREATE:           return "SL_ERR_THREAD_CREATE";
+        case SL_ERR_THREAD_JOIN:             return "SL_ERR_THREAD_JOIN";
+        case SL_ERR_DUPLICATE:               return "SL_ERR_DUPLICATE";
+        default: return "[UNKNOWN ERROR]";
+    }
+}
+
+SL_header void *memclone(void *memory, size_t size)
+{
+    void *newData = malloc(size);
+    return newData ? memcpy(newData, memory, size) : NULL;
+}
+
+SL_header char *SL_tmpf(const char *fmt, ...)
+{
+    static thread_local char *tmp = NULL;
+    static thread_local usize capa = 0;
+    if (fmt == NULL) return tmp;
+
+    va_list args0; va_start(args0, fmt);
+    
+    va_list args1; va_copy(args1, args0);
+    usize print_len = 1 + vsnprintf(tmp, capa, fmt, args1);
+    va_end(args1);
+
+    if (print_len >= capa) {
+        if (tmp) free(tmp);
+        tmp = malloc(capa = SL_alignPow2(print_len));
+        vsnprintf(tmp, capa, fmt, args0);
+    }
+    va_end(args0);
+    
+    return tmp;
+}
+
+SL_header u64 SL_alignPow2(u64 n) {
+    u64 i = 1;
+    while (i < n) i <<= 1;
+    return i;
+}
+
+SL_header void *__SL_arrayAt(void *data, usize count, usize elemSize, ssize index)
+{
+    if (index < 0) index = count + index;
+    return index >= 0 && index < count ? data + index * elemSize : NULL;
+}
+SL_header bool __SL_arraySetCapacity(void **array_data, usize *array_count, usize *array_capa, sl_allocator *alloc, usize elemSize, usize new_capa)
+{
+    if (new_capa <= *array_capa) return true;
+
+    if (*array_data == NULL) {
+        *array_data = SL_aalloc(alloc, elemSize * (*array_capa = SL_alignPow2(new_capa)));
+        return *array_data ? true : (__SL_ERROR(SL_ERR_MEMORY), false);
+    }
+    
+    usize old_capa = *array_capa;
+    do *array_capa <<= 1; while (new_capa > *array_capa);
+    
+    void *newData = SL_aalloc(alloc, elemSize * *array_capa);
+    if (!newData) return __SL_ERROR(SL_ERR_MEMORY), false;
+    memcpy(newData, *array_data, elemSize * old_capa);
+    SL_afree(alloc, *array_data);
+    *array_data = newData;
+
+    // *array_data = SL_arealloc(alloc, *array_data, *array_capa);
+    // if (!*array_data) return __SL_ERROR(SL_ERR_MEMORY), false;
+
+    return true;
+}
+
+SL_header void *__SL_arrayInsertRange(void **array_data, usize *array_count, usize *array_capa, sl_allocator *alloc, usize elemSize, usize index, usize span, void *values)
+{
+    usize prev_count = *array_count;
+    if (index > prev_count) return __SL_ERROR(SL_ERR_OUT_OF_BOUNDS), NULL;
+    if (!__SL_arraySetCapacity(array_data, array_count, array_capa, alloc, elemSize, prev_count + span)) return __SL_ERROR(SL_ERR_MEMORY), NULL;
+    
+    void *firstElem = *array_data + elemSize * index;
+    if (index < prev_count) memmove(firstElem + elemSize * span, firstElem, elemSize * (prev_count - index));
+
+    if (values) memcpy(firstElem, values, elemSize * span);
+    
+    *array_count += span;
+    return firstElem;
+}
+SL_header bool __SL_arrayRemoveRange(void *array_data, usize *array_count, usize elemSize, usize index, usize span)
+{
+    if (index + span > *array_count || span == 0) return __SL_ERROR(SL_ERR_OUT_OF_BOUNDS), false;
+    memmove(array_data + elemSize * index, array_data + elemSize * (index + span), elemSize * ((*array_count -= span) - index + 1));
+    return true;
+}
+SL_header bool __SL_arrayRemoveUnordered(void *array_data, usize *array_count, usize elemSize, usize index)
+{
+    if (*array_count <= index || index < 0) return __SL_ERROR(SL_ERR_OUT_OF_BOUNDS), false;
+    memcpy (array_data + elemSize * index, array_data + elemSize * --*array_count, elemSize);
+    return true;
+}
+SL_header void __SL_arrayFill(void *array_data, usize array_count, usize elemSize, void *elem)
+{
+    for (usize max = (usize)array_data + elemSize * array_count; (usize)array_data < max; array_data += elemSize) memcpy(array_data, elem, elemSize);
+}
+
+SL_header void *__SL_listNodeAt(void *_first, void *last, usize count, usize index)
+{
+    (void)last; (void)count;
+    struct __list_gen_node *first = _first;
+
+    while (first && index) --index, first = first->next;
+    return first ? first : (__SL_ERROR(SL_ERR_OUT_OF_BOUNDS), NULL);
+}
+SL_header void *__SL_dlistNodeAt(void *_first, void *_last, usize count, usize index)
+{
+    struct __dlist_gen_node *first = _first, *last = _last;
+
+    if (index > count / 2) {
+        index = count - 1 - index;
+        struct __dlist_gen_node *cur = last;
+        while (cur && index) --index, cur = cur->prev;
+        return cur ? cur : (__SL_ERROR(SL_ERR_OUT_OF_BOUNDS), NULL);
+    }
+    else {
+        struct __dlist_gen_node *cur = first;
+        while (cur && index) --index, cur = cur->next;
+        return cur ? cur : (__SL_ERROR(SL_ERR_OUT_OF_BOUNDS), NULL);
+    }
+}
+SL_header void *__SL_listValueFromNode(void *node_ptr, bool is_dlist)
+{ 
+    return node_ptr ? (void *)node_ptr + (1 + is_dlist) * sizeof(void *) : NULL; 
+}
+
+SL_header void *__SL_listInsert(void **first, void **last, usize *count, sl_allocator *alloc, usize elemSize, usize index, void *value)
+{
+    if (index > *count) return __SL_ERROR(SL_ERR_OUT_OF_BOUNDS), NULL;
+    
+    struct __list_gen_node *node_ptr = SL_aalloc(alloc, sizeof(void *) + elemSize);
+    if (value) memcpy((void *)node_ptr + sizeof(void *), value, elemSize);
+    
+    if (index == 0) {
+        if (!*last) *last = node_ptr;
+        node_ptr->next = *first;
+        *first = node_ptr;
+    }
+    else if (index == *count) {
+        if (!*first) *first = node_ptr;
+        else *(void **)*last = node_ptr;
+        node_ptr->next = NULL;
+        *last = node_ptr;
+    }
+    else {
+        struct __list_gen_node *parent = __SL_listNodeAt(*first, NULL, 0, index - 1);
+        node_ptr->next = parent->next;
+        parent->next = node_ptr;
+    }    
+    
+    ++*count;
+    return &node_ptr->data;
+}
+SL_header void *__SL_dlistInsert(void **first, void **last, usize *count, sl_allocator *alloc, usize elemSize, usize index, void *value)
+{
+    if (index > *count) return __SL_ERROR(SL_ERR_OUT_OF_BOUNDS), NULL;
+
+    struct __dlist_gen_node *node_ptr = SL_aalloc(alloc, elemSize + 2 * sizeof(void *));
+    if (value) memcpy((void *)node_ptr + 2 * sizeof(void *), value, elemSize);
+    
+    if (index == 0) {
+        if (*first) *((void **)*first + 1) = node_ptr;
+        if (!*last) *last = node_ptr;
+        node_ptr->next = *first;
+        node_ptr->prev = NULL;
+        *first = node_ptr;
+    }
+    else if (index == *count) {
+        if (*last) *(void **)*last = node_ptr;
+        if (!*first) *first = node_ptr;
+        node_ptr->next = NULL;
+        node_ptr->prev = *last;
+        *last = node_ptr;
+    }
+    else {
+        struct __dlist_gen_node *atIdx = __SL_dlistNodeAt(*first, *last, *count, index);
+        node_ptr->prev = atIdx->prev;
+        node_ptr->next = atIdx;
+    }
+
+    ++*count;
+    return &node_ptr->data;
+}
+
+SL_header bool __SL_listRemove(void **first, void **last, usize *count, sl_allocator *alloc, usize elemSize, usize index, void *into)
+{
+
+    struct __list_gen_node *to_free;
+    if (index == 0) {
+        to_free = *first;
+        if (!to_free) return __SL_ERROR(SL_ERR_OUT_OF_BOUNDS), false;
+        *first = to_free->next;
+        if (!*first) *last = NULL;
+    }
+    else {
+        struct __list_gen_node *parent = __SL_listNodeAt(*first, NULL, 0, index - 1);
+        if (!parent || !parent->next) return false;
+        to_free = parent->next;
+        parent->next = to_free->next;
+    }
+
+    if (into) memcpy(into, to_free + sizeof(void *), elemSize);
+    SL_afree(alloc, to_free);
+    --*count;
+    return true;
+}
+SL_header bool __SL_dlistRemove(void **first, void **last, usize *count, sl_allocator *alloc, usize index, usize elemSize, void *into)
+{
+
+    struct __dlist_gen_node *at = __SL_dlistNodeAt(*first, *last, *count, index);
+    if (!at) return false;
+
+    if (at == *first) {
+        *first = at->next;
+        if (*first) *((void **)*first + 1) = NULL;
+        else *last = NULL;
+        
+    }
+    else if (at == *last) {
+        *last = at->prev;
+        if (*last) *((void **)*last + 0) = NULL;
+        else *first = NULL;
+    }
+    else {
+        at->prev->next = at->next;
+        at->next->prev = at->prev;
+    }
+
+    if (into) memcpy(into, at + 2 * sizeof(void *), elemSize);
+    SL_afree(alloc, at);
+    --*count;
+    return true;
+}
+
+SL_header void __SL_dictClear(struct __dict_gen *dict)
+{
+    for (usize i = 0; i < dict->capa; ++i) {
+        for (void *node = dict->data[i]; node; ) {
+            void *temp = *(void**)node;
+            SL_afree(dict->alloc, node);
+            node = temp;
+        }
+        dict->data[i] = NULL;
+    }
+    dict->count = 0;
+}
+
+SL_header void *__SL_dictGet(struct __dict_gen *dict, usize keySize, const void *key)
+{
+    usize hash = dict->hash(key) % dict->capa;
+    struct __dict_gen_bucket *node = dict->data[hash];
+    while (node && dict->cmp(&node->key, key) != 0) node = node->next;
+    return node ? (void *)node + sizeof(void *) + keySize : (__SL_ERROR(SL_ERR_OUT_OF_BOUNDS), NULL);
+}
+
+SL_header void *__SL_dictAdd(struct __dict_gen *dict, usize keySize, const void *key, usize valueSize, const void *value)
+{
+    struct __dict_gen_bucket *new = SL_aalloc(dict->alloc, sizeof(void *) + keySize + valueSize);
+    if (!new) return __SL_ERROR(SL_ERR_MEMORY), NULL;
+    if (!memcpy((void *)&new->key, key, keySize))               return SL_afree(dict->alloc, new), __SL_ERROR(SL_ERR_MEMORY), NULL;
+    if (!memcpy((void *)&new->key + keySize, value, valueSize)) return SL_afree(dict->alloc, new), __SL_ERROR(SL_ERR_MEMORY), NULL;
+
+    if (dict->count / (double)dict->capa > 3.0)
+    {
+        // We should double the bucket count and rehash everything
+        usize new_capa = dict->capa * 2;
+        struct __dict_gen_bucket **new_buckets = SL_azalloc(dict->alloc, new_capa * sizeof(void *));
+        SL_aforeach(bucket, *dict)
+        {
+            struct __dict_gen_bucket *node = *bucket;
+            while (node)
+            {
+                usize hash = dict->hash(node->key) % new_capa;
+                node->next = dict->data[hash];
+                dict->data[hash] = node;
+
+                node = node->next;
+            }
+        }
+
+        SL_afree(dict->alloc, dict->data);
+        dict->data = new_buckets;
+        dict->capa = new_capa;
+    }
+    
+    usize hash = dict->hash(key) % dict->capa;
+    new->next = dict->data[hash];
+    dict->data[hash] = new;
+    ++dict->count;
+    return (void *)&new->key + keySize;
+}
+
+SL_header bool __SL_dictRemove(struct __dict_gen *dict, usize keySize, void *key)
+{
+    usize hash = dict->hash(key) % dict->capa;
+    struct __dict_gen_bucket *node = dict->data[hash];
+
+    if (!node) return __SL_ERROR(SL_ERR_OUT_OF_BOUNDS), false;
+
+    if (dict->cmp(&node->key, key) == 0) dict->data[hash] = node->next;
+    else {
+        while (node->next && dict->cmp(&node->next->key, key) != 0) node = node->next;
+
+        if (node->next == NULL) return __SL_ERROR(SL_ERR_OUT_OF_BOUNDS), false;
+
+        struct __dict_gen_bucket *to_free = node->next;
+        node->next = to_free->next;
+        node = to_free;
+    }
+
+    SL_afree(dict->alloc, node);
+    --dict->count;
+    return true;
+}
+
+SL_header void *SL_arenaAlloc(sl_allocator *a_, usize size)
+{
+    sl_arena *a = (sl_arena*)a_;
+    if ((usize)a->current - (usize)a->currentPage + size > a->pageSize) a->currentPage = a->current = *(void**)SL_listAddEnd(a->buffers, malloc(a->pageSize));
+
+    void *ret = a->current;
+    a->current += size;
+    return ret;
+}
+SL_header void *SL_arenaZalloc(sl_allocator *a_, usize size)
+{
+    sl_arena *a = (sl_arena*)a_; 
+    if ((usize)a->current - (usize)a->currentPage + size > a->pageSize) a->currentPage = a->current = *(void**)SL_listAddEnd(a->buffers, malloc(a->pageSize));
+
+    void *ret = a->current;
+    a->current += size;
+    memset(ret, 0, size);
+    return ret;
+}
+SL_header void *SL_arenaRealloc(sl_allocator *a_, void *memory, usize size)
+{
+    SL_terminate(-1, "[UNIMPLEMENTED]");
+}
+SL_header void SL_arenaFree(sl_allocator *a_, void *memory)
+{
+    SL_terminate(-1, "[UNIMPLEMENTED]");
+}
+SL_header void *SL_arenaCopy(sl_allocator *a_, void *dest, void *source, usize size)
+{
+    (void)a_;
+    return memcpy(dest, source, size);
+}
+SL_header void *SL_arenaMove(sl_allocator *a_, void *dest, void *source, usize size)
+{
+    (void)a_;
+    return memmove(dest, source, size);
+}
+SL_header void *SL_arenaClone(sl_allocator *a_, void *memory, usize size)
+{
+    void *ret = SL_arenaAlloc(a_, size);
+    return ret ? SL_arenaCopy(a_, ret, memory, size) : NULL;
+}
+
+SL_header sl_arena SL_arenaCreate(usize pageSize)
+{
+    sl_arena ret = {
+        .description = SL_allocatorCreate(SL_arenaAlloc, SL_arenaZalloc, SL_arenaRealloc, SL_arenaFree, SL_arenaCopy, SL_arenaMove, SL_arenaClone),
+        .buffers = {0}, .currentPage = NULL, .current = NULL, .pageSize = pageSize
+    };
+    ret.currentPage = ret.current = *(void**)SL_listAddEnd(ret.buffers, malloc(pageSize));
+    return ret;
+}
+/// @brief Free allocator's resources
+/// @param arena Arena
+SL_header void SL_arenaDestroy(sl_arena arena)
+{
+    SL_lforeach(map, arena.buffers) free(*map);
+    SL_listClear(arena.buffers);
+}
+
+SL_header char *SL_strtrsfrm(char *str, int (*func)(int))
+{
+    for (char *c = str; *c; (*c = func(*c)), ++c);
+    return str;
+}
+SL_header char *SL_strupper(char *str)
+{
+    for (char *c = str; *c; (*c = toupper(*c)), ++c);
+    return str;
+}
+SL_header char *SL_strlower(char *str)
+{
+    for (char *c = str; *c; (*c = tolower(*c))) ++c;
+    return str;
+}
+SL_header bool SL_strstart(const char *str, const char *fact)
+{
+    while (*str && *fact && *str == *fact) ++fact, ++str;
+    return *fact == '\0';
+}
+SL_header bool SL_strend(const char *str, const char *fact)
+{
+    const char *end = str + strlen(str) - strlen(fact);
+    while (*end && *fact && *end == *fact) ++fact, ++end;
+    return *fact == '\0';
+}
+
+SL_header char *SL_readEntireFile(const char *path, usize *size)
+{
+    FILE *f = fopen(path, "rb");
+    if (!f) return NULL;
+
+    fseek(f, 0, SEEK_END);
+    usize len = ftell(f);
+    if (size) *size = len;
+    fseek(f, 0, SEEK_SET);
+
+    char *data = malloc(len + 1); // + '\0'
+    if (!data) return NULL;
+    fread(data, 1, len, f);
+    data[len] = '\0';
+
+    fclose(f);
+    return data;
+}
+SL_header bool SL_writeEntireFile(const char *path, usize size, void *data)
+{
+    FILE *f = fopen(path, "wb");
+    if (!f) return false;
+
+    bool writtenAll = fwrite(data, size, 1, f) == size;
+
+    fclose(f);
+    return writtenAll;
+}
+
+SL_header int __SL_stream_vprintf(sl_stream stream, const char *fmt, va_list list) {
+    return (stream.is_str ? (sl_func_vprint *)vsprintf : (sl_func_vprint *)vfprintf)(stream.generic, fmt, list);
+}
+SL_header int __SL_stream_printf(sl_stream stream, const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    int ret = __SL_stream_vprintf(stream, fmt, args);
+    va_end(args);
+    return ret;
+}
+
+SL_header int __SL_gprintBin(sl_stream dst, usize size, void *data)
+{
+    int ret = SL_gprintf(dst, "0b");
+    for (usize i = 0; i < size; ++i) {
+        u8 v = ((u8 *)data)[size - 1 - i];
+        ret += SL_gprintf(dst, "%c%c%c%c%c%c%c%c%c",
+            (v & 128) ? '1' : '0', (v & 64) ? '1' : '0', (v & 32) ? '1' : '0', (v & 16) ? '1' : '0',
+            (v & 8)   ? '1' : '0', (v & 4)  ? '1' : '0', (v & 2)  ? '1' : '0', (v & 1)  ? '1' : '0', i + 1 < size ? '\'' : 0
+        );
+    }
+    return ret;
+}
+SL_header int __SL_gprintHex(sl_stream dst, usize size, void *data)
+{
+    int ret = SL_gprintf(dst, "0x");
+    for (usize i = 0; i < size; ++i) {
+        u8 v = ((u8 *)data)[size - 1 - i];
+        u8 h = (v >> 4) & 0x0F, l = v & 0x0F;
+        ret += SL_gprintf(dst, "%c%c", (h > 9) ? ('A' + h - 10) : ('0' + h), (h > 9) ? ('A' + l - 10) : ('0' + l));
+    }
+    return ret;
+}
+
+bool __SL_await(pthread_t thread, const void *task, usize ret_size, const void *task_ret, void *usr_ret)
+{
+    if (pthread_join(thread, NULL)) return pthread_cancel(thread), free((void *)task), __SL_ERROR(SL_ERR_THREAD_JOIN), false;
+    if (usr_ret != NULL && !memcpy(usr_ret, task_ret, ret_size)) return free((void *)task), __SL_ERROR(SL_ERR_MEMORY), false;
+    return free((void *)task), true;
+}
+
+SL_header bool SL_cmd_arg_parse(int argc, char **argv, SL_array(sl_cmd_arg) *arguments)
+{
+    for (usize i = 1; i < argc; ++i) { // Skip program name
+        bool matched = false;
+        for (usize j = 0; j < arguments->count; ++j)
+        {
+            if (
+                (arguments->data[j].name_short == NULL || strcmp(argv[i], arguments->data[j].name_short) != 0) && 
+                (arguments->data[j].name_long  == NULL || strcmp(argv[i], arguments->data[j].name_long)  != 0)
+            ) continue;
+
+            switch (arguments->data[j].type)
+            {
+                case SL_CMD_ARG_TOGGLE: arguments->data[j].assigned_value.toggle = arguments->data[j].assigned = true; break;
+                case SL_CMD_ARG_INT:
+                {
+                    if (++i == argc || argv[i][0] == '-') return __SL_ERROR(SL_ERR_MISSING_VALUE), false;
+                    arguments->data[j].assigned_value.integer = atoll(argv[i]);
+                    arguments->data[j].assigned = true;
+                } break;
+                case SL_CMD_ARG_REAL:
+                {
+                    if (++i == argc || argv[i][0] == '-') return __SL_ERROR(SL_ERR_MISSING_VALUE), false;
+                    arguments->data[j].assigned_value.real = atof(argv[i]);
+                    arguments->data[j].assigned = true;
+                } break;
+                case SL_CMD_ARG_STRING:
+                {
+                    if (++i == argc || argv[i][0] == '-') return __SL_ERROR(SL_ERR_MISSING_VALUE), false;
+                    arguments->data[j].assigned_value.string = argv[i];
+                    arguments->data[j].assigned = true;
+                } break;
+                
+                default:
+                break;
+            }
+            matched = true;
+            break;
+        }
+
+        if (!matched && argv[i])
+        {
+            char *assigned_value = NULL;
+            if (i + 1 == argc || argv[i + 1][0] == '-') assigned_value = argv[++i];
+            SL_arrayAdd(*arguments, ((sl_cmd_arg){.type = SL_CMD_ARG_UNKNOWN, .name_long = argv[i], .name_short = argv[i], .assigned = true, .assigned_value.string = assigned_value}) );
+        }
+    }
+
+    return true;
+}
+
+SL_header uint SL_umin(uint a, uint b) { return a < b ? a : b; }
+SL_header u64 SL_u64min(u64 a, u64 b) { return a < b ? a : b; }
+SL_header int SL_imin(int a, int b) { return a < b ? a : b; }
+SL_header i64 SL_i64min(i64 a, i64 b) { return a < b ? a : b; }
+SL_header float SL_fmin(float a, float b) { return a < b ? a : b; }
+SL_header double SL_dmin(double a, double b) { return a < b ? a : b; }
+
+SL_header uint SL_umax(uint a, uint b) { return a > b ? a : b; }
+SL_header u64 SL_u64max(u64 a, u64 b) { return a > b ? a : b; }
+SL_header int SL_imax(int a, int b) { return a > b ? a : b; }
+SL_header i64 SL_i64max(i64 a, i64 b) { return a > b ? a : b; }
+SL_header float SL_fmax(float a, float b) { return a > b ? a : b; }
+SL_header double SL_dmax(double a, double b) { return a > b ? a : b; }
+
+SL_header int SL_isign(int i) { return i == 0 ? 0 : i > 0 ? 1 : -1; }
+SL_header i64 SL_i64sign(i64 i) { return i == 0 ? 0 : i > 0 ? 1 : -1; }
+SL_header float SL_fsign(float f) { return f == 0.0f ? 0.0f : f > 0.0f ? 1.0f : -1.0f; }
+SL_header double SL_dsign(double f) { return f == 0.0 ? 0.0 : f > 0.0 ? 1.0 : -1.0; }
+
+SL_header float SL_fstep(float f, float step_size) { return floorf(f / step_size) * step_size; }
+SL_header double SL_dstep(double f, double step_size) { return floor(f / step_size) * step_size; }
+SL_header float SL_flerp(float a, float b, float t) { return a + (b - a) * t; }
+SL_header double SL_dlerp(double a, double b, double t) { return a + (b - a) * t; }
+SL_header float SL_fclamp(float f, float min, float max) { return f < min ? min : (f > max ? max : f); }
+SL_header double SL_dclamp(double f, double min, double max) { return f < min ? min : (f > max ? max : f); }
+
+SL_header float SL_inplaceU32ToFloat(u32 u) {
+    union { float f; u32 u; } val = {.u = u};
+    return val.f;
+}
+SL_header u32 SL_inplaceFloatToU32(float f) {
+    union { float f; u32 u; } val = {.f = f};
+    return val.u;
+}
+SL_header double SL_inplaceU64ToDouble(u64 u) {
+    union { double d; u64 u; } val = {.u = u};
+    return val.d;
+}
+SL_header u64 SL_inplaceDoubleToU64(double f) {
+    union { double f; u64 u; } val = {.f = f};
+    return val.u;
+}
+
+SL_header float SL_inplaceU32ToFloat01(u32 u) {
+    union { float f; u32 u; } val = {.u = (u & 0x007FFFFFu) | 0x3F800000u};
+    return val.f - 1.0f;
+}
+SL_header double SL_inplaceU64ToDouble01(u64 u) {
+    union { double f; u64 u; } val = {.u = (u & 0x000FFFFFFFFFFFFFllu) | 0x3FF0000000000000llu};
+    return val.f - 1.0;
+}
+
+SL_header u32 SL_u32hash_PCG(u32 u) {
+    u32 state = u * 747796405u + 2891336453u;
+    u32 word = ((state >> ((state >> 28) + 4)) ^ state) * 277803737u;
+    return (word >> 22) ^ word;
+}
+static u32 __SL_RAND_SEED__ = 0;
+SL_header void SL_u32srand(u32 new_seed) { __SL_RAND_SEED__ = new_seed; };
+SL_header u32 SL_u32rand() { return __SL_RAND_SEED__ = SL_u32hash_PCG(__SL_RAND_SEED__); }
+SL_header u32 SL_u32rand_in(u32 low, u32 high) { return high <= low ? low : low + (SL_u32rand() % (high - low)); }
+
+SL_header float SL_frand() { return SL_inplaceU32ToFloat01(SL_u32rand()); }
+SL_header double SL_drand() { return SL_inplaceU64ToDouble01(((u64)SL_u32rand() << 32LLU) | (u64)SL_u32rand()); }
+SL_header float SL_frand_between(float low, float high) { return low + SL_frand() * (high - low); }
+SL_header double SL_drand_between(double low, double high) { return low + SL_drand() * (high - low); }
+#endif
+
+
+#ifdef SL_STRIP_PREFIX
+#   define DEF_PTR          SL_DEF_PTR
+#   define DEF_ALIAS        SL_DEF_ALIAS
+#   define gprintf          SL_gprintf
+#   define vgprintf         SL_vgprintf
+#   define tmpf             SL_tmpf
+#   define strf             SL_strf
+#   define alignPow2        SL_alignPow2
+#   define static_count     SL_static_count
+#   define DEF_CMP_FUNC     SL_DEF_CMP_FUNC
+#   define DEF_HASH_FUNC    SL_DEF_HASH_FUNC
+
+#   define  aalloc           SL_aalloc
+#   define  azalloc          SL_azalloc
+#   define  arealloc         SL_arealloc
+#   define  afree            SL_afree
+#   define  aclone           SL_aclone
+    typedef sl_allocator     allocator;
+#   define  allocator_       SL_allocator_
+
+#   define ARRAY_FIELDS         SL_ARRAY_FIELDS
+#   define DEF_ARRAY            SL_DEF_ARRAY
+#   define ARRAY_XPD            SL_ARRAY_XPD
+#   define array                SL_array
+#   define slice                SL_slice
+#   define slice_               SL_slice_
+#   define slicea               SL_slicea
+#   define arrayCreate          SL_arrayCreate
+#   define arrayCreateA         SL_arrayCreateA
+#   define arrayDestroy         SL_arrayDestroy
+#   define arrayClone           SL_arrayClone
+#   define arrayCloneA          SL_arrayCloneA
+#   define arrayWrap            SL_arrayWrap
+#   define arrayWrapVar         SL_arrayWrapVar
+#   define arrayFirst           SL_arrayFirst
+#   define arrayLast            SL_arrayLast
+#   define arrayAt              SL_arrayAt
+#   define arrayCheckResize     SL_arrayCheckResize
+#   define arrayInsertRange     SL_arrayInsertRange
+#   define arrayInsert          SL_arrayInsert
+#   define arrayInsertVar       SL_arrayInsertVar
+#   define arrayAddRange        SL_arrayAddRange
+#   define arrayAdd             SL_arrayAdd
+#   define arrayAddVar          SL_arrayAddVar
+#   define arrayCat             SL_arrayCat
+#   define arrayRemoveRange     SL_arrayRemoveRange
+#   define arrayRemove          SL_arrayRemove
+#   define arrayRemoveUnordered SL_arrayRemoveUnordered
+#   define arrayPop             SL_arrayPop
+#   define arrayQSort           SL_arraySort
+#   define arrayFill            SL_arrayFill
+#   define arrayReserve         SL_arrayReserve
+#   define arrayPrintf_full     SL_arrayPrintf_full
+#   define arrayPrintf          SL_arrayPrintf
+#   define aforeach             SL_aforeach
+#   define aindex               SL_aindex
+#   define aindex_in            SL_aindex_in
+
+#   define LIST_FIELDS      SL_LIST_FIELDS
+#   define DEF_LIST         SL_DEF_LIST
+#   define list             SL_list
+#   define lnode            SL_lnode
+#   define dlist            SL_dlist
+#   define dlnode           SL_dlnode
+#   define listCreateA      SL_listCreateA
+#   define dlistCreateA     SL_dlistCreateA
+#   define listDestroy      SL_listClear
+#   define listFirst        SL_listFirst
+#   define listLast         SL_listLast
+#   define listAt           SL_listAt
+#   define listInsert       SL_listInsert
+#   define listAddStart     SL_listAddStart
+#   define listAddEnd       SL_listAddEnd
+#   define listRemove       SL_listRemove
+#   define listPop          SL_listPop
+#   define lforeach         SL_lforeach
+#   define listPrintf_full  SL_listPrintf_full
+#   define listPrintf       SL_listPrintf
+
+#   define  DICT_FIELDS         SL_DICT_FIELDS
+#   define  DEF_DICT            SL_DEF_DICT
+#   define  dict                SL_dict
+#   define  dictClear           SL_dictClear
+#   define  dictCreate          SL_dictCreate
+#   define  dictCreateA         SL_dictCreateA
+#   define  dictHash            SL_dictHash
+#   define  dictDestroy         SL_dictDestroy
+#   define  dictGet             SL_dictGet
+#   define  dictAdd             SL_dictAdd
+#   define  dictRemove          SL_dictRemove
+#   define  dictKey             SL_dictKey
+#   define  dforeach            SL_dforeach
+
+    typedef sl_arena        arena;
+#   define arenaCreate      SL_arenaCreate
+#   define arenaDestroy     SL_arenaDestroy
+
+#   define  strtrsfrm       SL_strtrsfrm
+#   define  strupper        SL_strupper
+#   define  strlower        SL_strlower
+#   define  strstart        SL_strstart
+#   define  strend          SL_strend
+#   define  readEntireFile  SL_readEntireFile
+#   define  writeEntireFile SL_writeEntireFile
+    typedef sl_stream       stream;
+#   define  gprintf         SL_gprintf
+#   define  vgprintf        SL_vgprintf
+#   define  gprintBin       SL_printBin
+#   define  printBin        SL_printBin
+#   define  gprintHex       SL_gprintHex
+#   define  printHex        SL_printHex
+
+    typedef sl_task_state       task_state;
+#   define await                SL_await
+#   define DEF_ASYNC0           SL_DEF_ASYNC0
+#   define DEF_ASYNC1           SL_DEF_ASYNC1
+#   define DEF_ASYNC2           SL_DEF_ASYNC2
+#   define DEF_ASYNC3           SL_DEF_ASYNC3
+#   define DEF_ASYNC4           SL_DEF_ASYNC4
+#   define DEF_ASYNC5           SL_DEF_ASYNC5
+#   define DEF_ASYNC6           SL_DEF_ASYNC6
+#   define DEF_ASYNC7           SL_DEF_ASYNC7
+#   define DEF_ASYNC8           SL_DEF_ASYNC8
+#   define DEF_ASYNC            SL_DEF_ASYNC
+
+#   define DEF_LOGGER   SL_DEF_LOGGER
+    typedef SL_log_lvl  log_lvl;
+#   define todo         SL_todo
+#   define logI         SL_logI
+#   define logW         SL_logW
+#   define logE         SL_logE
+#   define logger_log   SL_logger_log
+#   define logger_lvl   SL_logger_lvl
+#   define logger_out   SL_logger_out
+
+    typedef sl_cmd_arg_type      cmd_arg_type;
+    typedef sl_cmd_arg_union     cmd_arg_union;
+    typedef sl_cmd_arg           cmd_arg;
+#   define  cmd_arg_toggle_      sl_cmd_arg_toggle_
+#   define  cmd_arg_integer_     sl_cmd_arg_integer_
+#   define  cmd_arg_real_        sl_cmd_arg_real_
+#   define  cmd_arg_string_      sl_cmd_arg_string_
+#   define  cmd_arg_parse        SL_cmd_arg_parse
+
+#   define PI                       SL_PI
+#   define TAU                      SL_TAU
+#   define DEG_TO_RAD               SL_DEG_TO_RAD
+#   define RAD_TO_DEG               SL_RAD_TO_DEG
+#   define E                        SL_E
+#   define PHI                      SL_PHI
+#   define FLOAT_MAX                SL_FLOAT_MAX
+#   define DOUBLE_MAX               SL_DOUBLE_MAX
+#   define umin                     SL_umin
+#   define u64min                   SL_u64min
+#   define imin                     SL_imin
+#   define i64min                   SL_i64min
+#   define fmin                     SL_fmin
+#   define dmin                     SL_dmin
+#   define umax                     SL_umax
+#   define u64max                   SL_u64max
+#   define imax                     SL_imax
+#   define i64max                   SL_i64max
+#   define fmax                     SL_fmax
+#   define dmax                     SL_dmax
+#   define isign                    SL_isign
+#   define i64sign                  SL_i64sign
+#   define fsign                    SL_fsign
+#   define dsign                    SL_dsign
+#   define fstep                    SL_fstep
+#   define dstep                    SL_dstep
+#   define flerp                    SL_flerp
+#   define dlerp                    SL_dlerp
+#   define fclamp                   SL_fclamp
+#   define dclamp                   SL_dclamp
+#   define inplaceU32ToFloat        SL_inplaceU32ToFloat
+#   define inplaceFloatToU32        SL_inplaceFloatToU32
+#   define inplaceU64ToDouble       SL_inplaceU64ToDouble
+#   define inplaceDoubleToU64       SL_inplaceDoubleToU64
+#   define inplaceU32ToFloat01      SL_inplaceU32ToFloat01
+#   define inplaceU64ToDouble01     SL_inplaceU64ToDouble01
+#   define u32hash_PCG              SL_u32hash_PCG
+#   define u32srand                 SL_u32srand
+#   define u32rand                  SL_u32rand
+#   define u32rand_in               SL_u32rand_in
+#   define frand                    SL_frand
+#   define drand                    SL_drand
+#   define frand_between            SL_frand_between
+#   define drand_between            SL_drand_between
+
+#   define  XPD_V SL_XPD_V
+#   define  XPD_V2 SL_XPD_V2
+#   define  XPD_V3 SL_XPD_V3
+#   define  XPD_V4 SL_XPD_V4
+#   define  FMT_V2 SL_FMT_V2
+#   define  FMT_V3 SL_FMT_V3
+#   define  FMT_V4 SL_FMT_V4
+#   define  vsize SL_vsize
+#   define  i8v2_zero SL_i8v2_zero
+#   define  i8v2_one SL_i8v2_one
+#   define  i8v2_right SL_i8v2_right
+#   define  i8v2_up SL_i8v2_up
+#   define  i8v2_left SL_i8v2_left
+#   define  i8v2_down SL_i8v2_down
+#   define  i8v3_zero SL_i8v3_zero
+#   define  i8v3_one SL_i8v3_one
+#   define  i8v3_right SL_i8v3_right
+#   define  i8v3_up SL_i8v3_up
+#   define  i8v3_forw SL_i8v3_forw
+#   define  i8v3_left SL_i8v3_left
+#   define  i8v3_down SL_i8v3_down
+#   define  i8v3_back SL_i8v3_back
+#   define  i8v4_zero SL_i8v4_zero
+#   define  i8v4_one SL_i8v4_one
+#   define  i8v2_ SL_i8v2_
+#   define  i8v3_ SL_i8v3_
+#   define  i8v4_ SL_i8v4_
+#   define  i8v2s SL_i8v2s
+#   define  i8v3s SL_i8v3s
+#   define  i8v4s SL_i8v4s
+#   define  i8v2v SL_i8v2v
+#   define  i8v3v SL_i8v3v
+#   define  i8v4v SL_i8v4v
+#   define  i8vadd_ SL_i8vadd_
+#   define  i8vadd SL_i8vadd
+#   define  i8v2add SL_i8v2add
+#   define  i8v3add SL_i8v3add
+#   define  i8v4add SL_i8v4add
+#   define  i8vsub_ SL_i8vsub_
+#   define  i8vsub SL_i8vsub
+#   define  i8v2sub SL_i8v2sub
+#   define  i8v3sub SL_i8v3sub
+#   define  i8v4sub SL_i8v4sub
+#   define  i8vmul_ SL_i8vmul_
+#   define  i8vmul SL_i8vmul
+#   define  i8v2mul SL_i8v2mul
+#   define  i8v3mul SL_i8v3mul
+#   define  i8v4mul SL_i8v4mul
+#   define  i8vmuls_ SL_i8vmuls_
+#   define  i8vmuls SL_i8vmuls
+#   define  i8v2muls SL_i8v2muls
+#   define  i8v3muls SL_i8v3muls
+#   define  i8v4muls SL_i8v4muls
+#   define  i8vdiv_ SL_i8vdiv_
+#   define  i8vdiv SL_i8vdiv
+#   define  i8v2div SL_i8v2div
+#   define  i8v3div SL_i8v3div
+#   define  i8v4div SL_i8v4div
+#   define  i8vdivs_ SL_i8vdivs_
+#   define  i8vdivs SL_i8vdivs
+#   define  i8v2divs SL_i8v2divs
+#   define  i8v3divs SL_i8v3divs
+#   define  i8v4divs SL_i8v4divs
+#   define  i8vaddS_ SL_i8vaddS_
+#   define  i8vaddS SL_i8vaddS
+#   define  i8v2addS SL_i8v2addS
+#   define  i8v3addS SL_i8v3addS
+#   define  i8v4addS SL_i8v4addS
+#   define  i8vsubS_ SL_i8vsubS_
+#   define  i8vsubS SL_i8vsubS
+#   define  i8v2subS SL_i8v2subS
+#   define  i8v3subS SL_i8v3subS
+#   define  i8v4subS SL_i8v4subS
+#   define  i8vaddM_ SL_i8vaddM_
+#   define  i8vaddM SL_i8vaddM
+#   define  i8v2addM SL_i8v2addM
+#   define  i8v3addM SL_i8v3addM
+#   define  i8v4addM SL_i8v4addM
+#   define  i8vsubM_ SL_i8vsubM_
+#   define  i8vsubM SL_i8vsubM
+#   define  i8v2subM SL_i8v2subM
+#   define  i8v3subM SL_i8v3subM
+#   define  i8v4subM SL_i8v4subM
+#   define  i8vaddSM_ SL_i8vaddSM_
+#   define  i8vaddSM SL_i8vaddSM
+#   define  i8v2addSM SL_i8v2addSM
+#   define  i8v3addSM SL_i8v3addSM
+#   define  i8v4addSM SL_i8v4addSM
+#   define  i8vsubSM_ SL_i8vsubSM_
+#   define  i8vsubSM SL_i8vsubSM
+#   define  i8v2subSM SL_i8v2subSM
+#   define  i8v3subSM SL_i8v3subSM
+#   define  i8v4subSM SL_i8v4subSM
+#   define  i8vSadd_ SL_i8vSadd_
+#   define  i8vSadd SL_i8vSadd
+#   define  i8v2Sadd SL_i8v2Sadd
+#   define  i8v3Sadd SL_i8v3Sadd
+#   define  i8v4Sadd SL_i8v4Sadd
+#   define  i8vSsub_ SL_i8vSsub_
+#   define  i8vSsub SL_i8vSsub
+#   define  i8v2Ssub SL_i8v2Ssub
+#   define  i8v3Ssub SL_i8v3Ssub
+#   define  i8v4Ssub SL_i8v4Ssub
+#   define  i8vneg_ SL_i8vneg_
+#   define  i8vneg SL_i8vneg
+#   define  i8v2neg SL_i8v2neg
+#   define  i8v3neg SL_i8v3neg
+#   define  i8v4neg SL_i8v4neg
+#   define  i8vabs_ SL_i8vabs_
+#   define  i8vabs SL_i8vabs
+#   define  i8v2abs SL_i8v2abs
+#   define  i8v3abs SL_i8v3abs
+#   define  i8v4abs SL_i8v4abs
+#   define  i8vmin_ SL_i8vmin_
+#   define  i8vmin SL_i8vmin
+#   define  i8v2min SL_i8v2min
+#   define  i8v3min SL_i8v3min
+#   define  i8v4min SL_i8v4min
+#   define  i8vmax_ SL_i8vmax_
+#   define  i8vmax SL_i8vmax
+#   define  i8v2max SL_i8v2max
+#   define  i8v3max SL_i8v3max
+#   define  i8v4max SL_i8v4max
+#   define  i8vdot_ SL_i8vdot_
+#   define  i8vdot SL_i8vdot
+#   define  i8v2dot SL_i8v2dot
+#   define  i8v3dot SL_i8v3dot
+#   define  i8v4dot SL_i8v4dot
+#   define  i8vlen_max_ SL_i8vlen_max_
+#   define  i8vlen_max SL_i8vlen_max
+#   define  i8v2len_max SL_i8v2len_max
+#   define  i8v3len_max SL_i8v3len_max
+#   define  i8v4len_max SL_i8v4len_max
+#   define  i8vlen_manh_ SL_i8vlen_manh_
+#   define  i8vlen_manh SL_i8vlen_manh
+#   define  i8v2len_manh SL_i8v2len_manh
+#   define  i8v3len_manh SL_i8v3len_manh
+#   define  i8v4len_manh SL_i8v4len_manh
+#   define  i8vlen_srq_ SL_i8vlen_srq_
+#   define  i8vlen_srq SL_i8vlen_srq
+#   define  i8v2len_sqr SL_i8v2len_sqr
+#   define  i8v3len_sqr SL_i8v3len_sqr
+#   define  i8v4len_sqr SL_i8v4len_sqr
+#   define  i8vlen_ SL_i8vlen_
+#   define  i8vlen SL_i8vlen
+#   define  i8v2len SL_i8v2len
+#   define  i8v3len SL_i8v3len
+#   define  i8v4len SL_i8v4len
+#   define  i8vdist_ SL_i8vdist_
+#   define  i8vdist SL_i8vdist
+#   define  i8v2dist SL_i8v2dist
+#   define  i8v3dist SL_i8v3dist
+#   define  i8v4dist SL_i8v4dist
+#   define  i8v2refl SL_i8v2refl
+#   define  i8v3refl SL_i8v3refl
+#   define  i8v4refl SL_i8v4refl
+#   define  i8v2refl_u SL_i8v2refl_u
+#   define  i8v3refl_u SL_i8v3refl_u
+#   define  i8v4refl_u SL_i8v4refl_u
+#   define  i8vmods_ SL_i8vmods_
+#   define  i8vmods SL_i8vmods
+#   define  i8v2mods SL_i8v2mods
+#   define  i8v3mods SL_i8v3mods
+#   define  i8v4mods SL_i8v4mods
+#   define  i8vmod_ SL_i8vmod_
+#   define  i8vmod SL_i8vmod
+#   define  i8v2mod SL_i8v2mod
+#   define  i8v3mod SL_i8v3mod
+#   define  i8v4mod SL_i8v4mod
+#   define  i8v2cross SL_i8v2cross
+#   define  i8v3cross SL_i8v3cross
+#   define  i16v2_zero SL_i16v2_zero
+#   define  i16v2_one SL_i16v2_one
+#   define  i16v2_right SL_i16v2_right
+#   define  i16v2_up SL_i16v2_up
+#   define  i16v2_left SL_i16v2_left
+#   define  i16v2_down SL_i16v2_down
+#   define  i16v3_zero SL_i16v3_zero
+#   define  i16v3_one SL_i16v3_one
+#   define  i16v3_right SL_i16v3_right
+#   define  i16v3_up SL_i16v3_up
+#   define  i16v3_forw SL_i16v3_forw
+#   define  i16v3_left SL_i16v3_left
+#   define  i16v3_down SL_i16v3_down
+#   define  i16v3_back SL_i16v3_back
+#   define  i16v4_zero SL_i16v4_zero
+#   define  i16v4_one SL_i16v4_one
+#   define  i16v2_ SL_i16v2_
+#   define  i16v3_ SL_i16v3_
+#   define  i16v4_ SL_i16v4_
+#   define  i16v2s SL_i16v2s
+#   define  i16v3s SL_i16v3s
+#   define  i16v4s SL_i16v4s
+#   define  i16v2v SL_i16v2v
+#   define  i16v3v SL_i16v3v
+#   define  i16v4v SL_i16v4v
+#   define  i16vadd_ SL_i16vadd_
+#   define  i16vadd SL_i16vadd
+#   define  i16v2add SL_i16v2add
+#   define  i16v3add SL_i16v3add
+#   define  i16v4add SL_i16v4add
+#   define  i16vsub_ SL_i16vsub_
+#   define  i16vsub SL_i16vsub
+#   define  i16v2sub SL_i16v2sub
+#   define  i16v3sub SL_i16v3sub
+#   define  i16v4sub SL_i16v4sub
+#   define  i16vmul_ SL_i16vmul_
+#   define  i16vmul SL_i16vmul
+#   define  i16v2mul SL_i16v2mul
+#   define  i16v3mul SL_i16v3mul
+#   define  i16v4mul SL_i16v4mul
+#   define  i16vmuls_ SL_i16vmuls_
+#   define  i16vmuls SL_i16vmuls
+#   define  i16v2muls SL_i16v2muls
+#   define  i16v3muls SL_i16v3muls
+#   define  i16v4muls SL_i16v4muls
+#   define  i16vdiv_ SL_i16vdiv_
+#   define  i16vdiv SL_i16vdiv
+#   define  i16v2div SL_i16v2div
+#   define  i16v3div SL_i16v3div
+#   define  i16v4div SL_i16v4div
+#   define  i16vdivs_ SL_i16vdivs_
+#   define  i16vdivs SL_i16vdivs
+#   define  i16v2divs SL_i16v2divs
+#   define  i16v3divs SL_i16v3divs
+#   define  i16v4divs SL_i16v4divs
+#   define  i16vaddS_ SL_i16vaddS_
+#   define  i16vaddS SL_i16vaddS
+#   define  i16v2addS SL_i16v2addS
+#   define  i16v3addS SL_i16v3addS
+#   define  i16v4addS SL_i16v4addS
+#   define  i16vsubS_ SL_i16vsubS_
+#   define  i16vsubS SL_i16vsubS
+#   define  i16v2subS SL_i16v2subS
+#   define  i16v3subS SL_i16v3subS
+#   define  i16v4subS SL_i16v4subS
+#   define  i16vaddM_ SL_i16vaddM_
+#   define  i16vaddM SL_i16vaddM
+#   define  i16v2addM SL_i16v2addM
+#   define  i16v3addM SL_i16v3addM
+#   define  i16v4addM SL_i16v4addM
+#   define  i16vsubM_ SL_i16vsubM_
+#   define  i16vsubM SL_i16vsubM
+#   define  i16v2subM SL_i16v2subM
+#   define  i16v3subM SL_i16v3subM
+#   define  i16v4subM SL_i16v4subM
+#   define  i16vaddSM_ SL_i16vaddSM_
+#   define  i16vaddSM SL_i16vaddSM
+#   define  i16v2addSM SL_i16v2addSM
+#   define  i16v3addSM SL_i16v3addSM
+#   define  i16v4addSM SL_i16v4addSM
+#   define  i16vsubSM_ SL_i16vsubSM_
+#   define  i16vsubSM SL_i16vsubSM
+#   define  i16v2subSM SL_i16v2subSM
+#   define  i16v3subSM SL_i16v3subSM
+#   define  i16v4subSM SL_i16v4subSM
+#   define  i16vSadd_ SL_i16vSadd_
+#   define  i16vSadd SL_i16vSadd
+#   define  i16v2Sadd SL_i16v2Sadd
+#   define  i16v3Sadd SL_i16v3Sadd
+#   define  i16v4Sadd SL_i16v4Sadd
+#   define  i16vSsub_ SL_i16vSsub_
+#   define  i16vSsub SL_i16vSsub
+#   define  i16v2Ssub SL_i16v2Ssub
+#   define  i16v3Ssub SL_i16v3Ssub
+#   define  i16v4Ssub SL_i16v4Ssub
+#   define  i16vneg_ SL_i16vneg_
+#   define  i16vneg SL_i16vneg
+#   define  i16v2neg SL_i16v2neg
+#   define  i16v3neg SL_i16v3neg
+#   define  i16v4neg SL_i16v4neg
+#   define  i16vabs_ SL_i16vabs_
+#   define  i16vabs SL_i16vabs
+#   define  i16v2abs SL_i16v2abs
+#   define  i16v3abs SL_i16v3abs
+#   define  i16v4abs SL_i16v4abs
+#   define  i16vmin_ SL_i16vmin_
+#   define  i16vmin SL_i16vmin
+#   define  i16v2min SL_i16v2min
+#   define  i16v3min SL_i16v3min
+#   define  i16v4min SL_i16v4min
+#   define  i16vmax_ SL_i16vmax_
+#   define  i16vmax SL_i16vmax
+#   define  i16v2max SL_i16v2max
+#   define  i16v3max SL_i16v3max
+#   define  i16v4max SL_i16v4max
+#   define  i16vdot_ SL_i16vdot_
+#   define  i16vdot SL_i16vdot
+#   define  i16v2dot SL_i16v2dot
+#   define  i16v3dot SL_i16v3dot
+#   define  i16v4dot SL_i16v4dot
+#   define  i16vlen_max_ SL_i16vlen_max_
+#   define  i16vlen_max SL_i16vlen_max
+#   define  i16v2len_max SL_i16v2len_max
+#   define  i16v3len_max SL_i16v3len_max
+#   define  i16v4len_max SL_i16v4len_max
+#   define  i16vlen_manh_ SL_i16vlen_manh_
+#   define  i16vlen_manh SL_i16vlen_manh
+#   define  i16v2len_manh SL_i16v2len_manh
+#   define  i16v3len_manh SL_i16v3len_manh
+#   define  i16v4len_manh SL_i16v4len_manh
+#   define  i16vlen_srq_ SL_i16vlen_srq_
+#   define  i16vlen_srq SL_i16vlen_srq
+#   define  i16v2len_sqr SL_i16v2len_sqr
+#   define  i16v3len_sqr SL_i16v3len_sqr
+#   define  i16v4len_sqr SL_i16v4len_sqr
+#   define  i16vlen_ SL_i16vlen_
+#   define  i16vlen SL_i16vlen
+#   define  i16v2len SL_i16v2len
+#   define  i16v3len SL_i16v3len
+#   define  i16v4len SL_i16v4len
+#   define  i16vdist_ SL_i16vdist_
+#   define  i16vdist SL_i16vdist
+#   define  i16v2dist SL_i16v2dist
+#   define  i16v3dist SL_i16v3dist
+#   define  i16v4dist SL_i16v4dist
+#   define  i16v2refl SL_i16v2refl
+#   define  i16v3refl SL_i16v3refl
+#   define  i16v4refl SL_i16v4refl
+#   define  i16v2refl_u SL_i16v2refl_u
+#   define  i16v3refl_u SL_i16v3refl_u
+#   define  i16v4refl_u SL_i16v4refl_u
+#   define  i16vmods_ SL_i16vmods_
+#   define  i16vmods SL_i16vmods
+#   define  i16v2mods SL_i16v2mods
+#   define  i16v3mods SL_i16v3mods
+#   define  i16v4mods SL_i16v4mods
+#   define  i16vmod_ SL_i16vmod_
+#   define  i16vmod SL_i16vmod
+#   define  i16v2mod SL_i16v2mod
+#   define  i16v3mod SL_i16v3mod
+#   define  i16v4mod SL_i16v4mod
+#   define  i16v2cross SL_i16v2cross
+#   define  i16v3cross SL_i16v3cross
+#   define  i32v2_zero SL_i32v2_zero
+#   define  i32v2_one SL_i32v2_one
+#   define  i32v2_right SL_i32v2_right
+#   define  i32v2_up SL_i32v2_up
+#   define  i32v2_left SL_i32v2_left
+#   define  i32v2_down SL_i32v2_down
+#   define  i32v3_zero SL_i32v3_zero
+#   define  i32v3_one SL_i32v3_one
+#   define  i32v3_right SL_i32v3_right
+#   define  i32v3_up SL_i32v3_up
+#   define  i32v3_forw SL_i32v3_forw
+#   define  i32v3_left SL_i32v3_left
+#   define  i32v3_down SL_i32v3_down
+#   define  i32v3_back SL_i32v3_back
+#   define  i32v4_zero SL_i32v4_zero
+#   define  i32v4_one SL_i32v4_one
+#   define  i32v2_ SL_i32v2_
+#   define  i32v3_ SL_i32v3_
+#   define  i32v4_ SL_i32v4_
+#   define  i32v2s SL_i32v2s
+#   define  i32v3s SL_i32v3s
+#   define  i32v4s SL_i32v4s
+#   define  i32v2v SL_i32v2v
+#   define  i32v3v SL_i32v3v
+#   define  i32v4v SL_i32v4v
+#   define  i32vadd_ SL_i32vadd_
+#   define  i32vadd SL_i32vadd
+#   define  i32v2add SL_i32v2add
+#   define  i32v3add SL_i32v3add
+#   define  i32v4add SL_i32v4add
+#   define  i32vsub_ SL_i32vsub_
+#   define  i32vsub SL_i32vsub
+#   define  i32v2sub SL_i32v2sub
+#   define  i32v3sub SL_i32v3sub
+#   define  i32v4sub SL_i32v4sub
+#   define  i32vmul_ SL_i32vmul_
+#   define  i32vmul SL_i32vmul
+#   define  i32v2mul SL_i32v2mul
+#   define  i32v3mul SL_i32v3mul
+#   define  i32v4mul SL_i32v4mul
+#   define  i32vmuls_ SL_i32vmuls_
+#   define  i32vmuls SL_i32vmuls
+#   define  i32v2muls SL_i32v2muls
+#   define  i32v3muls SL_i32v3muls
+#   define  i32v4muls SL_i32v4muls
+#   define  i32vdiv_ SL_i32vdiv_
+#   define  i32vdiv SL_i32vdiv
+#   define  i32v2div SL_i32v2div
+#   define  i32v3div SL_i32v3div
+#   define  i32v4div SL_i32v4div
+#   define  i32vdivs_ SL_i32vdivs_
+#   define  i32vdivs SL_i32vdivs
+#   define  i32v2divs SL_i32v2divs
+#   define  i32v3divs SL_i32v3divs
+#   define  i32v4divs SL_i32v4divs
+#   define  i32vaddS_ SL_i32vaddS_
+#   define  i32vaddS SL_i32vaddS
+#   define  i32v2addS SL_i32v2addS
+#   define  i32v3addS SL_i32v3addS
+#   define  i32v4addS SL_i32v4addS
+#   define  i32vsubS_ SL_i32vsubS_
+#   define  i32vsubS SL_i32vsubS
+#   define  i32v2subS SL_i32v2subS
+#   define  i32v3subS SL_i32v3subS
+#   define  i32v4subS SL_i32v4subS
+#   define  i32vaddM_ SL_i32vaddM_
+#   define  i32vaddM SL_i32vaddM
+#   define  i32v2addM SL_i32v2addM
+#   define  i32v3addM SL_i32v3addM
+#   define  i32v4addM SL_i32v4addM
+#   define  i32vsubM_ SL_i32vsubM_
+#   define  i32vsubM SL_i32vsubM
+#   define  i32v2subM SL_i32v2subM
+#   define  i32v3subM SL_i32v3subM
+#   define  i32v4subM SL_i32v4subM
+#   define  i32vaddSM_ SL_i32vaddSM_
+#   define  i32vaddSM SL_i32vaddSM
+#   define  i32v2addSM SL_i32v2addSM
+#   define  i32v3addSM SL_i32v3addSM
+#   define  i32v4addSM SL_i32v4addSM
+#   define  i32vsubSM_ SL_i32vsubSM_
+#   define  i32vsubSM SL_i32vsubSM
+#   define  i32v2subSM SL_i32v2subSM
+#   define  i32v3subSM SL_i32v3subSM
+#   define  i32v4subSM SL_i32v4subSM
+#   define  i32vSadd_ SL_i32vSadd_
+#   define  i32vSadd SL_i32vSadd
+#   define  i32v2Sadd SL_i32v2Sadd
+#   define  i32v3Sadd SL_i32v3Sadd
+#   define  i32v4Sadd SL_i32v4Sadd
+#   define  i32vSsub_ SL_i32vSsub_
+#   define  i32vSsub SL_i32vSsub
+#   define  i32v2Ssub SL_i32v2Ssub
+#   define  i32v3Ssub SL_i32v3Ssub
+#   define  i32v4Ssub SL_i32v4Ssub
+#   define  i32vneg_ SL_i32vneg_
+#   define  i32vneg SL_i32vneg
+#   define  i32v2neg SL_i32v2neg
+#   define  i32v3neg SL_i32v3neg
+#   define  i32v4neg SL_i32v4neg
+#   define  i32vabs_ SL_i32vabs_
+#   define  i32vabs SL_i32vabs
+#   define  i32v2abs SL_i32v2abs
+#   define  i32v3abs SL_i32v3abs
+#   define  i32v4abs SL_i32v4abs
+#   define  i32vmin_ SL_i32vmin_
+#   define  i32vmin SL_i32vmin
+#   define  i32v2min SL_i32v2min
+#   define  i32v3min SL_i32v3min
+#   define  i32v4min SL_i32v4min
+#   define  i32vmax_ SL_i32vmax_
+#   define  i32vmax SL_i32vmax
+#   define  i32v2max SL_i32v2max
+#   define  i32v3max SL_i32v3max
+#   define  i32v4max SL_i32v4max
+#   define  i32vdot_ SL_i32vdot_
+#   define  i32vdot SL_i32vdot
+#   define  i32v2dot SL_i32v2dot
+#   define  i32v3dot SL_i32v3dot
+#   define  i32v4dot SL_i32v4dot
+#   define  i32vlen_max_ SL_i32vlen_max_
+#   define  i32vlen_max SL_i32vlen_max
+#   define  i32v2len_max SL_i32v2len_max
+#   define  i32v3len_max SL_i32v3len_max
+#   define  i32v4len_max SL_i32v4len_max
+#   define  i32vlen_manh_ SL_i32vlen_manh_
+#   define  i32vlen_manh SL_i32vlen_manh
+#   define  i32v2len_manh SL_i32v2len_manh
+#   define  i32v3len_manh SL_i32v3len_manh
+#   define  i32v4len_manh SL_i32v4len_manh
+#   define  i32vlen_srq_ SL_i32vlen_srq_
+#   define  i32vlen_srq SL_i32vlen_srq
+#   define  i32v2len_sqr SL_i32v2len_sqr
+#   define  i32v3len_sqr SL_i32v3len_sqr
+#   define  i32v4len_sqr SL_i32v4len_sqr
+#   define  i32vlen_ SL_i32vlen_
+#   define  i32vlen SL_i32vlen
+#   define  i32v2len SL_i32v2len
+#   define  i32v3len SL_i32v3len
+#   define  i32v4len SL_i32v4len
+#   define  i32vdist_ SL_i32vdist_
+#   define  i32vdist SL_i32vdist
+#   define  i32v2dist SL_i32v2dist
+#   define  i32v3dist SL_i32v3dist
+#   define  i32v4dist SL_i32v4dist
+#   define  i32v2refl SL_i32v2refl
+#   define  i32v3refl SL_i32v3refl
+#   define  i32v4refl SL_i32v4refl
+#   define  i32v2refl_u SL_i32v2refl_u
+#   define  i32v3refl_u SL_i32v3refl_u
+#   define  i32v4refl_u SL_i32v4refl_u
+#   define  i32vmods_ SL_i32vmods_
+#   define  i32vmods SL_i32vmods
+#   define  i32v2mods SL_i32v2mods
+#   define  i32v3mods SL_i32v3mods
+#   define  i32v4mods SL_i32v4mods
+#   define  i32vmod_ SL_i32vmod_
+#   define  i32vmod SL_i32vmod
+#   define  i32v2mod SL_i32v2mod
+#   define  i32v3mod SL_i32v3mod
+#   define  i32v4mod SL_i32v4mod
+#   define  i32v2cross SL_i32v2cross
+#   define  i32v3cross SL_i32v3cross
+#   define  i64v2_zero SL_i64v2_zero
+#   define  i64v2_one SL_i64v2_one
+#   define  i64v2_right SL_i64v2_right
+#   define  i64v2_up SL_i64v2_up
+#   define  i64v2_left SL_i64v2_left
+#   define  i64v2_down SL_i64v2_down
+#   define  i64v3_zero SL_i64v3_zero
+#   define  i64v3_one SL_i64v3_one
+#   define  i64v3_right SL_i64v3_right
+#   define  i64v3_up SL_i64v3_up
+#   define  i64v3_forw SL_i64v3_forw
+#   define  i64v3_left SL_i64v3_left
+#   define  i64v3_down SL_i64v3_down
+#   define  i64v3_back SL_i64v3_back
+#   define  i64v4_zero SL_i64v4_zero
+#   define  i64v4_one SL_i64v4_one
+#   define  i64v2_ SL_i64v2_
+#   define  i64v3_ SL_i64v3_
+#   define  i64v4_ SL_i64v4_
+#   define  i64v2s SL_i64v2s
+#   define  i64v3s SL_i64v3s
+#   define  i64v4s SL_i64v4s
+#   define  i64v2v SL_i64v2v
+#   define  i64v3v SL_i64v3v
+#   define  i64v4v SL_i64v4v
+#   define  i64vadd_ SL_i64vadd_
+#   define  i64vadd SL_i64vadd
+#   define  i64v2add SL_i64v2add
+#   define  i64v3add SL_i64v3add
+#   define  i64v4add SL_i64v4add
+#   define  i64vsub_ SL_i64vsub_
+#   define  i64vsub SL_i64vsub
+#   define  i64v2sub SL_i64v2sub
+#   define  i64v3sub SL_i64v3sub
+#   define  i64v4sub SL_i64v4sub
+#   define  i64vmul_ SL_i64vmul_
+#   define  i64vmul SL_i64vmul
+#   define  i64v2mul SL_i64v2mul
+#   define  i64v3mul SL_i64v3mul
+#   define  i64v4mul SL_i64v4mul
+#   define  i64vmuls_ SL_i64vmuls_
+#   define  i64vmuls SL_i64vmuls
+#   define  i64v2muls SL_i64v2muls
+#   define  i64v3muls SL_i64v3muls
+#   define  i64v4muls SL_i64v4muls
+#   define  i64vdiv_ SL_i64vdiv_
+#   define  i64vdiv SL_i64vdiv
+#   define  i64v2div SL_i64v2div
+#   define  i64v3div SL_i64v3div
+#   define  i64v4div SL_i64v4div
+#   define  i64vdivs_ SL_i64vdivs_
+#   define  i64vdivs SL_i64vdivs
+#   define  i64v2divs SL_i64v2divs
+#   define  i64v3divs SL_i64v3divs
+#   define  i64v4divs SL_i64v4divs
+#   define  i64vaddS_ SL_i64vaddS_
+#   define  i64vaddS SL_i64vaddS
+#   define  i64v2addS SL_i64v2addS
+#   define  i64v3addS SL_i64v3addS
+#   define  i64v4addS SL_i64v4addS
+#   define  i64vsubS_ SL_i64vsubS_
+#   define  i64vsubS SL_i64vsubS
+#   define  i64v2subS SL_i64v2subS
+#   define  i64v3subS SL_i64v3subS
+#   define  i64v4subS SL_i64v4subS
+#   define  i64vaddM_ SL_i64vaddM_
+#   define  i64vaddM SL_i64vaddM
+#   define  i64v2addM SL_i64v2addM
+#   define  i64v3addM SL_i64v3addM
+#   define  i64v4addM SL_i64v4addM
+#   define  i64vsubM_ SL_i64vsubM_
+#   define  i64vsubM SL_i64vsubM
+#   define  i64v2subM SL_i64v2subM
+#   define  i64v3subM SL_i64v3subM
+#   define  i64v4subM SL_i64v4subM
+#   define  i64vaddSM_ SL_i64vaddSM_
+#   define  i64vaddSM SL_i64vaddSM
+#   define  i64v2addSM SL_i64v2addSM
+#   define  i64v3addSM SL_i64v3addSM
+#   define  i64v4addSM SL_i64v4addSM
+#   define  i64vsubSM_ SL_i64vsubSM_
+#   define  i64vsubSM SL_i64vsubSM
+#   define  i64v2subSM SL_i64v2subSM
+#   define  i64v3subSM SL_i64v3subSM
+#   define  i64v4subSM SL_i64v4subSM
+#   define  i64vSadd_ SL_i64vSadd_
+#   define  i64vSadd SL_i64vSadd
+#   define  i64v2Sadd SL_i64v2Sadd
+#   define  i64v3Sadd SL_i64v3Sadd
+#   define  i64v4Sadd SL_i64v4Sadd
+#   define  i64vSsub_ SL_i64vSsub_
+#   define  i64vSsub SL_i64vSsub
+#   define  i64v2Ssub SL_i64v2Ssub
+#   define  i64v3Ssub SL_i64v3Ssub
+#   define  i64v4Ssub SL_i64v4Ssub
+#   define  i64vneg_ SL_i64vneg_
+#   define  i64vneg SL_i64vneg
+#   define  i64v2neg SL_i64v2neg
+#   define  i64v3neg SL_i64v3neg
+#   define  i64v4neg SL_i64v4neg
+#   define  i64vabs_ SL_i64vabs_
+#   define  i64vabs SL_i64vabs
+#   define  i64v2abs SL_i64v2abs
+#   define  i64v3abs SL_i64v3abs
+#   define  i64v4abs SL_i64v4abs
+#   define  i64vmin_ SL_i64vmin_
+#   define  i64vmin SL_i64vmin
+#   define  i64v2min SL_i64v2min
+#   define  i64v3min SL_i64v3min
+#   define  i64v4min SL_i64v4min
+#   define  i64vmax_ SL_i64vmax_
+#   define  i64vmax SL_i64vmax
+#   define  i64v2max SL_i64v2max
+#   define  i64v3max SL_i64v3max
+#   define  i64v4max SL_i64v4max
+#   define  i64vdot_ SL_i64vdot_
+#   define  i64vdot SL_i64vdot
+#   define  i64v2dot SL_i64v2dot
+#   define  i64v3dot SL_i64v3dot
+#   define  i64v4dot SL_i64v4dot
+#   define  i64vlen_max_ SL_i64vlen_max_
+#   define  i64vlen_max SL_i64vlen_max
+#   define  i64v2len_max SL_i64v2len_max
+#   define  i64v3len_max SL_i64v3len_max
+#   define  i64v4len_max SL_i64v4len_max
+#   define  i64vlen_manh_ SL_i64vlen_manh_
+#   define  i64vlen_manh SL_i64vlen_manh
+#   define  i64v2len_manh SL_i64v2len_manh
+#   define  i64v3len_manh SL_i64v3len_manh
+#   define  i64v4len_manh SL_i64v4len_manh
+#   define  i64vlen_srq_ SL_i64vlen_srq_
+#   define  i64vlen_srq SL_i64vlen_srq
+#   define  i64v2len_sqr SL_i64v2len_sqr
+#   define  i64v3len_sqr SL_i64v3len_sqr
+#   define  i64v4len_sqr SL_i64v4len_sqr
+#   define  i64vlen_ SL_i64vlen_
+#   define  i64vlen SL_i64vlen
+#   define  i64v2len SL_i64v2len
+#   define  i64v3len SL_i64v3len
+#   define  i64v4len SL_i64v4len
+#   define  i64vdist_ SL_i64vdist_
+#   define  i64vdist SL_i64vdist
+#   define  i64v2dist SL_i64v2dist
+#   define  i64v3dist SL_i64v3dist
+#   define  i64v4dist SL_i64v4dist
+#   define  i64v2refl SL_i64v2refl
+#   define  i64v3refl SL_i64v3refl
+#   define  i64v4refl SL_i64v4refl
+#   define  i64v2refl_u SL_i64v2refl_u
+#   define  i64v3refl_u SL_i64v3refl_u
+#   define  i64v4refl_u SL_i64v4refl_u
+#   define  i64vmods_ SL_i64vmods_
+#   define  i64vmods SL_i64vmods
+#   define  i64v2mods SL_i64v2mods
+#   define  i64v3mods SL_i64v3mods
+#   define  i64v4mods SL_i64v4mods
+#   define  i64vmod_ SL_i64vmod_
+#   define  i64vmod SL_i64vmod
+#   define  i64v2mod SL_i64v2mod
+#   define  i64v3mod SL_i64v3mod
+#   define  i64v4mod SL_i64v4mod
+#   define  i64v2cross SL_i64v2cross
+#   define  i64v3cross SL_i64v3cross
+#   define  u8v2_zero SL_u8v2_zero
+#   define  u8v2_one SL_u8v2_one
+#   define  u8v2_right SL_u8v2_right
+#   define  u8v2_up SL_u8v2_up
+#   define  u8v3_zero SL_u8v3_zero
+#   define  u8v3_one SL_u8v3_one
+#   define  u8v3_right SL_u8v3_right
+#   define  u8v3_up SL_u8v3_up
+#   define  u8v3_forw SL_u8v3_forw
+#   define  u8v4_zero SL_u8v4_zero
+#   define  u8v4_one SL_u8v4_one
+#   define  u8v2_ SL_u8v2_
+#   define  u8v3_ SL_u8v3_
+#   define  u8v4_ SL_u8v4_
+#   define  u8v2s SL_u8v2s
+#   define  u8v3s SL_u8v3s
+#   define  u8v4s SL_u8v4s
+#   define  u8v2v SL_u8v2v
+#   define  u8v3v SL_u8v3v
+#   define  u8v4v SL_u8v4v
+#   define  u8vadd_ SL_u8vadd_
+#   define  u8vadd SL_u8vadd
+#   define  u8v2add SL_u8v2add
+#   define  u8v3add SL_u8v3add
+#   define  u8v4add SL_u8v4add
+#   define  u8vsub_ SL_u8vsub_
+#   define  u8vsub SL_u8vsub
+#   define  u8v2sub SL_u8v2sub
+#   define  u8v3sub SL_u8v3sub
+#   define  u8v4sub SL_u8v4sub
+#   define  u8vmul_ SL_u8vmul_
+#   define  u8vmul SL_u8vmul
+#   define  u8v2mul SL_u8v2mul
+#   define  u8v3mul SL_u8v3mul
+#   define  u8v4mul SL_u8v4mul
+#   define  u8vmuls_ SL_u8vmuls_
+#   define  u8vmuls SL_u8vmuls
+#   define  u8v2muls SL_u8v2muls
+#   define  u8v3muls SL_u8v3muls
+#   define  u8v4muls SL_u8v4muls
+#   define  u8vdiv_ SL_u8vdiv_
+#   define  u8vdiv SL_u8vdiv
+#   define  u8v2div SL_u8v2div
+#   define  u8v3div SL_u8v3div
+#   define  u8v4div SL_u8v4div
+#   define  u8vdivs_ SL_u8vdivs_
+#   define  u8vdivs SL_u8vdivs
+#   define  u8v2divs SL_u8v2divs
+#   define  u8v3divs SL_u8v3divs
+#   define  u8v4divs SL_u8v4divs
+#   define  u8vaddS_ SL_u8vaddS_
+#   define  u8vaddS SL_u8vaddS
+#   define  u8v2addS SL_u8v2addS
+#   define  u8v3addS SL_u8v3addS
+#   define  u8v4addS SL_u8v4addS
+#   define  u8vsubS_ SL_u8vsubS_
+#   define  u8vsubS SL_u8vsubS
+#   define  u8v2subS SL_u8v2subS
+#   define  u8v3subS SL_u8v3subS
+#   define  u8v4subS SL_u8v4subS
+#   define  u8vaddM_ SL_u8vaddM_
+#   define  u8vaddM SL_u8vaddM
+#   define  u8v2addM SL_u8v2addM
+#   define  u8v3addM SL_u8v3addM
+#   define  u8v4addM SL_u8v4addM
+#   define  u8vsubM_ SL_u8vsubM_
+#   define  u8vsubM SL_u8vsubM
+#   define  u8v2subM SL_u8v2subM
+#   define  u8v3subM SL_u8v3subM
+#   define  u8v4subM SL_u8v4subM
+#   define  u8vaddSM_ SL_u8vaddSM_
+#   define  u8vaddSM SL_u8vaddSM
+#   define  u8v2addSM SL_u8v2addSM
+#   define  u8v3addSM SL_u8v3addSM
+#   define  u8v4addSM SL_u8v4addSM
+#   define  u8vsubSM_ SL_u8vsubSM_
+#   define  u8vsubSM SL_u8vsubSM
+#   define  u8v2subSM SL_u8v2subSM
+#   define  u8v3subSM SL_u8v3subSM
+#   define  u8v4subSM SL_u8v4subSM
+#   define  u8vSadd_ SL_u8vSadd_
+#   define  u8vSadd SL_u8vSadd
+#   define  u8v2Sadd SL_u8v2Sadd
+#   define  u8v3Sadd SL_u8v3Sadd
+#   define  u8v4Sadd SL_u8v4Sadd
+#   define  u8vSsub_ SL_u8vSsub_
+#   define  u8vSsub SL_u8vSsub
+#   define  u8v2Ssub SL_u8v2Ssub
+#   define  u8v3Ssub SL_u8v3Ssub
+#   define  u8v4Ssub SL_u8v4Ssub
+#   define  u8vmin_ SL_u8vmin_
+#   define  u8vmin SL_u8vmin
+#   define  u8v2min SL_u8v2min
+#   define  u8v3min SL_u8v3min
+#   define  u8v4min SL_u8v4min
+#   define  u8vmax_ SL_u8vmax_
+#   define  u8vmax SL_u8vmax
+#   define  u8v2max SL_u8v2max
+#   define  u8v3max SL_u8v3max
+#   define  u8v4max SL_u8v4max
+#   define  u8vdot_ SL_u8vdot_
+#   define  u8vdot SL_u8vdot
+#   define  u8v2dot SL_u8v2dot
+#   define  u8v3dot SL_u8v3dot
+#   define  u8v4dot SL_u8v4dot
+#   define  u8vlen_max_ SL_u8vlen_max_
+#   define  u8vlen_max SL_u8vlen_max
+#   define  u8v2len_max SL_u8v2len_max
+#   define  u8v3len_max SL_u8v3len_max
+#   define  u8v4len_max SL_u8v4len_max
+#   define  u8vlen_manh_ SL_u8vlen_manh_
+#   define  u8vlen_manh SL_u8vlen_manh
+#   define  u8v2len_manh SL_u8v2len_manh
+#   define  u8v3len_manh SL_u8v3len_manh
+#   define  u8v4len_manh SL_u8v4len_manh
+#   define  u8vlen_srq_ SL_u8vlen_srq_
+#   define  u8vlen_srq SL_u8vlen_srq
+#   define  u8v2len_sqr SL_u8v2len_sqr
+#   define  u8v3len_sqr SL_u8v3len_sqr
+#   define  u8v4len_sqr SL_u8v4len_sqr
+#   define  u8vlen_ SL_u8vlen_
+#   define  u8vlen SL_u8vlen
+#   define  u8v2len SL_u8v2len
+#   define  u8v3len SL_u8v3len
+#   define  u8v4len SL_u8v4len
+#   define  u8vdist_ SL_u8vdist_
+#   define  u8vdist SL_u8vdist
+#   define  u8v2dist SL_u8v2dist
+#   define  u8v3dist SL_u8v3dist
+#   define  u8v4dist SL_u8v4dist
+#   define  u8v2refl SL_u8v2refl
+#   define  u8v3refl SL_u8v3refl
+#   define  u8v4refl SL_u8v4refl
+#   define  u8v2refl_u SL_u8v2refl_u
+#   define  u8v3refl_u SL_u8v3refl_u
+#   define  u8v4refl_u SL_u8v4refl_u
+#   define  u8vmods_ SL_u8vmods_
+#   define  u8vmods SL_u8vmods
+#   define  u8v2mods SL_u8v2mods
+#   define  u8v3mods SL_u8v3mods
+#   define  u8v4mods SL_u8v4mods
+#   define  u8vmod_ SL_u8vmod_
+#   define  u8vmod SL_u8vmod
+#   define  u8v2mod SL_u8v2mod
+#   define  u8v3mod SL_u8v3mod
+#   define  u8v4mod SL_u8v4mod
+#   define  u16v2_zero SL_u16v2_zero
+#   define  u16v2_one SL_u16v2_one
+#   define  u16v2_right SL_u16v2_right
+#   define  u16v2_up SL_u16v2_up
+#   define  u16v3_zero SL_u16v3_zero
+#   define  u16v3_one SL_u16v3_one
+#   define  u16v3_right SL_u16v3_right
+#   define  u16v3_up SL_u16v3_up
+#   define  u16v3_forw SL_u16v3_forw
+#   define  u16v4_zero SL_u16v4_zero
+#   define  u16v4_one SL_u16v4_one
+#   define  u16v2_ SL_u16v2_
+#   define  u16v3_ SL_u16v3_
+#   define  u16v4_ SL_u16v4_
+#   define  u16v2s SL_u16v2s
+#   define  u16v3s SL_u16v3s
+#   define  u16v4s SL_u16v4s
+#   define  u16v2v SL_u16v2v
+#   define  u16v3v SL_u16v3v
+#   define  u16v4v SL_u16v4v
+#   define  u16vadd_ SL_u16vadd_
+#   define  u16vadd SL_u16vadd
+#   define  u16v2add SL_u16v2add
+#   define  u16v3add SL_u16v3add
+#   define  u16v4add SL_u16v4add
+#   define  u16vsub_ SL_u16vsub_
+#   define  u16vsub SL_u16vsub
+#   define  u16v2sub SL_u16v2sub
+#   define  u16v3sub SL_u16v3sub
+#   define  u16v4sub SL_u16v4sub
+#   define  u16vmul_ SL_u16vmul_
+#   define  u16vmul SL_u16vmul
+#   define  u16v2mul SL_u16v2mul
+#   define  u16v3mul SL_u16v3mul
+#   define  u16v4mul SL_u16v4mul
+#   define  u16vmuls_ SL_u16vmuls_
+#   define  u16vmuls SL_u16vmuls
+#   define  u16v2muls SL_u16v2muls
+#   define  u16v3muls SL_u16v3muls
+#   define  u16v4muls SL_u16v4muls
+#   define  u16vdiv_ SL_u16vdiv_
+#   define  u16vdiv SL_u16vdiv
+#   define  u16v2div SL_u16v2div
+#   define  u16v3div SL_u16v3div
+#   define  u16v4div SL_u16v4div
+#   define  u16vdivs_ SL_u16vdivs_
+#   define  u16vdivs SL_u16vdivs
+#   define  u16v2divs SL_u16v2divs
+#   define  u16v3divs SL_u16v3divs
+#   define  u16v4divs SL_u16v4divs
+#   define  u16vaddS_ SL_u16vaddS_
+#   define  u16vaddS SL_u16vaddS
+#   define  u16v2addS SL_u16v2addS
+#   define  u16v3addS SL_u16v3addS
+#   define  u16v4addS SL_u16v4addS
+#   define  u16vsubS_ SL_u16vsubS_
+#   define  u16vsubS SL_u16vsubS
+#   define  u16v2subS SL_u16v2subS
+#   define  u16v3subS SL_u16v3subS
+#   define  u16v4subS SL_u16v4subS
+#   define  u16vaddM_ SL_u16vaddM_
+#   define  u16vaddM SL_u16vaddM
+#   define  u16v2addM SL_u16v2addM
+#   define  u16v3addM SL_u16v3addM
+#   define  u16v4addM SL_u16v4addM
+#   define  u16vsubM_ SL_u16vsubM_
+#   define  u16vsubM SL_u16vsubM
+#   define  u16v2subM SL_u16v2subM
+#   define  u16v3subM SL_u16v3subM
+#   define  u16v4subM SL_u16v4subM
+#   define  u16vaddSM_ SL_u16vaddSM_
+#   define  u16vaddSM SL_u16vaddSM
+#   define  u16v2addSM SL_u16v2addSM
+#   define  u16v3addSM SL_u16v3addSM
+#   define  u16v4addSM SL_u16v4addSM
+#   define  u16vsubSM_ SL_u16vsubSM_
+#   define  u16vsubSM SL_u16vsubSM
+#   define  u16v2subSM SL_u16v2subSM
+#   define  u16v3subSM SL_u16v3subSM
+#   define  u16v4subSM SL_u16v4subSM
+#   define  u16vSadd_ SL_u16vSadd_
+#   define  u16vSadd SL_u16vSadd
+#   define  u16v2Sadd SL_u16v2Sadd
+#   define  u16v3Sadd SL_u16v3Sadd
+#   define  u16v4Sadd SL_u16v4Sadd
+#   define  u16vSsub_ SL_u16vSsub_
+#   define  u16vSsub SL_u16vSsub
+#   define  u16v2Ssub SL_u16v2Ssub
+#   define  u16v3Ssub SL_u16v3Ssub
+#   define  u16v4Ssub SL_u16v4Ssub
+#   define  u16vmin_ SL_u16vmin_
+#   define  u16vmin SL_u16vmin
+#   define  u16v2min SL_u16v2min
+#   define  u16v3min SL_u16v3min
+#   define  u16v4min SL_u16v4min
+#   define  u16vmax_ SL_u16vmax_
+#   define  u16vmax SL_u16vmax
+#   define  u16v2max SL_u16v2max
+#   define  u16v3max SL_u16v3max
+#   define  u16v4max SL_u16v4max
+#   define  u16vdot_ SL_u16vdot_
+#   define  u16vdot SL_u16vdot
+#   define  u16v2dot SL_u16v2dot
+#   define  u16v3dot SL_u16v3dot
+#   define  u16v4dot SL_u16v4dot
+#   define  u16vlen_max_ SL_u16vlen_max_
+#   define  u16vlen_max SL_u16vlen_max
+#   define  u16v2len_max SL_u16v2len_max
+#   define  u16v3len_max SL_u16v3len_max
+#   define  u16v4len_max SL_u16v4len_max
+#   define  u16vlen_manh_ SL_u16vlen_manh_
+#   define  u16vlen_manh SL_u16vlen_manh
+#   define  u16v2len_manh SL_u16v2len_manh
+#   define  u16v3len_manh SL_u16v3len_manh
+#   define  u16v4len_manh SL_u16v4len_manh
+#   define  u16vlen_srq_ SL_u16vlen_srq_
+#   define  u16vlen_srq SL_u16vlen_srq
+#   define  u16v2len_sqr SL_u16v2len_sqr
+#   define  u16v3len_sqr SL_u16v3len_sqr
+#   define  u16v4len_sqr SL_u16v4len_sqr
+#   define  u16vlen_ SL_u16vlen_
+#   define  u16vlen SL_u16vlen
+#   define  u16v2len SL_u16v2len
+#   define  u16v3len SL_u16v3len
+#   define  u16v4len SL_u16v4len
+#   define  u16vdist_ SL_u16vdist_
+#   define  u16vdist SL_u16vdist
+#   define  u16v2dist SL_u16v2dist
+#   define  u16v3dist SL_u16v3dist
+#   define  u16v4dist SL_u16v4dist
+#   define  u16v2refl SL_u16v2refl
+#   define  u16v3refl SL_u16v3refl
+#   define  u16v4refl SL_u16v4refl
+#   define  u16v2refl_u SL_u16v2refl_u
+#   define  u16v3refl_u SL_u16v3refl_u
+#   define  u16v4refl_u SL_u16v4refl_u
+#   define  u16vmods_ SL_u16vmods_
+#   define  u16vmods SL_u16vmods
+#   define  u16v2mods SL_u16v2mods
+#   define  u16v3mods SL_u16v3mods
+#   define  u16v4mods SL_u16v4mods
+#   define  u16vmod_ SL_u16vmod_
+#   define  u16vmod SL_u16vmod
+#   define  u16v2mod SL_u16v2mod
+#   define  u16v3mod SL_u16v3mod
+#   define  u16v4mod SL_u16v4mod
+#   define  u32v2_zero SL_u32v2_zero
+#   define  u32v2_one SL_u32v2_one
+#   define  u32v2_right SL_u32v2_right
+#   define  u32v2_up SL_u32v2_up
+#   define  u32v3_zero SL_u32v3_zero
+#   define  u32v3_one SL_u32v3_one
+#   define  u32v3_right SL_u32v3_right
+#   define  u32v3_up SL_u32v3_up
+#   define  u32v3_forw SL_u32v3_forw
+#   define  u32v4_zero SL_u32v4_zero
+#   define  u32v4_one SL_u32v4_one
+#   define  u32v2_ SL_u32v2_
+#   define  u32v3_ SL_u32v3_
+#   define  u32v4_ SL_u32v4_
+#   define  u32v2s SL_u32v2s
+#   define  u32v3s SL_u32v3s
+#   define  u32v4s SL_u32v4s
+#   define  u32v2v SL_u32v2v
+#   define  u32v3v SL_u32v3v
+#   define  u32v4v SL_u32v4v
+#   define  u32vadd_ SL_u32vadd_
+#   define  u32vadd SL_u32vadd
+#   define  u32v2add SL_u32v2add
+#   define  u32v3add SL_u32v3add
+#   define  u32v4add SL_u32v4add
+#   define  u32vsub_ SL_u32vsub_
+#   define  u32vsub SL_u32vsub
+#   define  u32v2sub SL_u32v2sub
+#   define  u32v3sub SL_u32v3sub
+#   define  u32v4sub SL_u32v4sub
+#   define  u32vmul_ SL_u32vmul_
+#   define  u32vmul SL_u32vmul
+#   define  u32v2mul SL_u32v2mul
+#   define  u32v3mul SL_u32v3mul
+#   define  u32v4mul SL_u32v4mul
+#   define  u32vmuls_ SL_u32vmuls_
+#   define  u32vmuls SL_u32vmuls
+#   define  u32v2muls SL_u32v2muls
+#   define  u32v3muls SL_u32v3muls
+#   define  u32v4muls SL_u32v4muls
+#   define  u32vdiv_ SL_u32vdiv_
+#   define  u32vdiv SL_u32vdiv
+#   define  u32v2div SL_u32v2div
+#   define  u32v3div SL_u32v3div
+#   define  u32v4div SL_u32v4div
+#   define  u32vdivs_ SL_u32vdivs_
+#   define  u32vdivs SL_u32vdivs
+#   define  u32v2divs SL_u32v2divs
+#   define  u32v3divs SL_u32v3divs
+#   define  u32v4divs SL_u32v4divs
+#   define  u32vaddS_ SL_u32vaddS_
+#   define  u32vaddS SL_u32vaddS
+#   define  u32v2addS SL_u32v2addS
+#   define  u32v3addS SL_u32v3addS
+#   define  u32v4addS SL_u32v4addS
+#   define  u32vsubS_ SL_u32vsubS_
+#   define  u32vsubS SL_u32vsubS
+#   define  u32v2subS SL_u32v2subS
+#   define  u32v3subS SL_u32v3subS
+#   define  u32v4subS SL_u32v4subS
+#   define  u32vaddM_ SL_u32vaddM_
+#   define  u32vaddM SL_u32vaddM
+#   define  u32v2addM SL_u32v2addM
+#   define  u32v3addM SL_u32v3addM
+#   define  u32v4addM SL_u32v4addM
+#   define  u32vsubM_ SL_u32vsubM_
+#   define  u32vsubM SL_u32vsubM
+#   define  u32v2subM SL_u32v2subM
+#   define  u32v3subM SL_u32v3subM
+#   define  u32v4subM SL_u32v4subM
+#   define  u32vaddSM_ SL_u32vaddSM_
+#   define  u32vaddSM SL_u32vaddSM
+#   define  u32v2addSM SL_u32v2addSM
+#   define  u32v3addSM SL_u32v3addSM
+#   define  u32v4addSM SL_u32v4addSM
+#   define  u32vsubSM_ SL_u32vsubSM_
+#   define  u32vsubSM SL_u32vsubSM
+#   define  u32v2subSM SL_u32v2subSM
+#   define  u32v3subSM SL_u32v3subSM
+#   define  u32v4subSM SL_u32v4subSM
+#   define  u32vSadd_ SL_u32vSadd_
+#   define  u32vSadd SL_u32vSadd
+#   define  u32v2Sadd SL_u32v2Sadd
+#   define  u32v3Sadd SL_u32v3Sadd
+#   define  u32v4Sadd SL_u32v4Sadd
+#   define  u32vSsub_ SL_u32vSsub_
+#   define  u32vSsub SL_u32vSsub
+#   define  u32v2Ssub SL_u32v2Ssub
+#   define  u32v3Ssub SL_u32v3Ssub
+#   define  u32v4Ssub SL_u32v4Ssub
+#   define  u32vmin_ SL_u32vmin_
+#   define  u32vmin SL_u32vmin
+#   define  u32v2min SL_u32v2min
+#   define  u32v3min SL_u32v3min
+#   define  u32v4min SL_u32v4min
+#   define  u32vmax_ SL_u32vmax_
+#   define  u32vmax SL_u32vmax
+#   define  u32v2max SL_u32v2max
+#   define  u32v3max SL_u32v3max
+#   define  u32v4max SL_u32v4max
+#   define  u32vdot_ SL_u32vdot_
+#   define  u32vdot SL_u32vdot
+#   define  u32v2dot SL_u32v2dot
+#   define  u32v3dot SL_u32v3dot
+#   define  u32v4dot SL_u32v4dot
+#   define  u32vlen_max_ SL_u32vlen_max_
+#   define  u32vlen_max SL_u32vlen_max
+#   define  u32v2len_max SL_u32v2len_max
+#   define  u32v3len_max SL_u32v3len_max
+#   define  u32v4len_max SL_u32v4len_max
+#   define  u32vlen_manh_ SL_u32vlen_manh_
+#   define  u32vlen_manh SL_u32vlen_manh
+#   define  u32v2len_manh SL_u32v2len_manh
+#   define  u32v3len_manh SL_u32v3len_manh
+#   define  u32v4len_manh SL_u32v4len_manh
+#   define  u32vlen_srq_ SL_u32vlen_srq_
+#   define  u32vlen_srq SL_u32vlen_srq
+#   define  u32v2len_sqr SL_u32v2len_sqr
+#   define  u32v3len_sqr SL_u32v3len_sqr
+#   define  u32v4len_sqr SL_u32v4len_sqr
+#   define  u32vlen_ SL_u32vlen_
+#   define  u32vlen SL_u32vlen
+#   define  u32v2len SL_u32v2len
+#   define  u32v3len SL_u32v3len
+#   define  u32v4len SL_u32v4len
+#   define  u32vdist_ SL_u32vdist_
+#   define  u32vdist SL_u32vdist
+#   define  u32v2dist SL_u32v2dist
+#   define  u32v3dist SL_u32v3dist
+#   define  u32v4dist SL_u32v4dist
+#   define  u32v2refl SL_u32v2refl
+#   define  u32v3refl SL_u32v3refl
+#   define  u32v4refl SL_u32v4refl
+#   define  u32v2refl_u SL_u32v2refl_u
+#   define  u32v3refl_u SL_u32v3refl_u
+#   define  u32v4refl_u SL_u32v4refl_u
+#   define  u32vmods_ SL_u32vmods_
+#   define  u32vmods SL_u32vmods
+#   define  u32v2mods SL_u32v2mods
+#   define  u32v3mods SL_u32v3mods
+#   define  u32v4mods SL_u32v4mods
+#   define  u32vmod_ SL_u32vmod_
+#   define  u32vmod SL_u32vmod
+#   define  u32v2mod SL_u32v2mod
+#   define  u32v3mod SL_u32v3mod
+#   define  u32v4mod SL_u32v4mod
+#   define  u64v2_zero SL_u64v2_zero
+#   define  u64v2_one SL_u64v2_one
+#   define  u64v2_right SL_u64v2_right
+#   define  u64v2_up SL_u64v2_up
+#   define  u64v3_zero SL_u64v3_zero
+#   define  u64v3_one SL_u64v3_one
+#   define  u64v3_right SL_u64v3_right
+#   define  u64v3_up SL_u64v3_up
+#   define  u64v3_forw SL_u64v3_forw
+#   define  u64v4_zero SL_u64v4_zero
+#   define  u64v4_one SL_u64v4_one
+#   define  u64v2_ SL_u64v2_
+#   define  u64v3_ SL_u64v3_
+#   define  u64v4_ SL_u64v4_
+#   define  u64v2s SL_u64v2s
+#   define  u64v3s SL_u64v3s
+#   define  u64v4s SL_u64v4s
+#   define  u64v2v SL_u64v2v
+#   define  u64v3v SL_u64v3v
+#   define  u64v4v SL_u64v4v
+#   define  u64vadd_ SL_u64vadd_
+#   define  u64vadd SL_u64vadd
+#   define  u64v2add SL_u64v2add
+#   define  u64v3add SL_u64v3add
+#   define  u64v4add SL_u64v4add
+#   define  u64vsub_ SL_u64vsub_
+#   define  u64vsub SL_u64vsub
+#   define  u64v2sub SL_u64v2sub
+#   define  u64v3sub SL_u64v3sub
+#   define  u64v4sub SL_u64v4sub
+#   define  u64vmul_ SL_u64vmul_
+#   define  u64vmul SL_u64vmul
+#   define  u64v2mul SL_u64v2mul
+#   define  u64v3mul SL_u64v3mul
+#   define  u64v4mul SL_u64v4mul
+#   define  u64vmuls_ SL_u64vmuls_
+#   define  u64vmuls SL_u64vmuls
+#   define  u64v2muls SL_u64v2muls
+#   define  u64v3muls SL_u64v3muls
+#   define  u64v4muls SL_u64v4muls
+#   define  u64vdiv_ SL_u64vdiv_
+#   define  u64vdiv SL_u64vdiv
+#   define  u64v2div SL_u64v2div
+#   define  u64v3div SL_u64v3div
+#   define  u64v4div SL_u64v4div
+#   define  u64vdivs_ SL_u64vdivs_
+#   define  u64vdivs SL_u64vdivs
+#   define  u64v2divs SL_u64v2divs
+#   define  u64v3divs SL_u64v3divs
+#   define  u64v4divs SL_u64v4divs
+#   define  u64vaddS_ SL_u64vaddS_
+#   define  u64vaddS SL_u64vaddS
+#   define  u64v2addS SL_u64v2addS
+#   define  u64v3addS SL_u64v3addS
+#   define  u64v4addS SL_u64v4addS
+#   define  u64vsubS_ SL_u64vsubS_
+#   define  u64vsubS SL_u64vsubS
+#   define  u64v2subS SL_u64v2subS
+#   define  u64v3subS SL_u64v3subS
+#   define  u64v4subS SL_u64v4subS
+#   define  u64vaddM_ SL_u64vaddM_
+#   define  u64vaddM SL_u64vaddM
+#   define  u64v2addM SL_u64v2addM
+#   define  u64v3addM SL_u64v3addM
+#   define  u64v4addM SL_u64v4addM
+#   define  u64vsubM_ SL_u64vsubM_
+#   define  u64vsubM SL_u64vsubM
+#   define  u64v2subM SL_u64v2subM
+#   define  u64v3subM SL_u64v3subM
+#   define  u64v4subM SL_u64v4subM
+#   define  u64vaddSM_ SL_u64vaddSM_
+#   define  u64vaddSM SL_u64vaddSM
+#   define  u64v2addSM SL_u64v2addSM
+#   define  u64v3addSM SL_u64v3addSM
+#   define  u64v4addSM SL_u64v4addSM
+#   define  u64vsubSM_ SL_u64vsubSM_
+#   define  u64vsubSM SL_u64vsubSM
+#   define  u64v2subSM SL_u64v2subSM
+#   define  u64v3subSM SL_u64v3subSM
+#   define  u64v4subSM SL_u64v4subSM
+#   define  u64vSadd_ SL_u64vSadd_
+#   define  u64vSadd SL_u64vSadd
+#   define  u64v2Sadd SL_u64v2Sadd
+#   define  u64v3Sadd SL_u64v3Sadd
+#   define  u64v4Sadd SL_u64v4Sadd
+#   define  u64vSsub_ SL_u64vSsub_
+#   define  u64vSsub SL_u64vSsub
+#   define  u64v2Ssub SL_u64v2Ssub
+#   define  u64v3Ssub SL_u64v3Ssub
+#   define  u64v4Ssub SL_u64v4Ssub
+#   define  u64vmin_ SL_u64vmin_
+#   define  u64vmin SL_u64vmin
+#   define  u64v2min SL_u64v2min
+#   define  u64v3min SL_u64v3min
+#   define  u64v4min SL_u64v4min
+#   define  u64vmax_ SL_u64vmax_
+#   define  u64vmax SL_u64vmax
+#   define  u64v2max SL_u64v2max
+#   define  u64v3max SL_u64v3max
+#   define  u64v4max SL_u64v4max
+#   define  u64vdot_ SL_u64vdot_
+#   define  u64vdot SL_u64vdot
+#   define  u64v2dot SL_u64v2dot
+#   define  u64v3dot SL_u64v3dot
+#   define  u64v4dot SL_u64v4dot
+#   define  u64vlen_max_ SL_u64vlen_max_
+#   define  u64vlen_max SL_u64vlen_max
+#   define  u64v2len_max SL_u64v2len_max
+#   define  u64v3len_max SL_u64v3len_max
+#   define  u64v4len_max SL_u64v4len_max
+#   define  u64vlen_manh_ SL_u64vlen_manh_
+#   define  u64vlen_manh SL_u64vlen_manh
+#   define  u64v2len_manh SL_u64v2len_manh
+#   define  u64v3len_manh SL_u64v3len_manh
+#   define  u64v4len_manh SL_u64v4len_manh
+#   define  u64vlen_srq_ SL_u64vlen_srq_
+#   define  u64vlen_srq SL_u64vlen_srq
+#   define  u64v2len_sqr SL_u64v2len_sqr
+#   define  u64v3len_sqr SL_u64v3len_sqr
+#   define  u64v4len_sqr SL_u64v4len_sqr
+#   define  u64vlen_ SL_u64vlen_
+#   define  u64vlen SL_u64vlen
+#   define  u64v2len SL_u64v2len
+#   define  u64v3len SL_u64v3len
+#   define  u64v4len SL_u64v4len
+#   define  u64vdist_ SL_u64vdist_
+#   define  u64vdist SL_u64vdist
+#   define  u64v2dist SL_u64v2dist
+#   define  u64v3dist SL_u64v3dist
+#   define  u64v4dist SL_u64v4dist
+#   define  u64v2refl SL_u64v2refl
+#   define  u64v3refl SL_u64v3refl
+#   define  u64v4refl SL_u64v4refl
+#   define  u64v2refl_u SL_u64v2refl_u
+#   define  u64v3refl_u SL_u64v3refl_u
+#   define  u64v4refl_u SL_u64v4refl_u
+#   define  u64vmods_ SL_u64vmods_
+#   define  u64vmods SL_u64vmods
+#   define  u64v2mods SL_u64v2mods
+#   define  u64v3mods SL_u64v3mods
+#   define  u64v4mods SL_u64v4mods
+#   define  u64vmod_ SL_u64vmod_
+#   define  u64vmod SL_u64vmod
+#   define  u64v2mod SL_u64v2mod
+#   define  u64v3mod SL_u64v3mod
+#   define  u64v4mod SL_u64v4mod
+#   define  fv2_zero SL_fv2_zero
+#   define  fv2_one SL_fv2_one
+#   define  fv2_right SL_fv2_right
+#   define  fv2_up SL_fv2_up
+#   define  fv2_left SL_fv2_left
+#   define  fv2_down SL_fv2_down
+#   define  fv3_zero SL_fv3_zero
+#   define  fv3_one SL_fv3_one
+#   define  fv3_right SL_fv3_right
+#   define  fv3_up SL_fv3_up
+#   define  fv3_forw SL_fv3_forw
+#   define  fv3_left SL_fv3_left
+#   define  fv3_down SL_fv3_down
+#   define  fv3_back SL_fv3_back
+#   define  fv4_zero SL_fv4_zero
+#   define  fv4_one SL_fv4_one
+#   define  fv2_ SL_fv2_
+#   define  fv3_ SL_fv3_
+#   define  fv4_ SL_fv4_
+#   define  fv2s SL_fv2s
+#   define  fv3s SL_fv3s
+#   define  fv4s SL_fv4s
+#   define  fv2v SL_fv2v
+#   define  fv3v SL_fv3v
+#   define  fv4v SL_fv4v
+#   define  fvadd_ SL_fvadd_
+#   define  fvadd SL_fvadd
+#   define  fv2add SL_fv2add
+#   define  fv3add SL_fv3add
+#   define  fv4add SL_fv4add
+#   define  fvsub_ SL_fvsub_
+#   define  fvsub SL_fvsub
+#   define  fv2sub SL_fv2sub
+#   define  fv3sub SL_fv3sub
+#   define  fv4sub SL_fv4sub
+#   define  fvmul_ SL_fvmul_
+#   define  fvmul SL_fvmul
+#   define  fv2mul SL_fv2mul
+#   define  fv3mul SL_fv3mul
+#   define  fv4mul SL_fv4mul
+#   define  fvmuls_ SL_fvmuls_
+#   define  fvmuls SL_fvmuls
+#   define  fv2muls SL_fv2muls
+#   define  fv3muls SL_fv3muls
+#   define  fv4muls SL_fv4muls
+#   define  fvdiv_ SL_fvdiv_
+#   define  fvdiv SL_fvdiv
+#   define  fv2div SL_fv2div
+#   define  fv3div SL_fv3div
+#   define  fv4div SL_fv4div
+#   define  fvdivs_ SL_fvdivs_
+#   define  fvdivs SL_fvdivs
+#   define  fv2divs SL_fv2divs
+#   define  fv3divs SL_fv3divs
+#   define  fv4divs SL_fv4divs
+#   define  fvaddS_ SL_fvaddS_
+#   define  fvaddS SL_fvaddS
+#   define  fv2addS SL_fv2addS
+#   define  fv3addS SL_fv3addS
+#   define  fv4addS SL_fv4addS
+#   define  fvsubS_ SL_fvsubS_
+#   define  fvsubS SL_fvsubS
+#   define  fv2subS SL_fv2subS
+#   define  fv3subS SL_fv3subS
+#   define  fv4subS SL_fv4subS
+#   define  fvaddM_ SL_fvaddM_
+#   define  fvaddM SL_fvaddM
+#   define  fv2addM SL_fv2addM
+#   define  fv3addM SL_fv3addM
+#   define  fv4addM SL_fv4addM
+#   define  fvsubM_ SL_fvsubM_
+#   define  fvsubM SL_fvsubM
+#   define  fv2subM SL_fv2subM
+#   define  fv3subM SL_fv3subM
+#   define  fv4subM SL_fv4subM
+#   define  fvaddSM_ SL_fvaddSM_
+#   define  fvaddSM SL_fvaddSM
+#   define  fv2addSM SL_fv2addSM
+#   define  fv3addSM SL_fv3addSM
+#   define  fv4addSM SL_fv4addSM
+#   define  fvsubSM_ SL_fvsubSM_
+#   define  fvsubSM SL_fvsubSM
+#   define  fv2subSM SL_fv2subSM
+#   define  fv3subSM SL_fv3subSM
+#   define  fv4subSM SL_fv4subSM
+#   define  fvSadd_ SL_fvSadd_
+#   define  fvSadd SL_fvSadd
+#   define  fv2Sadd SL_fv2Sadd
+#   define  fv3Sadd SL_fv3Sadd
+#   define  fv4Sadd SL_fv4Sadd
+#   define  fvSsub_ SL_fvSsub_
+#   define  fvSsub SL_fvSsub
+#   define  fv2Ssub SL_fv2Ssub
+#   define  fv3Ssub SL_fv3Ssub
+#   define  fv4Ssub SL_fv4Ssub
+#   define  fvneg_ SL_fvneg_
+#   define  fvneg SL_fvneg
+#   define  fv2neg SL_fv2neg
+#   define  fv3neg SL_fv3neg
+#   define  fv4neg SL_fv4neg
+#   define  fvabs_ SL_fvabs_
+#   define  fvabs SL_fvabs
+#   define  fv2abs SL_fv2abs
+#   define  fv3abs SL_fv3abs
+#   define  fv4abs SL_fv4abs
+#   define  fvmin_ SL_fvmin_
+#   define  fvmin SL_fvmin
+#   define  fv2min SL_fv2min
+#   define  fv3min SL_fv3min
+#   define  fv4min SL_fv4min
+#   define  fvmax_ SL_fvmax_
+#   define  fvmax SL_fvmax
+#   define  fv2max SL_fv2max
+#   define  fv3max SL_fv3max
+#   define  fv4max SL_fv4max
+#   define  fvdot_ SL_fvdot_
+#   define  fvdot SL_fvdot
+#   define  fv2dot SL_fv2dot
+#   define  fv3dot SL_fv3dot
+#   define  fv4dot SL_fv4dot
+#   define  fvlen_max_ SL_fvlen_max_
+#   define  fvlen_max SL_fvlen_max
+#   define  fv2len_max SL_fv2len_max
+#   define  fv3len_max SL_fv3len_max
+#   define  fv4len_max SL_fv4len_max
+#   define  fvlen_manh_ SL_fvlen_manh_
+#   define  fvlen_manh SL_fvlen_manh
+#   define  fv2len_manh SL_fv2len_manh
+#   define  fv3len_manh SL_fv3len_manh
+#   define  fv4len_manh SL_fv4len_manh
+#   define  fvlen_srq_ SL_fvlen_srq_
+#   define  fvlen_srq SL_fvlen_srq
+#   define  fv2len_sqr SL_fv2len_sqr
+#   define  fv3len_sqr SL_fv3len_sqr
+#   define  fv4len_sqr SL_fv4len_sqr
+#   define  fvlen_ SL_fvlen_
+#   define  fvlen SL_fvlen
+#   define  fv2len SL_fv2len
+#   define  fv3len SL_fv3len
+#   define  fv4len SL_fv4len
+#   define  fvdist_ SL_fvdist_
+#   define  fvdist SL_fvdist
+#   define  fv2dist SL_fv2dist
+#   define  fv3dist SL_fv3dist
+#   define  fv4dist SL_fv4dist
+#   define  fv2refl SL_fv2refl
+#   define  fv3refl SL_fv3refl
+#   define  fv4refl SL_fv4refl
+#   define  fv2refl_u SL_fv2refl_u
+#   define  fv3refl_u SL_fv3refl_u
+#   define  fv4refl_u SL_fv4refl_u
+#   define  fvmods_ SL_fvmods_
+#   define  fvmods SL_fvmods
+#   define  fv2mods SL_fv2mods
+#   define  fv3mods SL_fv3mods
+#   define  fv4mods SL_fv4mods
+#   define  fvmod_ SL_fvmod_
+#   define  fvmod SL_fvmod
+#   define  fv2mod SL_fv2mod
+#   define  fv3mod SL_fv3mod
+#   define  fv4mod SL_fv4mod
+#   define  fvnorm_ SL_fvnorm_
+#   define  fvnorm SL_fvnorm
+#   define  fv2norm SL_fv2norm
+#   define  fv3norm SL_fv3norm
+#   define  fv4norm SL_fv4norm
+#   define  fvfloor_ SL_fvfloor_
+#   define  fvfloor SL_fvfloor
+#   define  fv2floor SL_fv2floor
+#   define  fv3floor SL_fv3floor
+#   define  fv4floor SL_fv4floor
+#   define  fvceil_ SL_fvceil_
+#   define  fvceil SL_fvceil
+#   define  fv2ceil SL_fv2ceil
+#   define  fv3ceil SL_fv3ceil
+#   define  fv4ceil SL_fv4ceil
+#   define  fvlerp_ SL_fvlerp_
+#   define  fvlerp SL_fvlerp
+#   define  fv2lerp SL_fv2lerp
+#   define  fv3lerp SL_fv3lerp
+#   define  fv4lerp SL_fv4lerp
+#   define  fv2serp SL_fv2serp
+#   define  fv3serp SL_fv3serp
+#   define  fv4serp SL_fv4serp
+#   define  fv2cross SL_fv2cross
+#   define  fv3cross SL_fv3cross
+#   define  dv2_zero SL_dv2_zero
+#   define  dv2_one SL_dv2_one
+#   define  dv2_right SL_dv2_right
+#   define  dv2_up SL_dv2_up
+#   define  dv2_left SL_dv2_left
+#   define  dv2_down SL_dv2_down
+#   define  dv3_zero SL_dv3_zero
+#   define  dv3_one SL_dv3_one
+#   define  dv3_right SL_dv3_right
+#   define  dv3_up SL_dv3_up
+#   define  dv3_forw SL_dv3_forw
+#   define  dv3_left SL_dv3_left
+#   define  dv3_down SL_dv3_down
+#   define  dv3_back SL_dv3_back
+#   define  dv4_zero SL_dv4_zero
+#   define  dv4_one SL_dv4_one
+#   define  dv2_ SL_dv2_
+#   define  dv3_ SL_dv3_
+#   define  dv4_ SL_dv4_
+#   define  dv2s SL_dv2s
+#   define  dv3s SL_dv3s
+#   define  dv4s SL_dv4s
+#   define  dv2v SL_dv2v
+#   define  dv3v SL_dv3v
+#   define  dv4v SL_dv4v
+#   define  dvadd_ SL_dvadd_
+#   define  dvadd SL_dvadd
+#   define  dv2add SL_dv2add
+#   define  dv3add SL_dv3add
+#   define  dv4add SL_dv4add
+#   define  dvsub_ SL_dvsub_
+#   define  dvsub SL_dvsub
+#   define  dv2sub SL_dv2sub
+#   define  dv3sub SL_dv3sub
+#   define  dv4sub SL_dv4sub
+#   define  dvmul_ SL_dvmul_
+#   define  dvmul SL_dvmul
+#   define  dv2mul SL_dv2mul
+#   define  dv3mul SL_dv3mul
+#   define  dv4mul SL_dv4mul
+#   define  dvmuls_ SL_dvmuls_
+#   define  dvmuls SL_dvmuls
+#   define  dv2muls SL_dv2muls
+#   define  dv3muls SL_dv3muls
+#   define  dv4muls SL_dv4muls
+#   define  dvdiv_ SL_dvdiv_
+#   define  dvdiv SL_dvdiv
+#   define  dv2div SL_dv2div
+#   define  dv3div SL_dv3div
+#   define  dv4div SL_dv4div
+#   define  dvdivs_ SL_dvdivs_
+#   define  dvdivs SL_dvdivs
+#   define  dv2divs SL_dv2divs
+#   define  dv3divs SL_dv3divs
+#   define  dv4divs SL_dv4divs
+#   define  dvaddS_ SL_dvaddS_
+#   define  dvaddS SL_dvaddS
+#   define  dv2addS SL_dv2addS
+#   define  dv3addS SL_dv3addS
+#   define  dv4addS SL_dv4addS
+#   define  dvsubS_ SL_dvsubS_
+#   define  dvsubS SL_dvsubS
+#   define  dv2subS SL_dv2subS
+#   define  dv3subS SL_dv3subS
+#   define  dv4subS SL_dv4subS
+#   define  dvaddM_ SL_dvaddM_
+#   define  dvaddM SL_dvaddM
+#   define  dv2addM SL_dv2addM
+#   define  dv3addM SL_dv3addM
+#   define  dv4addM SL_dv4addM
+#   define  dvsubM_ SL_dvsubM_
+#   define  dvsubM SL_dvsubM
+#   define  dv2subM SL_dv2subM
+#   define  dv3subM SL_dv3subM
+#   define  dv4subM SL_dv4subM
+#   define  dvaddSM_ SL_dvaddSM_
+#   define  dvaddSM SL_dvaddSM
+#   define  dv2addSM SL_dv2addSM
+#   define  dv3addSM SL_dv3addSM
+#   define  dv4addSM SL_dv4addSM
+#   define  dvsubSM_ SL_dvsubSM_
+#   define  dvsubSM SL_dvsubSM
+#   define  dv2subSM SL_dv2subSM
+#   define  dv3subSM SL_dv3subSM
+#   define  dv4subSM SL_dv4subSM
+#   define  dvSadd_ SL_dvSadd_
+#   define  dvSadd SL_dvSadd
+#   define  dv2Sadd SL_dv2Sadd
+#   define  dv3Sadd SL_dv3Sadd
+#   define  dv4Sadd SL_dv4Sadd
+#   define  dvSsub_ SL_dvSsub_
+#   define  dvSsub SL_dvSsub
+#   define  dv2Ssub SL_dv2Ssub
+#   define  dv3Ssub SL_dv3Ssub
+#   define  dv4Ssub SL_dv4Ssub
+#   define  dvneg_ SL_dvneg_
+#   define  dvneg SL_dvneg
+#   define  dv2neg SL_dv2neg
+#   define  dv3neg SL_dv3neg
+#   define  dv4neg SL_dv4neg
+#   define  dvabs_ SL_dvabs_
+#   define  dvabs SL_dvabs
+#   define  dv2abs SL_dv2abs
+#   define  dv3abs SL_dv3abs
+#   define  dv4abs SL_dv4abs
+#   define  dvmin_ SL_dvmin_
+#   define  dvmin SL_dvmin
+#   define  dv2min SL_dv2min
+#   define  dv3min SL_dv3min
+#   define  dv4min SL_dv4min
+#   define  dvmax_ SL_dvmax_
+#   define  dvmax SL_dvmax
+#   define  dv2max SL_dv2max
+#   define  dv3max SL_dv3max
+#   define  dv4max SL_dv4max
+#   define  dvdot_ SL_dvdot_
+#   define  dvdot SL_dvdot
+#   define  dv2dot SL_dv2dot
+#   define  dv3dot SL_dv3dot
+#   define  dv4dot SL_dv4dot
+#   define  dvlen_max_ SL_dvlen_max_
+#   define  dvlen_max SL_dvlen_max
+#   define  dv2len_max SL_dv2len_max
+#   define  dv3len_max SL_dv3len_max
+#   define  dv4len_max SL_dv4len_max
+#   define  dvlen_manh_ SL_dvlen_manh_
+#   define  dvlen_manh SL_dvlen_manh
+#   define  dv2len_manh SL_dv2len_manh
+#   define  dv3len_manh SL_dv3len_manh
+#   define  dv4len_manh SL_dv4len_manh
+#   define  dvlen_srq_ SL_dvlen_srq_
+#   define  dvlen_srq SL_dvlen_srq
+#   define  dv2len_sqr SL_dv2len_sqr
+#   define  dv3len_sqr SL_dv3len_sqr
+#   define  dv4len_sqr SL_dv4len_sqr
+#   define  dvlen_ SL_dvlen_
+#   define  dvlen SL_dvlen
+#   define  dv2len SL_dv2len
+#   define  dv3len SL_dv3len
+#   define  dv4len SL_dv4len
+#   define  dvdist_ SL_dvdist_
+#   define  dvdist SL_dvdist
+#   define  dv2dist SL_dv2dist
+#   define  dv3dist SL_dv3dist
+#   define  dv4dist SL_dv4dist
+#   define  dv2refl SL_dv2refl
+#   define  dv3refl SL_dv3refl
+#   define  dv4refl SL_dv4refl
+#   define  dv2refl_u SL_dv2refl_u
+#   define  dv3refl_u SL_dv3refl_u
+#   define  dv4refl_u SL_dv4refl_u
+#   define  dvmods_ SL_dvmods_
+#   define  dvmods SL_dvmods
+#   define  dv2mods SL_dv2mods
+#   define  dv3mods SL_dv3mods
+#   define  dv4mods SL_dv4mods
+#   define  dvmod_ SL_dvmod_
+#   define  dvmod SL_dvmod
+#   define  dv2mod SL_dv2mod
+#   define  dv3mod SL_dv3mod
+#   define  dv4mod SL_dv4mod
+#   define  dvnorm_ SL_dvnorm_
+#   define  dvnorm SL_dvnorm
+#   define  dv2norm SL_dv2norm
+#   define  dv3norm SL_dv3norm
+#   define  dv4norm SL_dv4norm
+#   define  dvfloor_ SL_dvfloor_
+#   define  dvfloor SL_dvfloor
+#   define  dv2floor SL_dv2floor
+#   define  dv3floor SL_dv3floor
+#   define  dv4floor SL_dv4floor
+#   define  dvceil_ SL_dvceil_
+#   define  dvceil SL_dvceil
+#   define  dv2ceil SL_dv2ceil
+#   define  dv3ceil SL_dv3ceil
+#   define  dv4ceil SL_dv4ceil
+#   define  dvlerp_ SL_dvlerp_
+#   define  dvlerp SL_dvlerp
+#   define  dv2lerp SL_dv2lerp
+#   define  dv3lerp SL_dv3lerp
+#   define  dv4lerp SL_dv4lerp
+#   define  dv2serp SL_dv2serp
+#   define  dv3serp SL_dv3serp
+#   define  dv4serp SL_dv4serp
+#   define  dv2cross SL_dv2cross
+#   define  dv3cross SL_dv3cross
+#   define  bv2_zero SL_bv2_zero
+#   define  bv2_one SL_bv2_one
+#   define  bv2_right SL_bv2_right
+#   define  bv2_up SL_bv2_up
+#   define  bv3_zero SL_bv3_zero
+#   define  bv3_one SL_bv3_one
+#   define  bv3_right SL_bv3_right
+#   define  bv3_up SL_bv3_up
+#   define  bv3_forw SL_bv3_forw
+#   define  bv4_zero SL_bv4_zero
+#   define  bv4_one SL_bv4_one
+#   define  bv2_ SL_bv2_
+#   define  bv3_ SL_bv3_
+#   define  bv4_ SL_bv4_
+#   define  bv2s SL_bv2s
+#   define  bv3s SL_bv3s
+#   define  bv4s SL_bv4s
+#   define  bv2v SL_bv2v
+#   define  bv3v SL_bv3v
+#   define  bv4v SL_bv4v
+#   define  bvadd_ SL_bvadd_
+#   define  bvadd SL_bvadd
+#   define  bv2add SL_bv2add
+#   define  bv3add SL_bv3add
+#   define  bv4add SL_bv4add
+#   define  bvsub_ SL_bvsub_
+#   define  bvsub SL_bvsub
+#   define  bv2sub SL_bv2sub
+#   define  bv3sub SL_bv3sub
+#   define  bv4sub SL_bv4sub
+#   define  bvmul_ SL_bvmul_
+#   define  bvmul SL_bvmul
+#   define  bv2mul SL_bv2mul
+#   define  bv3mul SL_bv3mul
+#   define  bv4mul SL_bv4mul
+#   define  bvmuls_ SL_bvmuls_
+#   define  bvmuls SL_bvmuls
+#   define  bv2muls SL_bv2muls
+#   define  bv3muls SL_bv3muls
+#   define  bv4muls SL_bv4muls
+#   define  bvdiv_ SL_bvdiv_
+#   define  bvdiv SL_bvdiv
+#   define  bv2div SL_bv2div
+#   define  bv3div SL_bv3div
+#   define  bv4div SL_bv4div
+#   define  bvdivs_ SL_bvdivs_
+#   define  bvdivs SL_bvdivs
+#   define  bv2divs SL_bv2divs
+#   define  bv3divs SL_bv3divs
+#   define  bv4divs SL_bv4divs
+#   define  bvaddS_ SL_bvaddS_
+#   define  bvaddS SL_bvaddS
+#   define  bv2addS SL_bv2addS
+#   define  bv3addS SL_bv3addS
+#   define  bv4addS SL_bv4addS
+#   define  bvsubS_ SL_bvsubS_
+#   define  bvsubS SL_bvsubS
+#   define  bv2subS SL_bv2subS
+#   define  bv3subS SL_bv3subS
+#   define  bv4subS SL_bv4subS
+#   define  bvaddM_ SL_bvaddM_
+#   define  bvaddM SL_bvaddM
+#   define  bv2addM SL_bv2addM
+#   define  bv3addM SL_bv3addM
+#   define  bv4addM SL_bv4addM
+#   define  bvsubM_ SL_bvsubM_
+#   define  bvsubM SL_bvsubM
+#   define  bv2subM SL_bv2subM
+#   define  bv3subM SL_bv3subM
+#   define  bv4subM SL_bv4subM
+#   define  bvaddSM_ SL_bvaddSM_
+#   define  bvaddSM SL_bvaddSM
+#   define  bv2addSM SL_bv2addSM
+#   define  bv3addSM SL_bv3addSM
+#   define  bv4addSM SL_bv4addSM
+#   define  bvsubSM_ SL_bvsubSM_
+#   define  bvsubSM SL_bvsubSM
+#   define  bv2subSM SL_bv2subSM
+#   define  bv3subSM SL_bv3subSM
+#   define  bv4subSM SL_bv4subSM
+#   define  bvSadd_ SL_bvSadd_
+#   define  bvSadd SL_bvSadd
+#   define  bv2Sadd SL_bv2Sadd
+#   define  bv3Sadd SL_bv3Sadd
+#   define  bv4Sadd SL_bv4Sadd
+#   define  bvSsub_ SL_bvSsub_
+#   define  bvSsub SL_bvSsub
+#   define  bv2Ssub SL_bv2Ssub
+#   define  bv3Ssub SL_bv3Ssub
+#   define  bv4Ssub SL_bv4Ssub
+#   define  bvmin_ SL_bvmin_
+#   define  bvmin SL_bvmin
+#   define  bv2min SL_bv2min
+#   define  bv3min SL_bv3min
+#   define  bv4min SL_bv4min
+#   define  bvmax_ SL_bvmax_
+#   define  bvmax SL_bvmax
+#   define  bv2max SL_bv2max
+#   define  bv3max SL_bv3max
+#   define  bv4max SL_bv4max
+#   define  bvdot_ SL_bvdot_
+#   define  bvdot SL_bvdot
+#   define  bv2dot SL_bv2dot
+#   define  bv3dot SL_bv3dot
+#   define  bv4dot SL_bv4dot
+#   define  bvlen_max_ SL_bvlen_max_
+#   define  bvlen_max SL_bvlen_max
+#   define  bv2len_max SL_bv2len_max
+#   define  bv3len_max SL_bv3len_max
+#   define  bv4len_max SL_bv4len_max
+#   define  bvlen_manh_ SL_bvlen_manh_
+#   define  bvlen_manh SL_bvlen_manh
+#   define  bv2len_manh SL_bv2len_manh
+#   define  bv3len_manh SL_bv3len_manh
+#   define  bv4len_manh SL_bv4len_manh
+#   define  bvlen_srq_ SL_bvlen_srq_
+#   define  bvlen_srq SL_bvlen_srq
+#   define  bv2len_sqr SL_bv2len_sqr
+#   define  bv3len_sqr SL_bv3len_sqr
+#   define  bv4len_sqr SL_bv4len_sqr
+#   define  bvlen_ SL_bvlen_
+#   define  bvlen SL_bvlen
+#   define  bv2len SL_bv2len
+#   define  bv3len SL_bv3len
+#   define  bv4len SL_bv4len
+#   define  bvdist_ SL_bvdist_
+#   define  bvdist SL_bvdist
+#   define  bv2dist SL_bv2dist
+#   define  bv3dist SL_bv3dist
+#   define  bv4dist SL_bv4dist
+#   define  bv2refl SL_bv2refl
+#   define  bv3refl SL_bv3refl
+#   define  bv4refl SL_bv4refl
+#   define  bv2refl_u SL_bv2refl_u
+#   define  bv3refl_u SL_bv3refl_u
+#   define  bv4refl_u SL_bv4refl_u
+#   define  iv2_zero SL_iv2_zero
+#   define  iv2_one SL_iv2_one
+#   define  iv2_right SL_iv2_right
+#   define  iv2_up SL_iv2_up
+#   define  iv2_left SL_iv2_left
+#   define  iv2_down SL_iv2_down
+#   define  iv3_zero SL_iv3_zero
+#   define  iv3_one SL_iv3_one
+#   define  iv3_right SL_iv3_right
+#   define  iv3_up SL_iv3_up
+#   define  iv3_forw SL_iv3_forw
+#   define  iv3_left SL_iv3_left
+#   define  iv3_down SL_iv3_down
+#   define  iv3_back SL_iv3_back
+#   define  iv4_zero SL_iv4_zero
+#   define  iv4_one SL_iv4_one
+#   define  iv2_ SL_iv2_
+#   define  iv3_ SL_iv3_
+#   define  iv4_ SL_iv4_
+#   define  iv2s SL_iv2s
+#   define  iv3s SL_iv3s
+#   define  iv4s SL_iv4s
+#   define  iv2v SL_iv2v
+#   define  iv3v SL_iv3v
+#   define  iv4v SL_iv4v
+#   define  ivadd_ SL_ivadd_
+#   define  ivadd SL_ivadd
+#   define  iv2add SL_iv2add
+#   define  iv3add SL_iv3add
+#   define  iv4add SL_iv4add
+#   define  ivsub_ SL_ivsub_
+#   define  ivsub SL_ivsub
+#   define  iv2sub SL_iv2sub
+#   define  iv3sub SL_iv3sub
+#   define  iv4sub SL_iv4sub
+#   define  ivmul_ SL_ivmul_
+#   define  ivmul SL_ivmul
+#   define  iv2mul SL_iv2mul
+#   define  iv3mul SL_iv3mul
+#   define  iv4mul SL_iv4mul
+#   define  ivmuls_ SL_ivmuls_
+#   define  ivmuls SL_ivmuls
+#   define  iv2muls SL_iv2muls
+#   define  iv3muls SL_iv3muls
+#   define  iv4muls SL_iv4muls
+#   define  ivdiv_ SL_ivdiv_
+#   define  ivdiv SL_ivdiv
+#   define  iv2div SL_iv2div
+#   define  iv3div SL_iv3div
+#   define  iv4div SL_iv4div
+#   define  ivdivs_ SL_ivdivs_
+#   define  ivdivs SL_ivdivs
+#   define  iv2divs SL_iv2divs
+#   define  iv3divs SL_iv3divs
+#   define  iv4divs SL_iv4divs
+#   define  ivaddS_ SL_ivaddS_
+#   define  ivaddS SL_ivaddS
+#   define  iv2addS SL_iv2addS
+#   define  iv3addS SL_iv3addS
+#   define  iv4addS SL_iv4addS
+#   define  ivsubS_ SL_ivsubS_
+#   define  ivsubS SL_ivsubS
+#   define  iv2subS SL_iv2subS
+#   define  iv3subS SL_iv3subS
+#   define  iv4subS SL_iv4subS
+#   define  ivaddM_ SL_ivaddM_
+#   define  ivaddM SL_ivaddM
+#   define  iv2addM SL_iv2addM
+#   define  iv3addM SL_iv3addM
+#   define  iv4addM SL_iv4addM
+#   define  ivsubM_ SL_ivsubM_
+#   define  ivsubM SL_ivsubM
+#   define  iv2subM SL_iv2subM
+#   define  iv3subM SL_iv3subM
+#   define  iv4subM SL_iv4subM
+#   define  ivaddSM_ SL_ivaddSM_
+#   define  ivaddSM SL_ivaddSM
+#   define  iv2addSM SL_iv2addSM
+#   define  iv3addSM SL_iv3addSM
+#   define  iv4addSM SL_iv4addSM
+#   define  ivsubSM_ SL_ivsubSM_
+#   define  ivsubSM SL_ivsubSM
+#   define  iv2subSM SL_iv2subSM
+#   define  iv3subSM SL_iv3subSM
+#   define  iv4subSM SL_iv4subSM
+#   define  ivSadd_ SL_ivSadd_
+#   define  ivSadd SL_ivSadd
+#   define  iv2Sadd SL_iv2Sadd
+#   define  iv3Sadd SL_iv3Sadd
+#   define  iv4Sadd SL_iv4Sadd
+#   define  ivSsub_ SL_ivSsub_
+#   define  ivSsub SL_ivSsub
+#   define  iv2Ssub SL_iv2Ssub
+#   define  iv3Ssub SL_iv3Ssub
+#   define  iv4Ssub SL_iv4Ssub
+#   define  ivneg_ SL_ivneg_
+#   define  ivneg SL_ivneg
+#   define  iv2neg SL_iv2neg
+#   define  iv3neg SL_iv3neg
+#   define  iv4neg SL_iv4neg
+#   define  ivabs_ SL_ivabs_
+#   define  ivabs SL_ivabs
+#   define  iv2abs SL_iv2abs
+#   define  iv3abs SL_iv3abs
+#   define  iv4abs SL_iv4abs
+#   define  ivmin_ SL_ivmin_
+#   define  ivmin SL_ivmin
+#   define  iv2min SL_iv2min
+#   define  iv3min SL_iv3min
+#   define  iv4min SL_iv4min
+#   define  ivmax_ SL_ivmax_
+#   define  ivmax SL_ivmax
+#   define  iv2max SL_iv2max
+#   define  iv3max SL_iv3max
+#   define  iv4max SL_iv4max
+#   define  ivdot_ SL_ivdot_
+#   define  ivdot SL_ivdot
+#   define  iv2dot SL_iv2dot
+#   define  iv3dot SL_iv3dot
+#   define  iv4dot SL_iv4dot
+#   define  ivlen_max_ SL_ivlen_max_
+#   define  ivlen_max SL_ivlen_max
+#   define  iv2len_max SL_iv2len_max
+#   define  iv3len_max SL_iv3len_max
+#   define  iv4len_max SL_iv4len_max
+#   define  ivlen_manh_ SL_ivlen_manh_
+#   define  ivlen_manh SL_ivlen_manh
+#   define  iv2len_manh SL_iv2len_manh
+#   define  iv3len_manh SL_iv3len_manh
+#   define  iv4len_manh SL_iv4len_manh
+#   define  ivlen_srq_ SL_ivlen_srq_
+#   define  ivlen_srq SL_ivlen_srq
+#   define  iv2len_sqr SL_iv2len_sqr
+#   define  iv3len_sqr SL_iv3len_sqr
+#   define  iv4len_sqr SL_iv4len_sqr
+#   define  ivlen_ SL_ivlen_
+#   define  ivlen SL_ivlen
+#   define  iv2len SL_iv2len
+#   define  iv3len SL_iv3len
+#   define  iv4len SL_iv4len
+#   define  ivdist_ SL_ivdist_
+#   define  ivdist SL_ivdist
+#   define  iv2dist SL_iv2dist
+#   define  iv3dist SL_iv3dist
+#   define  iv4dist SL_iv4dist
+#   define  iv2refl SL_iv2refl
+#   define  iv3refl SL_iv3refl
+#   define  iv4refl SL_iv4refl
+#   define  iv2refl_u SL_iv2refl_u
+#   define  iv3refl_u SL_iv3refl_u
+#   define  iv4refl_u SL_iv4refl_u
+#   define  ivmods_ SL_ivmods_
+#   define  ivmods SL_ivmods
+#   define  iv2mods SL_iv2mods
+#   define  iv3mods SL_iv3mods
+#   define  iv4mods SL_iv4mods
+#   define  ivmod_ SL_ivmod_
+#   define  ivmod SL_ivmod
+#   define  iv2mod SL_iv2mod
+#   define  iv3mod SL_iv3mod
+#   define  iv4mod SL_iv4mod
+#   define  iv2cross SL_iv2cross
+#   define  iv3cross SL_iv3cross
+#   define  uv2_zero SL_uv2_zero
+#   define  uv2_one SL_uv2_one
+#   define  uv2_right SL_uv2_right
+#   define  uv2_up SL_uv2_up
+#   define  uv3_zero SL_uv3_zero
+#   define  uv3_one SL_uv3_one
+#   define  uv3_right SL_uv3_right
+#   define  uv3_up SL_uv3_up
+#   define  uv3_forw SL_uv3_forw
+#   define  uv4_zero SL_uv4_zero
+#   define  uv4_one SL_uv4_one
+#   define  uv2_ SL_uv2_
+#   define  uv3_ SL_uv3_
+#   define  uv4_ SL_uv4_
+#   define  uv2s SL_uv2s
+#   define  uv3s SL_uv3s
+#   define  uv4s SL_uv4s
+#   define  uv2v SL_uv2v
+#   define  uv3v SL_uv3v
+#   define  uv4v SL_uv4v
+#   define  uvadd_ SL_uvadd_
+#   define  uvadd SL_uvadd
+#   define  uv2add SL_uv2add
+#   define  uv3add SL_uv3add
+#   define  uv4add SL_uv4add
+#   define  uvsub_ SL_uvsub_
+#   define  uvsub SL_uvsub
+#   define  uv2sub SL_uv2sub
+#   define  uv3sub SL_uv3sub
+#   define  uv4sub SL_uv4sub
+#   define  uvmul_ SL_uvmul_
+#   define  uvmul SL_uvmul
+#   define  uv2mul SL_uv2mul
+#   define  uv3mul SL_uv3mul
+#   define  uv4mul SL_uv4mul
+#   define  uvmuls_ SL_uvmuls_
+#   define  uvmuls SL_uvmuls
+#   define  uv2muls SL_uv2muls
+#   define  uv3muls SL_uv3muls
+#   define  uv4muls SL_uv4muls
+#   define  uvdiv_ SL_uvdiv_
+#   define  uvdiv SL_uvdiv
+#   define  uv2div SL_uv2div
+#   define  uv3div SL_uv3div
+#   define  uv4div SL_uv4div
+#   define  uvdivs_ SL_uvdivs_
+#   define  uvdivs SL_uvdivs
+#   define  uv2divs SL_uv2divs
+#   define  uv3divs SL_uv3divs
+#   define  uv4divs SL_uv4divs
+#   define  uvaddS_ SL_uvaddS_
+#   define  uvaddS SL_uvaddS
+#   define  uv2addS SL_uv2addS
+#   define  uv3addS SL_uv3addS
+#   define  uv4addS SL_uv4addS
+#   define  uvsubS_ SL_uvsubS_
+#   define  uvsubS SL_uvsubS
+#   define  uv2subS SL_uv2subS
+#   define  uv3subS SL_uv3subS
+#   define  uv4subS SL_uv4subS
+#   define  uvaddM_ SL_uvaddM_
+#   define  uvaddM SL_uvaddM
+#   define  uv2addM SL_uv2addM
+#   define  uv3addM SL_uv3addM
+#   define  uv4addM SL_uv4addM
+#   define  uvsubM_ SL_uvsubM_
+#   define  uvsubM SL_uvsubM
+#   define  uv2subM SL_uv2subM
+#   define  uv3subM SL_uv3subM
+#   define  uv4subM SL_uv4subM
+#   define  uvaddSM_ SL_uvaddSM_
+#   define  uvaddSM SL_uvaddSM
+#   define  uv2addSM SL_uv2addSM
+#   define  uv3addSM SL_uv3addSM
+#   define  uv4addSM SL_uv4addSM
+#   define  uvsubSM_ SL_uvsubSM_
+#   define  uvsubSM SL_uvsubSM
+#   define  uv2subSM SL_uv2subSM
+#   define  uv3subSM SL_uv3subSM
+#   define  uv4subSM SL_uv4subSM
+#   define  uvSadd_ SL_uvSadd_
+#   define  uvSadd SL_uvSadd
+#   define  uv2Sadd SL_uv2Sadd
+#   define  uv3Sadd SL_uv3Sadd
+#   define  uv4Sadd SL_uv4Sadd
+#   define  uvSsub_ SL_uvSsub_
+#   define  uvSsub SL_uvSsub
+#   define  uv2Ssub SL_uv2Ssub
+#   define  uv3Ssub SL_uv3Ssub
+#   define  uv4Ssub SL_uv4Ssub
+#   define  uvmin_ SL_uvmin_
+#   define  uvmin SL_uvmin
+#   define  uv2min SL_uv2min
+#   define  uv3min SL_uv3min
+#   define  uv4min SL_uv4min
+#   define  uvmax_ SL_uvmax_
+#   define  uvmax SL_uvmax
+#   define  uv2max SL_uv2max
+#   define  uv3max SL_uv3max
+#   define  uv4max SL_uv4max
+#   define  uvdot_ SL_uvdot_
+#   define  uvdot SL_uvdot
+#   define  uv2dot SL_uv2dot
+#   define  uv3dot SL_uv3dot
+#   define  uv4dot SL_uv4dot
+#   define  uvlen_max_ SL_uvlen_max_
+#   define  uvlen_max SL_uvlen_max
+#   define  uv2len_max SL_uv2len_max
+#   define  uv3len_max SL_uv3len_max
+#   define  uv4len_max SL_uv4len_max
+#   define  uvlen_manh_ SL_uvlen_manh_
+#   define  uvlen_manh SL_uvlen_manh
+#   define  uv2len_manh SL_uv2len_manh
+#   define  uv3len_manh SL_uv3len_manh
+#   define  uv4len_manh SL_uv4len_manh
+#   define  uvlen_srq_ SL_uvlen_srq_
+#   define  uvlen_srq SL_uvlen_srq
+#   define  uv2len_sqr SL_uv2len_sqr
+#   define  uv3len_sqr SL_uv3len_sqr
+#   define  uv4len_sqr SL_uv4len_sqr
+#   define  uvlen_ SL_uvlen_
+#   define  uvlen SL_uvlen
+#   define  uv2len SL_uv2len
+#   define  uv3len SL_uv3len
+#   define  uv4len SL_uv4len
+#   define  uvdist_ SL_uvdist_
+#   define  uvdist SL_uvdist
+#   define  uv2dist SL_uv2dist
+#   define  uv3dist SL_uv3dist
+#   define  uv4dist SL_uv4dist
+#   define  uv2refl SL_uv2refl
+#   define  uv3refl SL_uv3refl
+#   define  uv4refl SL_uv4refl
+#   define  uv2refl_u SL_uv2refl_u
+#   define  uv3refl_u SL_uv3refl_u
+#   define  uv4refl_u SL_uv4refl_u
+#   define  uvmods_ SL_uvmods_
+#   define  uvmods SL_uvmods
+#   define  uv2mods SL_uv2mods
+#   define  uv3mods SL_uv3mods
+#   define  uv4mods SL_uv4mods
+#   define  uvmod_ SL_uvmod_
+#   define  uvmod SL_uvmod
+#   define  uv2mod SL_uv2mod
+#   define  uv3mod SL_uv3mod
+#   define  uv4mod SL_uv4mod
+#   define  liv2_zero SL_liv2_zero
+#   define  liv2_one SL_liv2_one
+#   define  liv2_right SL_liv2_right
+#   define  liv2_up SL_liv2_up
+#   define  liv2_left SL_liv2_left
+#   define  liv2_down SL_liv2_down
+#   define  liv3_zero SL_liv3_zero
+#   define  liv3_one SL_liv3_one
+#   define  liv3_right SL_liv3_right
+#   define  liv3_up SL_liv3_up
+#   define  liv3_forw SL_liv3_forw
+#   define  liv3_left SL_liv3_left
+#   define  liv3_down SL_liv3_down
+#   define  liv3_back SL_liv3_back
+#   define  liv4_zero SL_liv4_zero
+#   define  liv4_one SL_liv4_one
+#   define  liv2_ SL_liv2_
+#   define  liv3_ SL_liv3_
+#   define  liv4_ SL_liv4_
+#   define  liv2s SL_liv2s
+#   define  liv3s SL_liv3s
+#   define  liv4s SL_liv4s
+#   define  liv2v SL_liv2v
+#   define  liv3v SL_liv3v
+#   define  liv4v SL_liv4v
+#   define  livadd_ SL_livadd_
+#   define  livadd SL_livadd
+#   define  liv2add SL_liv2add
+#   define  liv3add SL_liv3add
+#   define  liv4add SL_liv4add
+#   define  livsub_ SL_livsub_
+#   define  livsub SL_livsub
+#   define  liv2sub SL_liv2sub
+#   define  liv3sub SL_liv3sub
+#   define  liv4sub SL_liv4sub
+#   define  livmul_ SL_livmul_
+#   define  livmul SL_livmul
+#   define  liv2mul SL_liv2mul
+#   define  liv3mul SL_liv3mul
+#   define  liv4mul SL_liv4mul
+#   define  livmuls_ SL_livmuls_
+#   define  livmuls SL_livmuls
+#   define  liv2muls SL_liv2muls
+#   define  liv3muls SL_liv3muls
+#   define  liv4muls SL_liv4muls
+#   define  livdiv_ SL_livdiv_
+#   define  livdiv SL_livdiv
+#   define  liv2div SL_liv2div
+#   define  liv3div SL_liv3div
+#   define  liv4div SL_liv4div
+#   define  livdivs_ SL_livdivs_
+#   define  livdivs SL_livdivs
+#   define  liv2divs SL_liv2divs
+#   define  liv3divs SL_liv3divs
+#   define  liv4divs SL_liv4divs
+#   define  livaddS_ SL_livaddS_
+#   define  livaddS SL_livaddS
+#   define  liv2addS SL_liv2addS
+#   define  liv3addS SL_liv3addS
+#   define  liv4addS SL_liv4addS
+#   define  livsubS_ SL_livsubS_
+#   define  livsubS SL_livsubS
+#   define  liv2subS SL_liv2subS
+#   define  liv3subS SL_liv3subS
+#   define  liv4subS SL_liv4subS
+#   define  livaddM_ SL_livaddM_
+#   define  livaddM SL_livaddM
+#   define  liv2addM SL_liv2addM
+#   define  liv3addM SL_liv3addM
+#   define  liv4addM SL_liv4addM
+#   define  livsubM_ SL_livsubM_
+#   define  livsubM SL_livsubM
+#   define  liv2subM SL_liv2subM
+#   define  liv3subM SL_liv3subM
+#   define  liv4subM SL_liv4subM
+#   define  livaddSM_ SL_livaddSM_
+#   define  livaddSM SL_livaddSM
+#   define  liv2addSM SL_liv2addSM
+#   define  liv3addSM SL_liv3addSM
+#   define  liv4addSM SL_liv4addSM
+#   define  livsubSM_ SL_livsubSM_
+#   define  livsubSM SL_livsubSM
+#   define  liv2subSM SL_liv2subSM
+#   define  liv3subSM SL_liv3subSM
+#   define  liv4subSM SL_liv4subSM
+#   define  livSadd_ SL_livSadd_
+#   define  livSadd SL_livSadd
+#   define  liv2Sadd SL_liv2Sadd
+#   define  liv3Sadd SL_liv3Sadd
+#   define  liv4Sadd SL_liv4Sadd
+#   define  livSsub_ SL_livSsub_
+#   define  livSsub SL_livSsub
+#   define  liv2Ssub SL_liv2Ssub
+#   define  liv3Ssub SL_liv3Ssub
+#   define  liv4Ssub SL_liv4Ssub
+#   define  livneg_ SL_livneg_
+#   define  livneg SL_livneg
+#   define  liv2neg SL_liv2neg
+#   define  liv3neg SL_liv3neg
+#   define  liv4neg SL_liv4neg
+#   define  livabs_ SL_livabs_
+#   define  livabs SL_livabs
+#   define  liv2abs SL_liv2abs
+#   define  liv3abs SL_liv3abs
+#   define  liv4abs SL_liv4abs
+#   define  livmin_ SL_livmin_
+#   define  livmin SL_livmin
+#   define  liv2min SL_liv2min
+#   define  liv3min SL_liv3min
+#   define  liv4min SL_liv4min
+#   define  livmax_ SL_livmax_
+#   define  livmax SL_livmax
+#   define  liv2max SL_liv2max
+#   define  liv3max SL_liv3max
+#   define  liv4max SL_liv4max
+#   define  livdot_ SL_livdot_
+#   define  livdot SL_livdot
+#   define  liv2dot SL_liv2dot
+#   define  liv3dot SL_liv3dot
+#   define  liv4dot SL_liv4dot
+#   define  livlen_max_ SL_livlen_max_
+#   define  livlen_max SL_livlen_max
+#   define  liv2len_max SL_liv2len_max
+#   define  liv3len_max SL_liv3len_max
+#   define  liv4len_max SL_liv4len_max
+#   define  livlen_manh_ SL_livlen_manh_
+#   define  livlen_manh SL_livlen_manh
+#   define  liv2len_manh SL_liv2len_manh
+#   define  liv3len_manh SL_liv3len_manh
+#   define  liv4len_manh SL_liv4len_manh
+#   define  livlen_srq_ SL_livlen_srq_
+#   define  livlen_srq SL_livlen_srq
+#   define  liv2len_sqr SL_liv2len_sqr
+#   define  liv3len_sqr SL_liv3len_sqr
+#   define  liv4len_sqr SL_liv4len_sqr
+#   define  livlen_ SL_livlen_
+#   define  livlen SL_livlen
+#   define  liv2len SL_liv2len
+#   define  liv3len SL_liv3len
+#   define  liv4len SL_liv4len
+#   define  livdist_ SL_livdist_
+#   define  livdist SL_livdist
+#   define  liv2dist SL_liv2dist
+#   define  liv3dist SL_liv3dist
+#   define  liv4dist SL_liv4dist
+#   define  liv2refl SL_liv2refl
+#   define  liv3refl SL_liv3refl
+#   define  liv4refl SL_liv4refl
+#   define  liv2refl_u SL_liv2refl_u
+#   define  liv3refl_u SL_liv3refl_u
+#   define  liv4refl_u SL_liv4refl_u
+#   define  livmods_ SL_livmods_
+#   define  livmods SL_livmods
+#   define  liv2mods SL_liv2mods
+#   define  liv3mods SL_liv3mods
+#   define  liv4mods SL_liv4mods
+#   define  livmod_ SL_livmod_
+#   define  livmod SL_livmod
+#   define  liv2mod SL_liv2mod
+#   define  liv3mod SL_liv3mod
+#   define  liv4mod SL_liv4mod
+#   define  liv2cross SL_liv2cross
+#   define  liv3cross SL_liv3cross
+#   define  luv2_zero SL_luv2_zero
+#   define  luv2_one SL_luv2_one
+#   define  luv2_right SL_luv2_right
+#   define  luv2_up SL_luv2_up
+#   define  luv3_zero SL_luv3_zero
+#   define  luv3_one SL_luv3_one
+#   define  luv3_right SL_luv3_right
+#   define  luv3_up SL_luv3_up
+#   define  luv3_forw SL_luv3_forw
+#   define  luv4_zero SL_luv4_zero
+#   define  luv4_one SL_luv4_one
+#   define  luv2_ SL_luv2_
+#   define  luv3_ SL_luv3_
+#   define  luv4_ SL_luv4_
+#   define  luv2s SL_luv2s
+#   define  luv3s SL_luv3s
+#   define  luv4s SL_luv4s
+#   define  luv2v SL_luv2v
+#   define  luv3v SL_luv3v
+#   define  luv4v SL_luv4v
+#   define  luvadd_ SL_luvadd_
+#   define  luvadd SL_luvadd
+#   define  luv2add SL_luv2add
+#   define  luv3add SL_luv3add
+#   define  luv4add SL_luv4add
+#   define  luvsub_ SL_luvsub_
+#   define  luvsub SL_luvsub
+#   define  luv2sub SL_luv2sub
+#   define  luv3sub SL_luv3sub
+#   define  luv4sub SL_luv4sub
+#   define  luvmul_ SL_luvmul_
+#   define  luvmul SL_luvmul
+#   define  luv2mul SL_luv2mul
+#   define  luv3mul SL_luv3mul
+#   define  luv4mul SL_luv4mul
+#   define  luvmuls_ SL_luvmuls_
+#   define  luvmuls SL_luvmuls
+#   define  luv2muls SL_luv2muls
+#   define  luv3muls SL_luv3muls
+#   define  luv4muls SL_luv4muls
+#   define  luvdiv_ SL_luvdiv_
+#   define  luvdiv SL_luvdiv
+#   define  luv2div SL_luv2div
+#   define  luv3div SL_luv3div
+#   define  luv4div SL_luv4div
+#   define  luvdivs_ SL_luvdivs_
+#   define  luvdivs SL_luvdivs
+#   define  luv2divs SL_luv2divs
+#   define  luv3divs SL_luv3divs
+#   define  luv4divs SL_luv4divs
+#   define  luvaddS_ SL_luvaddS_
+#   define  luvaddS SL_luvaddS
+#   define  luv2addS SL_luv2addS
+#   define  luv3addS SL_luv3addS
+#   define  luv4addS SL_luv4addS
+#   define  luvsubS_ SL_luvsubS_
+#   define  luvsubS SL_luvsubS
+#   define  luv2subS SL_luv2subS
+#   define  luv3subS SL_luv3subS
+#   define  luv4subS SL_luv4subS
+#   define  luvaddM_ SL_luvaddM_
+#   define  luvaddM SL_luvaddM
+#   define  luv2addM SL_luv2addM
+#   define  luv3addM SL_luv3addM
+#   define  luv4addM SL_luv4addM
+#   define  luvsubM_ SL_luvsubM_
+#   define  luvsubM SL_luvsubM
+#   define  luv2subM SL_luv2subM
+#   define  luv3subM SL_luv3subM
+#   define  luv4subM SL_luv4subM
+#   define  luvaddSM_ SL_luvaddSM_
+#   define  luvaddSM SL_luvaddSM
+#   define  luv2addSM SL_luv2addSM
+#   define  luv3addSM SL_luv3addSM
+#   define  luv4addSM SL_luv4addSM
+#   define  luvsubSM_ SL_luvsubSM_
+#   define  luvsubSM SL_luvsubSM
+#   define  luv2subSM SL_luv2subSM
+#   define  luv3subSM SL_luv3subSM
+#   define  luv4subSM SL_luv4subSM
+#   define  luvSadd_ SL_luvSadd_
+#   define  luvSadd SL_luvSadd
+#   define  luv2Sadd SL_luv2Sadd
+#   define  luv3Sadd SL_luv3Sadd
+#   define  luv4Sadd SL_luv4Sadd
+#   define  luvSsub_ SL_luvSsub_
+#   define  luvSsub SL_luvSsub
+#   define  luv2Ssub SL_luv2Ssub
+#   define  luv3Ssub SL_luv3Ssub
+#   define  luv4Ssub SL_luv4Ssub
+#   define  luvmin_ SL_luvmin_
+#   define  luvmin SL_luvmin
+#   define  luv2min SL_luv2min
+#   define  luv3min SL_luv3min
+#   define  luv4min SL_luv4min
+#   define  luvmax_ SL_luvmax_
+#   define  luvmax SL_luvmax
+#   define  luv2max SL_luv2max
+#   define  luv3max SL_luv3max
+#   define  luv4max SL_luv4max
+#   define  luvdot_ SL_luvdot_
+#   define  luvdot SL_luvdot
+#   define  luv2dot SL_luv2dot
+#   define  luv3dot SL_luv3dot
+#   define  luv4dot SL_luv4dot
+#   define  luvlen_max_ SL_luvlen_max_
+#   define  luvlen_max SL_luvlen_max
+#   define  luv2len_max SL_luv2len_max
+#   define  luv3len_max SL_luv3len_max
+#   define  luv4len_max SL_luv4len_max
+#   define  luvlen_manh_ SL_luvlen_manh_
+#   define  luvlen_manh SL_luvlen_manh
+#   define  luv2len_manh SL_luv2len_manh
+#   define  luv3len_manh SL_luv3len_manh
+#   define  luv4len_manh SL_luv4len_manh
+#   define  luvlen_srq_ SL_luvlen_srq_
+#   define  luvlen_srq SL_luvlen_srq
+#   define  luv2len_sqr SL_luv2len_sqr
+#   define  luv3len_sqr SL_luv3len_sqr
+#   define  luv4len_sqr SL_luv4len_sqr
+#   define  luvlen_ SL_luvlen_
+#   define  luvlen SL_luvlen
+#   define  luv2len SL_luv2len
+#   define  luv3len SL_luv3len
+#   define  luv4len SL_luv4len
+#   define  luvdist_ SL_luvdist_
+#   define  luvdist SL_luvdist
+#   define  luv2dist SL_luv2dist
+#   define  luv3dist SL_luv3dist
+#   define  luv4dist SL_luv4dist
+#   define  luv2refl SL_luv2refl
+#   define  luv3refl SL_luv3refl
+#   define  luv4refl SL_luv4refl
+#   define  luv2refl_u SL_luv2refl_u
+#   define  luv3refl_u SL_luv3refl_u
+#   define  luv4refl_u SL_luv4refl_u
+#   define  luvmods_ SL_luvmods_
+#   define  luvmods SL_luvmods
+#   define  luv2mods SL_luv2mods
+#   define  luv3mods SL_luv3mods
+#   define  luv4mods SL_luv4mods
+#   define  luvmod_ SL_luvmod_
+#   define  luvmod SL_luvmod
+#   define  luv2mod SL_luv2mod
+#   define  luv3mod SL_luv3mod
+#   define  luv4mod SL_luv4mod
+
+#   define  XPD_Q SL_XPD_Q
+#   define  FMT_Q SL_FMT_Q
+#   define  fq_identity SL_fq_identity
+#   define  dq_identity SL_dq_identity
+#   define  fq_ SL_fq_
+#   define  dq_ SL_dq_
+#   define  fqasfv4 SL_fqasfv4
+#   define  dqasdv4 SL_dqasdv4
+#   define  fqadd SL_fqadd
+#   define  dqadd SL_dqadd
+#   define  fqsub SL_fqsub
+#   define  dqsub SL_dqsub
+#   define  fqmul SL_fqmul
+#   define  dqmul SL_dqmul
+#   define  fqdiv SL_fqdiv
+#   define  dqdiv SL_dqdiv
+#   define  fqneg SL_fqneg
+#   define  dqneg SL_dqneg
+#   define  fqscale SL_fqscale
+#   define  dqscale SL_dqscale
+#   define  fqlen SL_fqlen
+#   define  dqlen SL_dqlen
+#   define  fqnorm SL_fqnorm
+#   define  dqnorm SL_dqnorm
+#   define  fqtrsp SL_fqtrsp
+#   define  dqtrsp SL_dqtrsp
+#   define  fqinv SL_fqinv
+#   define  dqinv SL_dqinv
+#   define  fqexp SL_fqexp
+#   define  dqexp SL_dqexp
+#   define  fqln SL_fqln
+#   define  dqln SL_dqln
+#   define  fqln_u SL_fqln_u
+#   define  dqln_u SL_dqln_u
+#   define  fqpow SL_fqpow
+#   define  dqpow SL_dqpow
+#   define  fqrot SL_fqrot
+#   define  dqrot SL_dqrot
+#   define  fqslerp SL_fqslerp
+#   define  dqslerp SL_dqslerp
+#   define  fqfrom_euler SL_fqfrom_euler
+#   define  dqfrom_euler SL_dqfrom_euler
+#   define  fqto_euler SL_fqto_euler
+#   define  dqto_euler SL_dqto_euler
+#   define  fqfrom_angleAxis SL_fqfrom_angleAxis
+#   define  dqfrom_angleAxis SL_dqfrom_angleAxis
+#   define  fqfrom_fromTo SL_fqfrom_fromTo
+#   define  dqfrom_fromTo SL_dqfrom_fromTo
+#   define  fqfrom_v4 SL_fqfrom_v4
+#   define  dqfrom_v4 SL_dqfrom_v4
+#   define  fqto_v4 SL_fqto_v4
+#   define  dqto_v4 SL_dqto_v4
+
+#   define  msize SL_msize
+#   define  mget SL_mget
+#   define  XPD_M2X2 SL_XPD_M2X2
+#   define  XPD_M3X3 SL_XPD_M3X3
+#   define  XPD_M4X4 SL_XPD_M4X4
+#   define  FMT_M2X2 SL_FMT_M2X2
+#   define  FMT_M3X3 SL_FMT_M3X3
+#   define  FMT_M4X4 SL_FMT_M4X4
+#   define  asi32m SL_asi32m
+#   define  i32m2x2_zero SL_i32m2x2_zero
+#   define  i32m2x2_identity SL_i32m2x2_identity
+#   define  i32m2x2add SL_i32m2x2add
+#   define  i32m2x2sub SL_i32m2x2sub
+#   define  i32m2x2mul SL_i32m2x2mul
+#   define  i32m2x2muls SL_i32m2x2muls
+#   define  i32m2x2mulv SL_i32m2x2mulv
+#   define  i32m2x2divs SL_i32m2x2divs
+#   define  i32m2x2addS SL_i32m2x2addS
+#   define  i32m2x2subS SL_i32m2x2subS
+#   define  i32m2x2neg SL_i32m2x2neg
+#   define  i32m2x2abs SL_i32m2x2abs
+#   define  i32m2x2min SL_i32m2x2min
+#   define  i32m2x2max SL_i32m2x2max
+#   define  i32m2x2trsp SL_i32m2x2trsp
+#   define  i32m2x2trace SL_i32m2x2trace
+#   define  i32m2x2det_xpd SL_i32m2x2det_xpd
+#   define  i32m2x2det SL_i32m2x2det
+#   define  i32m3x3_zero SL_i32m3x3_zero
+#   define  i32m3x3_identity SL_i32m3x3_identity
+#   define  i32m3x3add SL_i32m3x3add
+#   define  i32m3x3sub SL_i32m3x3sub
+#   define  i32m3x3mul SL_i32m3x3mul
+#   define  i32m3x3muls SL_i32m3x3muls
+#   define  i32m3x3mulv SL_i32m3x3mulv
+#   define  i32m3x3apply SL_i32m3x3apply
+#   define  i32m3x3divs SL_i32m3x3divs
+#   define  i32m3x3addS SL_i32m3x3addS
+#   define  i32m3x3subS SL_i32m3x3subS
+#   define  i32m3x3neg SL_i32m3x3neg
+#   define  i32m3x3abs SL_i32m3x3abs
+#   define  i32m3x3min SL_i32m3x3min
+#   define  i32m3x3max SL_i32m3x3max
+#   define  i32m3x3trsp SL_i32m3x3trsp
+#   define  i32m3x3trace SL_i32m3x3trace
+#   define  i32m3x3det_xpd SL_i32m3x3det_xpd
+#   define  i32m3x3det SL_i32m3x3det
+#   define  i32m4x4_zero SL_i32m4x4_zero
+#   define  i32m4x4_identity SL_i32m4x4_identity
+#   define  i32m4x4add SL_i32m4x4add
+#   define  i32m4x4sub SL_i32m4x4sub
+#   define  i32m4x4mul SL_i32m4x4mul
+#   define  i32m4x4muls SL_i32m4x4muls
+#   define  i32m4x4mulv SL_i32m4x4mulv
+#   define  i32m4x4apply SL_i32m4x4apply
+#   define  i32m4x4divs SL_i32m4x4divs
+#   define  i32m4x4addS SL_i32m4x4addS
+#   define  i32m4x4subS SL_i32m4x4subS
+#   define  i32m4x4neg SL_i32m4x4neg
+#   define  i32m4x4abs SL_i32m4x4abs
+#   define  i32m4x4min SL_i32m4x4min
+#   define  i32m4x4max SL_i32m4x4max
+#   define  i32m4x4trsp SL_i32m4x4trsp
+#   define  i32m4x4trace SL_i32m4x4trace
+#   define  i32m4x4det_xpd SL_i32m4x4det_xpd
+#   define  i32m4x4det SL_i32m4x4det
+#   define  asi64m SL_asi64m
+#   define  i64m2x2_zero SL_i64m2x2_zero
+#   define  i64m2x2_identity SL_i64m2x2_identity
+#   define  i64m2x2add SL_i64m2x2add
+#   define  i64m2x2sub SL_i64m2x2sub
+#   define  i64m2x2mul SL_i64m2x2mul
+#   define  i64m2x2muls SL_i64m2x2muls
+#   define  i64m2x2mulv SL_i64m2x2mulv
+#   define  i64m2x2divs SL_i64m2x2divs
+#   define  i64m2x2addS SL_i64m2x2addS
+#   define  i64m2x2subS SL_i64m2x2subS
+#   define  i64m2x2neg SL_i64m2x2neg
+#   define  i64m2x2abs SL_i64m2x2abs
+#   define  i64m2x2min SL_i64m2x2min
+#   define  i64m2x2max SL_i64m2x2max
+#   define  i64m2x2trsp SL_i64m2x2trsp
+#   define  i64m2x2trace SL_i64m2x2trace
+#   define  i64m2x2det_xpd SL_i64m2x2det_xpd
+#   define  i64m2x2det SL_i64m2x2det
+#   define  i64m3x3_zero SL_i64m3x3_zero
+#   define  i64m3x3_identity SL_i64m3x3_identity
+#   define  i64m3x3add SL_i64m3x3add
+#   define  i64m3x3sub SL_i64m3x3sub
+#   define  i64m3x3mul SL_i64m3x3mul
+#   define  i64m3x3muls SL_i64m3x3muls
+#   define  i64m3x3mulv SL_i64m3x3mulv
+#   define  i64m3x3apply SL_i64m3x3apply
+#   define  i64m3x3divs SL_i64m3x3divs
+#   define  i64m3x3addS SL_i64m3x3addS
+#   define  i64m3x3subS SL_i64m3x3subS
+#   define  i64m3x3neg SL_i64m3x3neg
+#   define  i64m3x3abs SL_i64m3x3abs
+#   define  i64m3x3min SL_i64m3x3min
+#   define  i64m3x3max SL_i64m3x3max
+#   define  i64m3x3trsp SL_i64m3x3trsp
+#   define  i64m3x3trace SL_i64m3x3trace
+#   define  i64m3x3det_xpd SL_i64m3x3det_xpd
+#   define  i64m3x3det SL_i64m3x3det
+#   define  i64m4x4_zero SL_i64m4x4_zero
+#   define  i64m4x4_identity SL_i64m4x4_identity
+#   define  i64m4x4add SL_i64m4x4add
+#   define  i64m4x4sub SL_i64m4x4sub
+#   define  i64m4x4mul SL_i64m4x4mul
+#   define  i64m4x4muls SL_i64m4x4muls
+#   define  i64m4x4mulv SL_i64m4x4mulv
+#   define  i64m4x4apply SL_i64m4x4apply
+#   define  i64m4x4divs SL_i64m4x4divs
+#   define  i64m4x4addS SL_i64m4x4addS
+#   define  i64m4x4subS SL_i64m4x4subS
+#   define  i64m4x4neg SL_i64m4x4neg
+#   define  i64m4x4abs SL_i64m4x4abs
+#   define  i64m4x4min SL_i64m4x4min
+#   define  i64m4x4max SL_i64m4x4max
+#   define  i64m4x4trsp SL_i64m4x4trsp
+#   define  i64m4x4trace SL_i64m4x4trace
+#   define  i64m4x4det_xpd SL_i64m4x4det_xpd
+#   define  i64m4x4det SL_i64m4x4det
+#   define  asu32m SL_asu32m
+#   define  u32m2x2_zero SL_u32m2x2_zero
+#   define  u32m2x2_identity SL_u32m2x2_identity
+#   define  u32m2x2add SL_u32m2x2add
+#   define  u32m2x2sub SL_u32m2x2sub
+#   define  u32m2x2mul SL_u32m2x2mul
+#   define  u32m2x2muls SL_u32m2x2muls
+#   define  u32m2x2mulv SL_u32m2x2mulv
+#   define  u32m2x2divs SL_u32m2x2divs
+#   define  u32m2x2addS SL_u32m2x2addS
+#   define  u32m2x2subS SL_u32m2x2subS
+#   define  u32m2x2min SL_u32m2x2min
+#   define  u32m2x2max SL_u32m2x2max
+#   define  u32m2x2trsp SL_u32m2x2trsp
+#   define  u32m2x2trace SL_u32m2x2trace
+#   define  u32m2x2det_xpd SL_u32m2x2det_xpd
+#   define  u32m2x2det SL_u32m2x2det
+#   define  u32m3x3_zero SL_u32m3x3_zero
+#   define  u32m3x3_identity SL_u32m3x3_identity
+#   define  u32m3x3add SL_u32m3x3add
+#   define  u32m3x3sub SL_u32m3x3sub
+#   define  u32m3x3mul SL_u32m3x3mul
+#   define  u32m3x3muls SL_u32m3x3muls
+#   define  u32m3x3mulv SL_u32m3x3mulv
+#   define  u32m3x3apply SL_u32m3x3apply
+#   define  u32m3x3divs SL_u32m3x3divs
+#   define  u32m3x3addS SL_u32m3x3addS
+#   define  u32m3x3subS SL_u32m3x3subS
+#   define  u32m3x3min SL_u32m3x3min
+#   define  u32m3x3max SL_u32m3x3max
+#   define  u32m3x3trsp SL_u32m3x3trsp
+#   define  u32m3x3trace SL_u32m3x3trace
+#   define  u32m3x3det_xpd SL_u32m3x3det_xpd
+#   define  u32m3x3det SL_u32m3x3det
+#   define  u32m4x4_zero SL_u32m4x4_zero
+#   define  u32m4x4_identity SL_u32m4x4_identity
+#   define  u32m4x4add SL_u32m4x4add
+#   define  u32m4x4sub SL_u32m4x4sub
+#   define  u32m4x4mul SL_u32m4x4mul
+#   define  u32m4x4muls SL_u32m4x4muls
+#   define  u32m4x4mulv SL_u32m4x4mulv
+#   define  u32m4x4apply SL_u32m4x4apply
+#   define  u32m4x4divs SL_u32m4x4divs
+#   define  u32m4x4addS SL_u32m4x4addS
+#   define  u32m4x4subS SL_u32m4x4subS
+#   define  u32m4x4min SL_u32m4x4min
+#   define  u32m4x4max SL_u32m4x4max
+#   define  u32m4x4trsp SL_u32m4x4trsp
+#   define  u32m4x4trace SL_u32m4x4trace
+#   define  u32m4x4det_xpd SL_u32m4x4det_xpd
+#   define  u32m4x4det SL_u32m4x4det
+#   define  asu64m SL_asu64m
+#   define  u64m2x2_zero SL_u64m2x2_zero
+#   define  u64m2x2_identity SL_u64m2x2_identity
+#   define  u64m2x2add SL_u64m2x2add
+#   define  u64m2x2sub SL_u64m2x2sub
+#   define  u64m2x2mul SL_u64m2x2mul
+#   define  u64m2x2muls SL_u64m2x2muls
+#   define  u64m2x2mulv SL_u64m2x2mulv
+#   define  u64m2x2divs SL_u64m2x2divs
+#   define  u64m2x2addS SL_u64m2x2addS
+#   define  u64m2x2subS SL_u64m2x2subS
+#   define  u64m2x2min SL_u64m2x2min
+#   define  u64m2x2max SL_u64m2x2max
+#   define  u64m2x2trsp SL_u64m2x2trsp
+#   define  u64m2x2trace SL_u64m2x2trace
+#   define  u64m2x2det_xpd SL_u64m2x2det_xpd
+#   define  u64m2x2det SL_u64m2x2det
+#   define  u64m3x3_zero SL_u64m3x3_zero
+#   define  u64m3x3_identity SL_u64m3x3_identity
+#   define  u64m3x3add SL_u64m3x3add
+#   define  u64m3x3sub SL_u64m3x3sub
+#   define  u64m3x3mul SL_u64m3x3mul
+#   define  u64m3x3muls SL_u64m3x3muls
+#   define  u64m3x3mulv SL_u64m3x3mulv
+#   define  u64m3x3apply SL_u64m3x3apply
+#   define  u64m3x3divs SL_u64m3x3divs
+#   define  u64m3x3addS SL_u64m3x3addS
+#   define  u64m3x3subS SL_u64m3x3subS
+#   define  u64m3x3min SL_u64m3x3min
+#   define  u64m3x3max SL_u64m3x3max
+#   define  u64m3x3trsp SL_u64m3x3trsp
+#   define  u64m3x3trace SL_u64m3x3trace
+#   define  u64m3x3det_xpd SL_u64m3x3det_xpd
+#   define  u64m3x3det SL_u64m3x3det
+#   define  u64m4x4_zero SL_u64m4x4_zero
+#   define  u64m4x4_identity SL_u64m4x4_identity
+#   define  u64m4x4add SL_u64m4x4add
+#   define  u64m4x4sub SL_u64m4x4sub
+#   define  u64m4x4mul SL_u64m4x4mul
+#   define  u64m4x4muls SL_u64m4x4muls
+#   define  u64m4x4mulv SL_u64m4x4mulv
+#   define  u64m4x4apply SL_u64m4x4apply
+#   define  u64m4x4divs SL_u64m4x4divs
+#   define  u64m4x4addS SL_u64m4x4addS
+#   define  u64m4x4subS SL_u64m4x4subS
+#   define  u64m4x4min SL_u64m4x4min
+#   define  u64m4x4max SL_u64m4x4max
+#   define  u64m4x4trsp SL_u64m4x4trsp
+#   define  u64m4x4trace SL_u64m4x4trace
+#   define  u64m4x4det_xpd SL_u64m4x4det_xpd
+#   define  u64m4x4det SL_u64m4x4det
+#   define  asfm SL_asfm
+#   define  fm2x2_zero SL_fm2x2_zero
+#   define  fm2x2_identity SL_fm2x2_identity
+#   define  fm2x2add SL_fm2x2add
+#   define  fm2x2sub SL_fm2x2sub
+#   define  fm2x2mul SL_fm2x2mul
+#   define  fm2x2muls SL_fm2x2muls
+#   define  fm2x2mulv SL_fm2x2mulv
+#   define  fm2x2divs SL_fm2x2divs
+#   define  fm2x2addS SL_fm2x2addS
+#   define  fm2x2subS SL_fm2x2subS
+#   define  fm2x2neg SL_fm2x2neg
+#   define  fm2x2abs SL_fm2x2abs
+#   define  fm2x2min SL_fm2x2min
+#   define  fm2x2max SL_fm2x2max
+#   define  fm2x2trsp SL_fm2x2trsp
+#   define  fm2x2trace SL_fm2x2trace
+#   define  fm2x2det_xpd SL_fm2x2det_xpd
+#   define  fm2x2det SL_fm2x2det
+#   define  fm2x2inv SL_fm2x2inv
+#   define  fm2x2from_angle SL_fm2x2from_angle
+#   define  fm3x3_zero SL_fm3x3_zero
+#   define  fm3x3_identity SL_fm3x3_identity
+#   define  fm3x3add SL_fm3x3add
+#   define  fm3x3sub SL_fm3x3sub
+#   define  fm3x3mul SL_fm3x3mul
+#   define  fm3x3muls SL_fm3x3muls
+#   define  fm3x3mulv SL_fm3x3mulv
+#   define  fm3x3apply SL_fm3x3apply
+#   define  fm3x3divs SL_fm3x3divs
+#   define  fm3x3addS SL_fm3x3addS
+#   define  fm3x3subS SL_fm3x3subS
+#   define  fm3x3neg SL_fm3x3neg
+#   define  fm3x3abs SL_fm3x3abs
+#   define  fm3x3min SL_fm3x3min
+#   define  fm3x3max SL_fm3x3max
+#   define  fm3x3trsp SL_fm3x3trsp
+#   define  fm3x3trace SL_fm3x3trace
+#   define  fm3x3det_xpd SL_fm3x3det_xpd
+#   define  fm3x3det SL_fm3x3det
+#   define  fm3x3inv SL_fm3x3inv
+#   define  fm3x3from_quat SL_fm3x3from_quat
+#   define  fm3x3from_transform SL_fm3x3from_transform
+#   define  fm4x4_zero SL_fm4x4_zero
+#   define  fm4x4_identity SL_fm4x4_identity
+#   define  fm4x4add SL_fm4x4add
+#   define  fm4x4sub SL_fm4x4sub
+#   define  fm4x4mul SL_fm4x4mul
+#   define  fm4x4muls SL_fm4x4muls
+#   define  fm4x4mulv SL_fm4x4mulv
+#   define  fm4x4apply SL_fm4x4apply
+#   define  fm4x4divs SL_fm4x4divs
+#   define  fm4x4addS SL_fm4x4addS
+#   define  fm4x4subS SL_fm4x4subS
+#   define  fm4x4neg SL_fm4x4neg
+#   define  fm4x4abs SL_fm4x4abs
+#   define  fm4x4min SL_fm4x4min
+#   define  fm4x4max SL_fm4x4max
+#   define  fm4x4trsp SL_fm4x4trsp
+#   define  fm4x4trace SL_fm4x4trace
+#   define  fm4x4det_xpd SL_fm4x4det_xpd
+#   define  fm4x4det SL_fm4x4det
+#   define  fm4x4inv SL_fm4x4inv
+#   define  fm4x4from_transform SL_fm4x4from_transform
+#   define  asdm SL_asdm
+#   define  dm2x2_zero SL_dm2x2_zero
+#   define  dm2x2_identity SL_dm2x2_identity
+#   define  dm2x2add SL_dm2x2add
+#   define  dm2x2sub SL_dm2x2sub
+#   define  dm2x2mul SL_dm2x2mul
+#   define  dm2x2muls SL_dm2x2muls
+#   define  dm2x2mulv SL_dm2x2mulv
+#   define  dm2x2divs SL_dm2x2divs
+#   define  dm2x2addS SL_dm2x2addS
+#   define  dm2x2subS SL_dm2x2subS
+#   define  dm2x2neg SL_dm2x2neg
+#   define  dm2x2abs SL_dm2x2abs
+#   define  dm2x2min SL_dm2x2min
+#   define  dm2x2max SL_dm2x2max
+#   define  dm2x2trsp SL_dm2x2trsp
+#   define  dm2x2trace SL_dm2x2trace
+#   define  dm2x2det_xpd SL_dm2x2det_xpd
+#   define  dm2x2det SL_dm2x2det
+#   define  dm2x2inv SL_dm2x2inv
+#   define  dm2x2from_angle SL_dm2x2from_angle
+#   define  dm3x3_zero SL_dm3x3_zero
+#   define  dm3x3_identity SL_dm3x3_identity
+#   define  dm3x3add SL_dm3x3add
+#   define  dm3x3sub SL_dm3x3sub
+#   define  dm3x3mul SL_dm3x3mul
+#   define  dm3x3muls SL_dm3x3muls
+#   define  dm3x3mulv SL_dm3x3mulv
+#   define  dm3x3apply SL_dm3x3apply
+#   define  dm3x3divs SL_dm3x3divs
+#   define  dm3x3addS SL_dm3x3addS
+#   define  dm3x3subS SL_dm3x3subS
+#   define  dm3x3neg SL_dm3x3neg
+#   define  dm3x3abs SL_dm3x3abs
+#   define  dm3x3min SL_dm3x3min
+#   define  dm3x3max SL_dm3x3max
+#   define  dm3x3trsp SL_dm3x3trsp
+#   define  dm3x3trace SL_dm3x3trace
+#   define  dm3x3det_xpd SL_dm3x3det_xpd
+#   define  dm3x3det SL_dm3x3det
+#   define  dm3x3inv SL_dm3x3inv
+#   define  dm3x3from_quat SL_dm3x3from_quat
+#   define  dm3x3from_transform SL_dm3x3from_transform
+#   define  dm4x4_zero SL_dm4x4_zero
+#   define  dm4x4_identity SL_dm4x4_identity
+#   define  dm4x4add SL_dm4x4add
+#   define  dm4x4sub SL_dm4x4sub
+#   define  dm4x4mul SL_dm4x4mul
+#   define  dm4x4muls SL_dm4x4muls
+#   define  dm4x4mulv SL_dm4x4mulv
+#   define  dm4x4apply SL_dm4x4apply
+#   define  dm4x4divs SL_dm4x4divs
+#   define  dm4x4addS SL_dm4x4addS
+#   define  dm4x4subS SL_dm4x4subS
+#   define  dm4x4neg SL_dm4x4neg
+#   define  dm4x4abs SL_dm4x4abs
+#   define  dm4x4min SL_dm4x4min
+#   define  dm4x4max SL_dm4x4max
+#   define  dm4x4trsp SL_dm4x4trsp
+#   define  dm4x4trace SL_dm4x4trace
+#   define  dm4x4det_xpd SL_dm4x4det_xpd
+#   define  dm4x4det SL_dm4x4det
+#   define  dm4x4inv SL_dm4x4inv
+#   define  dm4x4from_transform SL_dm4x4from_transform
+#   define  asbm SL_asbm
+#   define  bm2x2_zero SL_bm2x2_zero
+#   define  bm2x2_identity SL_bm2x2_identity
+#   define  bm2x2add SL_bm2x2add
+#   define  bm2x2sub SL_bm2x2sub
+#   define  bm2x2mul SL_bm2x2mul
+#   define  bm2x2muls SL_bm2x2muls
+#   define  bm2x2mulv SL_bm2x2mulv
+#   define  bm2x2divs SL_bm2x2divs
+#   define  bm2x2addS SL_bm2x2addS
+#   define  bm2x2subS SL_bm2x2subS
+#   define  bm2x2min SL_bm2x2min
+#   define  bm2x2max SL_bm2x2max
+#   define  bm2x2trsp SL_bm2x2trsp
+#   define  bm2x2trace SL_bm2x2trace
+#   define  bm2x2det_xpd SL_bm2x2det_xpd
+#   define  bm2x2det SL_bm2x2det
+#   define  bm3x3_zero SL_bm3x3_zero
+#   define  bm3x3_identity SL_bm3x3_identity
+#   define  bm3x3add SL_bm3x3add
+#   define  bm3x3sub SL_bm3x3sub
+#   define  bm3x3mul SL_bm3x3mul
+#   define  bm3x3muls SL_bm3x3muls
+#   define  bm3x3mulv SL_bm3x3mulv
+#   define  bm3x3apply SL_bm3x3apply
+#   define  bm3x3divs SL_bm3x3divs
+#   define  bm3x3addS SL_bm3x3addS
+#   define  bm3x3subS SL_bm3x3subS
+#   define  bm3x3min SL_bm3x3min
+#   define  bm3x3max SL_bm3x3max
+#   define  bm3x3trsp SL_bm3x3trsp
+#   define  bm3x3trace SL_bm3x3trace
+#   define  bm3x3det_xpd SL_bm3x3det_xpd
+#   define  bm3x3det SL_bm3x3det
+#   define  bm4x4_zero SL_bm4x4_zero
+#   define  bm4x4_identity SL_bm4x4_identity
+#   define  bm4x4add SL_bm4x4add
+#   define  bm4x4sub SL_bm4x4sub
+#   define  bm4x4mul SL_bm4x4mul
+#   define  bm4x4muls SL_bm4x4muls
+#   define  bm4x4mulv SL_bm4x4mulv
+#   define  bm4x4apply SL_bm4x4apply
+#   define  bm4x4divs SL_bm4x4divs
+#   define  bm4x4addS SL_bm4x4addS
+#   define  bm4x4subS SL_bm4x4subS
+#   define  bm4x4min SL_bm4x4min
+#   define  bm4x4max SL_bm4x4max
+#   define  bm4x4trsp SL_bm4x4trsp
+#   define  bm4x4trace SL_bm4x4trace
+#   define  bm4x4det_xpd SL_bm4x4det_xpd
+#   define  bm4x4det SL_bm4x4det
+#endif
+
+
+#ifndef SL_NO_DEFINES
+    __SL_DEF_CMP_FUNC(int,    a, b, SL_header, SL_implement) SL_implement({ return (i64)*a - (i64)*b; });
+    __SL_DEF_CMP_FUNC(i8,     a, b, SL_header, SL_implement) SL_implement({ return (i64)*a - (i64)*b; });
+    __SL_DEF_CMP_FUNC(i16,    a, b, SL_header, SL_implement) SL_implement({ return (i64)*a - (i64)*b; });
+    __SL_DEF_CMP_FUNC(i32,    a, b, SL_header, SL_implement) SL_implement({ return (i64)*a - (i64)*b; });
+    __SL_DEF_CMP_FUNC(i64,    a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : (*a > *b ? 1 : 0); });
+    __SL_DEF_CMP_FUNC(uint,   a, b, SL_header, SL_implement) SL_implement({ return (i64)*a - (i64)*b; });
+    __SL_DEF_CMP_FUNC(u8,     a, b, SL_header, SL_implement) SL_implement({ return (i64)*a - (i64)*b; });
+    __SL_DEF_CMP_FUNC(u16,    a, b, SL_header, SL_implement) SL_implement({ return (i64)*a - (i64)*b; });
+    __SL_DEF_CMP_FUNC(u32,    a, b, SL_header, SL_implement) SL_implement({ return (i64)*a - (i64)*b; });
+    __SL_DEF_CMP_FUNC(u64,    a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : (*a > *b ? 1 : 0); });
+    __SL_DEF_CMP_FUNC(ssize,  a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : (*a > *b ? 1 : 0); });
+    __SL_DEF_CMP_FUNC(usize,  a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : (*a > *b ? 1 : 0); });
+    __SL_DEF_CMP_FUNC(float,  a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : (*a > *b ? 1 : 0); });
+    __SL_DEF_CMP_FUNC(double, a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : (*a > *b ? 1 : 0); });
+    __SL_DEF_CMP_FUNC(bool,   a, b, SL_header, SL_implement) SL_implement({ return !*a && *b ? -1 : (*a && !*b ? 1 : 0); });
+
+    __SL_DEF_CMP_FUNC(charp,  a, b, SL_header, SL_implement) SL_implement({ return strcmp(*a, *b); });
+    SL_DEF_HASH_FUNC(charp, key) SL_implement
+    ({
+        usize h = 0x02468ACE;
+        for (const char *c = *key; *c; ++c) {
+            h ^= *c;
+            h *= 0x5bd1e995;
+            h ^= h >> 15;
+        }
+        return h;
+    });
+
+    SL_DEF_ARRAY(bool);
+    SL_DEF_ARRAY(int);    SL_DEF_ARRAY(uint);  SL_DEF_ARRAY(usize);  SL_DEF_ARRAY(ssize);
+    SL_DEF_ARRAY(i8);     SL_DEF_ARRAY(i16);   SL_DEF_ARRAY(i32);    SL_DEF_ARRAY(i64);
+    SL_DEF_ARRAY(u8);     SL_DEF_ARRAY(u16);   SL_DEF_ARRAY(u32);    SL_DEF_ARRAY(u64);
+    SL_DEF_ARRAY(f16);    SL_DEF_ARRAY(f32);   SL_DEF_ARRAY(f64);    SL_DEF_ARRAY(f128);
+    SL_DEF_ARRAY(charp);
+
+    SL_DEF_ALIAS(SL_array(f32), SL_array(float));                       SL_DEF_ALIAS(SL_slice(f32), SL_slice(float)); 
+    SL_DEF_ALIAS(SL_array(f64), SL_array(double));                      SL_DEF_ALIAS(SL_slice(f64), SL_slice(double));
+
+    SL_DEF_ALIAS(SL_array(u8), SL_array(char8), SL_array(char));        SL_DEF_ALIAS(SL_slice(u8), SL_slice(char8), SL_slice(char));
+    SL_DEF_ALIAS(SL_array(u16), SL_array(char16), SL_array(wchar_t));   SL_DEF_ALIAS(SL_slice(u16), SL_slice(char16), SL_slice(wchar_t));
+    SL_DEF_ALIAS(SL_array(u32), SL_array(char32));                      SL_DEF_ALIAS(SL_slice(u32), SL_slice(char32));
+
+    SL_DEF_LIST(bool);
+    SL_DEF_LIST(int);   SL_DEF_LIST(uint);  SL_DEF_LIST(usize);  SL_DEF_LIST(ssize);
+    SL_DEF_LIST(i8);    SL_DEF_LIST(i16);   SL_DEF_LIST(i32);    SL_DEF_LIST(i64);
+    SL_DEF_LIST(u8);    SL_DEF_LIST(u16);   SL_DEF_LIST(u32);    SL_DEF_LIST(u64);
+    SL_DEF_LIST(f32);   SL_DEF_LIST(f64);
+    SL_DEF_LIST(charp);
+
+    SL_DEF_ALIAS(SL_list(f32), SL_list(float));                     SL_DEF_ALIAS(SL_dlist(f32), SL_dlist(float)); 
+    SL_DEF_ALIAS(SL_list(f64), SL_list(double));                    SL_DEF_ALIAS(SL_dlist(f64), SL_dlist(double));
+
+    SL_DEF_ALIAS(SL_list(u8), SL_list(char8), SL_list(char));       SL_DEF_ALIAS(SL_dlist(u8), SL_dlist(char8), SL_dlist(char));
+    SL_DEF_ALIAS(SL_list(u16), SL_list(char16), SL_list(wchar_t));  SL_DEF_ALIAS(SL_dlist(u16), SL_dlist(char16), SL_dlist(wchar_t));
+    SL_DEF_ALIAS(SL_list(u32), SL_list(char32));                    SL_DEF_ALIAS(SL_dlist(u32), SL_dlist(char32));
+#endif
+
+
+// This file was generated on 01/06/2026 17:44:58

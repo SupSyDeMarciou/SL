@@ -1,0 +1,31 @@
+q  = a + bi + cj + dk
+q' = w + xi + yj + zk
+
+q * q' = (a + bi + cj + dk) * (w + xi + yj + zk)
+       = aw + axi + ayj + azk + bwi - bx + byk - bzj + cwj - cxk - cy + czi + dwk + dxj - dyi - dz
+       = (aw - bx - cy - dz)     +
+         (ax + bw + cz - dy) * i +
+         (ay - bz + cw + dx) * j +
+         (az + by - cx + dw) * k
+
+## EULER ANGLES -- Roll -> Pitch -> Yaw
+                   ^       ^        ^
+                   Z       X        Y
+
+q_r = cos(r/2) + sin(r/2) * k = cr + sr * k
+q_p = cos(p/2) + sin(p/2) * i = cp + sp * i
+q_y = cos(y/2) + sin(y/2) * j = cy + sy * j
+
+q_y * q_p * q_r = (cy + sy * j) * (cp + sp * i) * (cr + sr * k)
+                = (cy*cp + cy*sp * i + sy*cp * j - sy*sp * k) * (cr + sr * k)
+                = ( cy*cp*cr + sy*sp*sr)     +
+                  ( cy*sp*cr + sy*cp*sr) * i + 
+                  ( sy*cp*cr - cy*sp*sr) * j +
+                  (-sy*sp*cr + cy*cp*sr) * k
+
+q_r * q_p * q_y = (cr + sr * k) * (cp + sp * i) * (cy + sy * j)
+                = (cr*cp + cr*sp * i + sr*sp * j + sr*cp * k) * (cy + sy * j)
+                = (cr*cp*cy - sr*sp*sy)     +
+                  (cr*sp*cy - sr*cp*sy) * i + 
+                  (sr*sp*cy + cr*cp*sy) * j +
+                  (sr*cp*cy + cr*sp*sy) * k
