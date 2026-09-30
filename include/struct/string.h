@@ -7,7 +7,7 @@
  *  TODO:
  *  - Support every <string.h> function:
  *      - strcmp, strcasecmp
- *      - 
+ *      - ...
  *  - Trim left/right/both
  *  - Split (returns array of "string_slice")
  *  - Start, end factor matching

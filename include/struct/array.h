@@ -31,7 +31,7 @@
 #define SL_slicea(type, array, start, end) ((SL_slice(type)){.data = (array).data + (start), .count = 1 + (end) - (start)})
 #define SL_slicev(type, ...)               ((SL_slice(type)){.data = (type[]){__VA_ARGS__}, .count = (sizeof((type[]){__VA_ARGS__}) / sizeof(type))})
 
-SL_DEF_ARRAY(void);
+SL_DEF_ARRAY(void); SL_DEF_ARRAY(SL_ptr(void));
 
 
 
@@ -184,7 +184,7 @@ SL_header bool __SL_arrayRemoveUnordered(void *array_data, usize *array_count, u
 /// @return Pointer to popped value
 /// @warning The pointer to the popped value is only garantied to be valid when this function is called
 /// @note Error status is recorded in SL_ERROR
-#define SL_arrayPop(array) ((array).count ? (array).data + --(array).count : __SL_ERROR(SL_ERR_OUT_OF_BOUNDS), NULL)
+#define SL_arrayPop(array) ((array).count ? (array).data + --(array).count : __SL_ERROR(SL_ERROR_OUT_OF_BOUNDS), NULL)
 
 
 
@@ -200,26 +200,6 @@ SL_header void __SL_arrayFill(void *array_data, usize array_count, usize elemSiz
 SL_header bool __SL_arraySetCapacity(void **array_data, usize *array_count, usize *array_capa, sl_allocator *alloc, usize elemSize, usize new_capa);
 #define SL_arrayReserve(array, new_capacity) (__SL_arraySetCapacity(__SL_XPD_ARRAY(array, &), new_capacity))
 
-/// @brief Print array to a stream with user defined formatting
-/// @param array Array
-/// @param dst Destination in which to print. Uses generic "gprintf" function to differenciate between printing to a string or a file
-/// @param fmt The format of the data to print
-/// @param varname The name of the iterator
-/// @param ... How to expand the value stored to fit the format specified with 'fmt'
-#define SL_arrayPrintf_full(array, dst, fmt, varname, ...) do { \
-    if (!(array).data) SL_gprintf(dst, "array[]"); \
-    else { \
-        SL_aforeach(varname, array) SL_gprintf(dst, SL_aindex(varname) == 0 ? "array["fmt : ", "fmt, ##__VA_ARGS__); \
-        SL_gprintf(dst, "]"); \
-    } \
-} while (0)
-/// @brief Print array to a stream with user defined formatting
-/// @param array Array
-/// @param dst Destination in which to print. Uses generic "gprintf" function to differenciate between printing to a string or a file
-/// @param fmt The format of the data to print
-/// @param ... How to expand the value stored to fit the format specified with 'fmt'
-#define SL_arrayPrintf(array, dst, fmt) SL_arrayPrintf_full(array, dst, fmt, __SL_VARNAME__, *__SL_VARNAME__)
-
 
 
 /// @brief Iterate over every item into an array
@@ -234,6 +214,33 @@ SL_header bool __SL_arraySetCapacity(void **array_data, usize *array_count, usiz
 #define SL_aindex_in(ptr, array) (((usize)(ptr) - (usize)((array).data)) / sizeof(*(array).data))
 
 #define SL_anext(array, ptr) ((ptr) = ((ptr) >= (array).data + (array).count ? NULL : (ptr) + 1))
+
+
+
+#include "../misc/io.h"
+
+/// @brief Print array to a stream with user defined formatting
+/// @param dst Destination in which to print. Uses generic "gprintf" function to differenciate between printing to a string or a file
+/// @param array Array
+/// @param fmt The format of the data to print
+/// @param varname The name of the iterator
+/// @param ... How to expand the value stored to fit the format specified with 'fmt'
+#define SL_arrayPrintf_full(dst, array, fmt, varname, ...) do { \
+    if (!(array).data) SL_gprintf(dst, "array[]"); \
+    else { \
+        SL_aforeach(varname, array) SL_gprintf(dst, SL_aindex(varname) == 0 ? "array["fmt : ", "fmt, ##__VA_ARGS__); \
+        SL_gprintf(dst, "]"); \
+    } \
+} while (0)
+/// @brief Print array to a stream with user defined formatting
+/// @param dst Destination in which to print. Uses generic "gprintf" function to differenciate between printing to a string or a file
+/// @param array Array
+/// @param fmt The format of the data to print
+/// @param ... How to expand the value stored to fit the format specified with 'fmt'
+#define SL_arrayPrintf(dst, array, fmt) SL_arrayPrintf_full(dst, array, fmt, __SL_VARNAME__, *__SL_VARNAME__)
+
+#define SL_putArray_full(...) SL_PUT_WRAPPER(SL_arrayPrintf_full(SL_PUT_TARGET, __VA_ARGS__))
+#define SL_putArray(...)      SL_PUT_WRAPPER(SL_arrayPrintf(SL_PUT_TARGET, __VA_ARGS__))
 
 
 
@@ -275,11 +282,13 @@ SL_header bool __SL_arraySetCapacity(void **array_data, usize *array_count, usiz
 #   define arrayQSort           SL_arraySort
 #   define arrayFill            SL_arrayFill
 #   define arrayReserve         SL_arrayReserve
-#   define arrayPrintf_full     SL_arrayPrintf_full
-#   define arrayPrintf          SL_arrayPrintf
 #   define aforeach             SL_aforeach
 #   define aindex               SL_aindex
 #   define aindex_in            SL_aindex_in
+#   define arrayPrintf_full     SL_arrayPrintf_full
+#   define arrayPrintf          SL_arrayPrintf
+#   define putArray_full        SL_putArray_full
+#   define putArray             SL_putArray
 #endif
 
 #ifdef SL_IMPLEMENTATION
@@ -294,20 +303,20 @@ SL_header bool __SL_arraySetCapacity(void **array_data, usize *array_count, usiz
 
     if (*array_data == NULL) {
         *array_data = SL_aalloc(alloc, elemSize * (*array_capa = SL_alignPow2(new_capa)));
-        return *array_data ? true : (__SL_ERROR(SL_ERR_MEMORY), false);
+        return *array_data ? true : (__SL_ERROR(SL_ERROR_MEMORY), false);
     }
     
     usize old_capa = *array_capa;
     do *array_capa <<= 1; while (new_capa > *array_capa);
     
     void *newData = SL_aalloc(alloc, elemSize * *array_capa);
-    if (!newData) return __SL_ERROR(SL_ERR_MEMORY), false;
+    if (!newData) return __SL_ERROR(SL_ERROR_MEMORY), false;
     memcpy(newData, *array_data, elemSize * old_capa);
     SL_afree(alloc, *array_data);
     *array_data = newData;
 
     // *array_data = SL_arealloc(alloc, *array_data, *array_capa);
-    // if (!*array_data) return __SL_ERROR(SL_ERR_MEMORY), false;
+    // if (!*array_data) return __SL_ERROR(SL_ERROR_MEMORY), false;
 
     return true;
 }
@@ -315,8 +324,8 @@ SL_header bool __SL_arraySetCapacity(void **array_data, usize *array_count, usiz
 SL_header void *__SL_arrayInsertRange(void **array_data, usize *array_count, usize *array_capa, sl_allocator *alloc, usize elemSize, usize index, usize span, void *values)
 {
     usize prev_count = *array_count;
-    if (index > prev_count) return __SL_ERROR(SL_ERR_OUT_OF_BOUNDS), NULL;
-    if (!__SL_arraySetCapacity(array_data, array_count, array_capa, alloc, elemSize, prev_count + span)) return __SL_ERROR(SL_ERR_MEMORY), NULL;
+    if (index > prev_count) return __SL_ERROR(SL_ERROR_OUT_OF_BOUNDS), NULL;
+    if (!__SL_arraySetCapacity(array_data, array_count, array_capa, alloc, elemSize, prev_count + span)) return __SL_ERROR(SL_ERROR_MEMORY), NULL;
     
     void *firstElem = *array_data + elemSize * index;
     if (index < prev_count) memmove(firstElem + elemSize * span, firstElem, elemSize * (prev_count - index));
@@ -328,13 +337,13 @@ SL_header void *__SL_arrayInsertRange(void **array_data, usize *array_count, usi
 }
 SL_header bool __SL_arrayRemoveRange(void *array_data, usize *array_count, usize elemSize, usize index, usize span)
 {
-    if (index + span > *array_count || span == 0) return __SL_ERROR(SL_ERR_OUT_OF_BOUNDS), false;
+    if (index + span > *array_count || span == 0) return __SL_ERROR(SL_ERROR_OUT_OF_BOUNDS), false;
     memmove(array_data + elemSize * index, array_data + elemSize * (index + span), elemSize * ((*array_count -= span) - index + 1));
     return true;
 }
 SL_header bool __SL_arrayRemoveUnordered(void *array_data, usize *array_count, usize elemSize, usize index)
 {
-    if (*array_count <= index || index < 0) return __SL_ERROR(SL_ERR_OUT_OF_BOUNDS), false;
+    if (*array_count <= index || index < 0) return __SL_ERROR(SL_ERROR_OUT_OF_BOUNDS), false;
     memcpy (array_data + elemSize * index, array_data + elemSize * --*array_count, elemSize);
     return true;
 }
@@ -360,7 +369,5 @@ SL_header void __SL_arrayFill(void *array_data, usize array_count, usize elemSiz
     SL_DEF_ALIAS(SL_array(u8), SL_array(char8), SL_array(char));        SL_DEF_ALIAS(SL_slice(u8), SL_slice(char8), SL_slice(char));
     SL_DEF_ALIAS(SL_array(u16), SL_array(char16), SL_array(wchar_t));   SL_DEF_ALIAS(SL_slice(u16), SL_slice(char16), SL_slice(wchar_t));
     SL_DEF_ALIAS(SL_array(u32), SL_array(char32));                      SL_DEF_ALIAS(SL_slice(u32), SL_slice(char32));
-
-    SL_DEF_ARRAY(void_p);
 #endif
 #endif // _SL_ARRAY_H_

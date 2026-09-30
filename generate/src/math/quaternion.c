@@ -1,11 +1,11 @@
 #define SL_GEN_MAIN
 #define SL_IMPLEMENTATION
-#include "genmaths.h"
+#include "../generate.h"
 
 void pushQuatDef(FILE *f, type qtype) {
 
-    print("/// @brief Quaternion of %s\n", ctypeAsStr(qtype.as.c));
-    print(
+    push("/// @brief Quaternion of %s\n", ctypeAsStr(qtype.as.c));
+    push(
         "typedef union {\n"
         "    %s data[4];\n"
         "    struct { %s a, b, c, d; };\n"
@@ -14,10 +14,10 @@ void pushQuatDef(FILE *f, type qtype) {
         "} %sq;\n",
         ctypeAsStr(qtype.as.c), ctypeAsStr(qtype.as.c), ctypeAsStr(qtype.as.c), ctypeAsStr(qtype.as.c), typeAsStr(V(qtype.as.c, 3), false), ctypeAsStr(qtype.as.c), ctypePrefixAsStr(qtype.as.c)
     );
-    print("\n");
+    push("\n");
     pushDefine(f, qtype, "_zero", "     ((@o){0})");
     pushDefine(f, qtype, "_identity", " ((@o){.a = 1, .b = 0, .c = 0, .d = 0})");
-    print("\n");
+    push("\n");
 }
 
 void pushQuatOp(FILE *f, const char *name, func_sig sig, const char *desc, const char *pre, const char *def) {
@@ -28,34 +28,34 @@ void pushQuatOp(FILE *f, const char *name, func_sig sig, const char *desc, const
         case VARIANT_C: {
             if (def[0] == '%' && def[1] == 'S') def += 2; // Ignore "single line" prefix
 
-            print("return ");
+            push("return ");
             pushFmtIndex(f, sig, def, .tab = 1);
-            print(";");
+            push(";");
         } break;
 
         case VARIANT_Q: {
             if (def[0] == '%' && def[1] == 'S') { // Single line result
-                print("return ");
+                push("return ");
                 pushFmtIndex(f, sig, def + 2, .tab = 1);
-                print(";");
+                push(";");
             }
             else { // Basic structured result
-                print("return (%s) {\n        ", typeAsStr(sig.ret, false));
+                push("return (%s) {\n        ", typeAsStr(sig.ret, false));
                 pushFmtQ(f, sig, 0, def, .tab = 2);
                 for (usize i = 1; i < 4; ++i) {
-                    print(",\n        ");
+                    push(",\n        ");
                     pushFmtQ(f, sig, i, def, .tab = 2);
                 }
-                print("\n    };");
+                push("\n    };");
             }
         } break;
     
         case VARIANT_V: {
             if (def[0] == '%' && def[1] == 'S') def += 2; // Ignore "single line" prefix
 
-            print("return ");
+            push("return ");
             pushFmtIndex(f, sig, def, .tab = 1);
-            print(";");
+            push(";");
         } break;
 
         default: SL_terminate(-1, "Return type \"%s\" not handled!", typeAsStr(sig.ret, false)); break;
@@ -69,7 +69,7 @@ int main() {
     type qtypes[2] = {Q(TYPE_FLOAT), Q(TYPE_DOUBLE)};
     
     FILE *f = fopen(S_PATH"SupSyLibraries/include/math/quaternion.h", "w");
-    print("#ifndef __SL_QUATERNION_H\n#define __SL_QUATERNION_H\n\n#include \"../base.h\"\n\n#include \"math.h\"\n#include \"vector.h\"\n\n");
+    push("#ifndef _SL_QUATERNION_H_\n#define _SL_QUATERNION_H_\n\n#include \"../base.h\"\n\n#include \"math.h\"\n#include \"vector.h\"\n\n");
     
     #define qtype qtypes[i]
     #define ctype C(qtypes[i].as.c)
@@ -77,18 +77,20 @@ int main() {
     pushDefine_(f, "XPD_Q", "(Q) (Q).w, (Q).x, (Q).y, (Q).z");
     pushDefine_(f, "FMT_Q", "(fmt) \"quat(\"fmt\" + \"fmt\"i + \"fmt\"j + \"fmt\"k)\"");
 
-    print("#pragma region ARITHMETIC\n\n");
-
+    
     for (usize i = 0; i < 2; ++i) pushQuatDef(f, qtype);
-    print("\n\n");
+    push("\n\n");
     for (usize i = 0; i < 2; ++i) pushDefine(f, qtype, "_", "(R, I, J, K) ((@o){.r = R, .i = I, .j = J, .k = K})");
     for (usize i = 0; i < 2; ++i) pushDefine(f, qtype, "v", "(R, IV)      ((@o){.r = R, .iv = IV})");
     for (usize i = 0; i < 2; ++i) pushDefine(f, qtype, "q", "(Q)          ((@o){"SL_PREFIX"XPD_Q(Q)})");
-    print("\n");
+    push("\n");
     pushDefine(f, qtypes[0], "asfv4", "(Q)     (*($Ov4*)Q.data)");
     pushDefine(f, qtypes[1], "asdv4", "(Q)     (*($Ov4*)Q.data)");
-    print("\n\n\n");
+    push("\n\n\n");
     
+    push("#pragma region ARITHMETIC\n\n");
+    
+    for (usize i = 0; i < 2; ++i) pushQuatOp(f, "equ",      sig(qtype, BOOL,  var("lhs", qtype), var("rhs", qtype)), "Equality of two @o", NULL, "%Slhs.w == rhs.w && lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z");
     for (usize i = 0; i < 2; ++i) pushQuatOp(f, "add",      sig(qtype, qtype, var("lhs", qtype), var("rhs", qtype)), "Addition of two @o", NULL, "# = lhs# + rhs#");
     for (usize i = 0; i < 2; ++i) pushQuatOp(f, "sub",      sig(qtype, qtype, var("lhs", qtype), var("rhs", qtype)), "Difference of two @o", NULL, "# = lhs# - rhs#");
     for (usize i = 0; i < 2; ++i) pushQuatOp(f, "mul",      sig(qtype, qtype, var("lhs", qtype), var("rhs", qtype)), "Multiplication of two @o", NULL, 
@@ -146,7 +148,7 @@ int main() {
         "%S"SL_PREFIX"$omul(a, "SL_PREFIX"$opow_u(delta_q, t))"
     );
 
-    print("\n#pragma endregion ARITHMETIC\n#pragma region CONVERSION\n");
+    push("\n\n#pragma endregion ARITHMETIC\n\n#pragma region CONVERSION\n\n");
 
     for (usize i = 0; i < 2; ++i) pushQuatOp(f, "from_euler", sig(qtype, qtype, var("yaw", F64), var("pitch", F64), var("roll", F64)), "Unit @o representing XYZ (yaw pitch roll) euler rotation",
     "double sy, cy; sincos(yaw * 0.5, &sy, &cy);\ndouble sp, cp; sincos(pitch * 0.5, &sp, &cp);\ndouble sr, cr; sincos(roll * 0.5, &sr, &cr);",
@@ -156,7 +158,7 @@ int main() {
     "   .c = sr*sp*cy + cr*cp*sy,\n"
     "   .d = sr*cp*cy + cr*sp*sy\n"
     "}");
-    for (usize i = 0; i < 2; ++i) pushQuatOp(f, "to_euler", sig(qtype, V(qtype.as.c, 3), var("q", qtype)), "Assumed unit @o to euler angles representing XYZ (yaw pitch roll) rotation",
+    for (usize i = 0; i < 2; ++i) pushQuatOp(f, "to_euler", sig(qtype, V(qtype.as.c, 3), var("q", qtype)), "Assumed unit @o to euler angles representing XYZ (yaw pitch roll) euler rotation",
         "double a =  q.w - q.x,\n"
         "       b =  q.y - q.z,\n"
         "       c =  q.x + q.w,\n"
@@ -185,24 +187,29 @@ int main() {
         "Unit @o based on angle-axis pair", "double sin_angle = sin(angle *= 0.5);",
         "%S(@o) {\n    .r = cos(angle),\n    .iv = "SL_PREFIX"$v1muls(axis, sin_angle)\n}"
     );
+    for (usize i = 0; i < 2; ++i) pushQuatOp(f, "to_angleAxis", sig(qtype, V(qtype.as.c, 4), var("q", qtype)), 
+        "Angle-axis pair based on assumed unit @o\nnote The returned vector is of the form `(@r){ .xyz = axis, .w = angle }`", "double sin_half_angle = "SL_PREFIX"$Ov3len(q.iv);",
+        "%S(@r) {\n    .xyz = "SL_PREFIX"$Ov3muls(q.iv, 1.0 / sin_half_angle),\n    .w = 2.0 * asin(sin_half_angle)\n}"
+    );
+
     for (usize i = 0; i < 2; ++i) pushQuatOp(f, "from_fromTo", sig(qtype, qtype, var("from", V(qtype.as.c, 3)), var("to", V(qtype.as.c, 3))), 
         "Unit @o representing the rotation from one @v1 to another @v1",
-        "SL_terminate(-1, \"[UNIPMLEMENTED]\");\n"
-        "@v0 axis = "SL_PREFIX"$v0cross(from, to);\nif (axis.x || axis.y || axis.z) {\n    float angle = acos("SL_PREFIX"$v0dot(from, to));\n    return "SL_PREFIX"$rfrom_angleAxis(angle, "SL_PREFIX"$v0norm(axis));\n}",
+        "@v0 axis = "SL_PREFIX"$v0cross(to, from);\nif (axis.x || axis.y || axis.z) {\n    float angle = acos("SL_PREFIX"$v0dot(from, to));\n    return "SL_PREFIX"$rfrom_angleAxis(angle, "SL_PREFIX"$v0norm(axis));\n}",
         "%S"SL_PREFIX"@o_identity"
     );
 
-    // TODO: add "from_rotVec"
-    // TODO: add "to_rotVec"
+    // TODO: add "from_rotVec" | Can be added using angleAxis functions, so are these really necessary ?
+    // TODO: add "to_rotVec"   |
 
     for (usize i = 0; i < 2; ++i) pushQuatOp(f, "from_v4",  sig(qtype, qtype, var("v", V(qtype.as.c, 4))), "@o from a @v0", NULL, "%S(@r) { .w = v.x, .x = v.y, .y = v.z, .z = v.w }");
     for (usize i = 0; i < 2; ++i) pushQuatOp(f, "to_v4",    sig(qtype, V(qtype.as.c, 4), var("q", qtype)), "@o to a @r",    NULL, "%S(@r) { .x = q.w, .y = q.x, .z = q.y, .w = q.z }");
 
-    print("\n#pragma endregion CONVERSION\n");
+    push("\n#pragma endregion CONVERSION\n\n");
     pushStripPrefix(f);
 
-    print("\n#endif // __SL_QUATERNION_H");
+    push("\n#endif // _SL_QUATERNION_H_\n\n");
+    pushGenerationData(f, "quaternion.h");
     fclose(f);
-
+    
     return 0;
 }

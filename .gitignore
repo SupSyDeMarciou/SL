@@ -1,1 +1,13 @@
-./bin/*
+# Ignore all, then unignore files with extension and directories
+*
+!*.*
+!*/
+
+# -------- #
+
+*.old
+*.exe
+
+.clangd
+generate/bin/*
+test/*

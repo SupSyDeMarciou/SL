@@ -5,9 +5,9 @@
  *  IO: Utilities for io. 
  *  
  *  TODO:
- *  - Give access to the va_list to the custom formating functions to allow passing structs by value
- *  - Use "length" and "precision" and other base formating arguments in custom print
- * 
+ *  - Fix unexpected results when streaming to a `char *`. Should add a position to enable multiple calls to gprintf to be concatenated (specificaly when reusing the stream in the context of the `put`)
+ *  - Utilities for manipulating path (extracting file extension, file name, folder hierarchy, stepping through ?)
+ *  
 */
 
 #include "../base.h"
@@ -50,34 +50,43 @@ SL_header bool SL_writeEntireFile(const char *path, usize size, void *data);
 
 
 
+/// TODO: Path utilities for extracting file extension, file name, folder hierarchy, stepping through ? 
 // typedef struct sl_path
 // {
 // } sl_path;
 
 
 
-typedef int sl_func_print(void *output_stream, const char *format, ...);                                                        /// @brief Generic functions type (which can deal with either a string or a FILE)
-typedef int sl_func_vprint(void *output_stream, const char *format, va_list list);                                              /// @brief Generic functions type (which can deal with either a string or a FILE)
-typedef struct sl_stream { union { FILE *file; char *string; void *generic; }; bool is_str; } sl_stream;                        /// @brief Stream structure. Abstracts the funcdamental type for print-type functions
-#define sl_stream_(dst) _Generic((dst), sl_stream: (dst), default: ((sl_stream){.file = (dst), .is_str = _Generic((dst), FILE *: false, default: true)})) /// @brief Generic stream constructor /// @param dst Either a `char *`, `FILE *` or another `sl_stream`
+typedef int sl_func_print(void *output_stream, const char *format, ...);                                                        /// @brief Generic function type (which can deal with either a str or a FILE)
+typedef int sl_func_vprint(void *output_stream, const char *format, va_list list);                                              /// @brief Generic function type (which can deal with either a str or a FILE)
+typedef struct sl_stream { union { FILE *file; char *str; void *generic; }; bool is_str; } sl_stream;                           /// @brief Stream structure. Abstracts the fundamental type for print-type functions
+/// @brief Generic stream constructor
+/// @param dst Either a `char *`, `FILE *` or another `sl_stream`
+#define sl_stream_(dst) _Generic((dst),                         \
+    sl_stream: (dst),                                           \
+    default: ((sl_stream) {                                     \
+        .file = (dst),                                          \
+        .is_str = _Generic((dst), FILE *: false, default: true) \
+    })                                                          \
+)
 
 SL_header int __SL_stream_vprintf(sl_stream stream, const char *fmt, va_list list);
 SL_header int __SL_stream_printf(sl_stream stream, const char *fmt, ...);
 /// @brief Generic printf
 /// @note Equivalent to calls to either `fprintf` or `sprintf`
-#define SL_gprintf(stream, fmt, ...) _Generic((stream), \
-    sl_stream: (__SL_stream_printf),                    \
-    FILE *:    (fprintf),                               \
-    default:   (sprintf)                                \
+#define SL_gprintf(stream, fmt, ...)    _Generic((stream), \
+    sl_stream: (__SL_stream_printf),                       \
+    FILE *:    (fprintf),                                  \
+    default:   (sprintf)                                   \
 )(stream, fmt, ##__VA_ARGS__)
 
 /// @brief Generic vprintf
 /// @note Equivalent to calls to either `vfprintf` or `vsprintf`
-#define SL_vgprintf(stream, fmt, list)  _Generic((stream),                              \
-    sl_stream: ((stream).is_str ? (sl_func_print*)vsprintf : (sl_func_print*)vfprintf), \
-    FILE *:    ((sl_func_print*)vfprintf),                                              \
-    default:   ((sl_func_print*)vsprintf)                                               \
-)((stream).generic, fmt, list)
+#define SL_vgprintf(stream, fmt, list)  _Generic((stream), \
+    sl_stream: (__SL_stream_vprintf),                      \
+    FILE *:    (vfprintf),                                 \
+    default:   (vsprintf)                                  \
+)(stream, fmt, list)
 
 SL_header int __SL_gprintBin(sl_stream dst, usize size, void *data);
 /// @brief Print a value's binary representation
@@ -99,6 +108,18 @@ SL_header int __SL_gprintHex(sl_stream dst, usize size, void *data);
 
 
 
+SL_header int __SL_fucked_up_gprintf_just_to_make_this_PUT_thing_work(sl_stream dst, const void *fmt_or_null, ...);
+#define SL_PUT_TARGET __SL_FPUT_STREAM
+#define SL_PUT_WRAPPER(...) NULL); do { __VA_ARGS__; } while (0); __SL_fucked_up_gprintf_just_to_make_this_PUT_thing_work(SL_PUT_TARGET
+
+#define SL_gput(dst, ...) do { sl_stream SL_PUT_TARGET = sl_stream_(dst); __SL_fucked_up_gprintf_just_to_make_this_PUT_thing_work(SL_PUT_TARGET, ##__VA_ARGS__, NULL); } while (0)
+#define SL_put(...) SL_gput(stdout, ##__VA_ARGS__)
+
+#define SL_putBin(val) SL_PUT_WRAPPER(SL_gprintBin(SL_PUT_TARGET, val))
+#define SL_putHex(val) SL_PUT_WRAPPER(SL_gprintHex(SL_PUT_TARGET, val))
+
+
+
 #ifdef SL_STRIP_PREFIX
 #   define  strtrsfrm       SL_strtrsfrm
 #   define  strupper        SL_strupper
@@ -114,6 +135,12 @@ SL_header int __SL_gprintHex(sl_stream dst, usize size, void *data);
 #   define  printBin        SL_printBin
 #   define  gprintHex       SL_gprintHex
 #   define  printHex        SL_printHex
+#   define  PUT_TARGET      SL_PUT_TARGET
+#   define  PUT_WRAPPER     SL_PUT_WRAPPER
+#   define  gput            SL_gput
+#   define  put             SL_put
+#   define  putBin          SL_putBin
+#   define  putHex          SL_putHex
 #endif
 
 
@@ -149,7 +176,7 @@ SL_header bool SL_strend(const char *str, const char *fact)
 SL_header char *SL_readEntireFile(const char *path, usize *size)
 {
     FILE *f = fopen(path, "rb");
-    if (!f) return NULL;
+    if (!f) return __SL_ERROR(SL_ERROR_MISSING_VALUE), NULL;
 
     fseek(f, 0, SEEK_END);
     usize len = ftell(f);
@@ -157,7 +184,7 @@ SL_header char *SL_readEntireFile(const char *path, usize *size)
     fseek(f, 0, SEEK_SET);
 
     char *data = malloc(len + 1); // + '\0'
-    if (!data) return NULL;
+    if (!data) return __SL_ERROR(SL_ERROR_MEMORY), NULL;
     fread(data, 1, len, f);
     data[len] = '\0';
 
@@ -167,7 +194,7 @@ SL_header char *SL_readEntireFile(const char *path, usize *size)
 SL_header bool SL_writeEntireFile(const char *path, usize size, void *data)
 {
     FILE *f = fopen(path, "wb");
-    if (!f) return false;
+    if (!f) return __SL_ERROR(SL_ERROR_MISSING_VALUE), false;
 
     bool writtenAll = fwrite(data, size, 1, f) == size;
 
@@ -206,6 +233,16 @@ SL_header int __SL_gprintHex(sl_stream dst, usize size, void *data)
         u8 h = (v >> 4) & 0x0F, l = v & 0x0F;
         ret += SL_gprintf(dst, "%c%c", (h > 9) ? ('A' + h - 10) : ('0' + h), (h > 9) ? ('A' + l - 10) : ('0' + l));
     }
+    return ret;
+}
+
+SL_header int __SL_fucked_up_gprintf_just_to_make_this_PUT_thing_work(sl_stream dst, const void *fmt_or_null, ...)
+{
+    if (fmt_or_null == NULL) return 0;
+    va_list va;
+    va_start(va, fmt_or_null);
+    int ret = SL_vgprintf(dst, fmt_or_null, va);
+    va_end(va);
     return ret;
 }
 #endif

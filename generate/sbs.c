@@ -1,8 +1,8 @@
-#include "../../../SupSyBuildSystem/sbs.h"
+#include "../../SupSyBuildSystem/sbs.h"
 #define SL_IMPLEMENTATION
-#include "../../include/struct/array.h"
-#include "../../include/misc/tui.h"
-#include "../../include/misc/io.h"
+#include "../include/struct/array.h"
+#include "../include/misc/tui.h"
+#include "../include/misc/io.h"
 
 #ifdef _WIN32
 #   define S_PATH "C:/Users/vlada/Desktop/Coding/C/SupSy/"
@@ -10,13 +10,13 @@
 #   define S_PATH "/home/supsy/Coding/C/SupSy/"
 #endif
 #define G_PATH S_PATH"SupSyLibraries/generate/"
-#define CT(x) "%", x, "%"
+#define F(x) "%", x, "%"
 
 
 
 int main(int argc, char **argv)
 {
-    SBS_rebuild(argc, argv, S_PATH"SupSyLibraries/include");
+    SBS_rebuild(argc, argv);
     sbs_run cmd = {0};
 
     SL_array(sl_cmd_arg) flags = SL_arrayCreate(sl_cmd_arg, 16);
@@ -45,19 +45,20 @@ int main(int argc, char **argv)
     
     SL_aforeach(f, to_build)
     {
-        if (flag_debug->assigned) SBS_addTask(&cmd, "gcc", "-DDEBUG", "-o", G_PATH"bin/"CT(*f)SBS_EXECUTABLE_EXT, G_PATH"src/math/"CT(*f)".c");
-        else                      SBS_addTask(&cmd, "gcc",             "-o", G_PATH"bin/"CT(*f)SBS_EXECUTABLE_EXT, G_PATH"src/math/"CT(*f)".c");
+        if (flag_debug->assigned) SBS_addTask(&cmd, "gcc", "-DDEBUG", "-o", G_PATH"bin/"F(*f)SBS_EXECUTABLE_EXT, G_PATH"src/math/"F(*f)".c");
+        else                      SBS_addTask(&cmd, "gcc",             "-o", G_PATH"bin/"F(*f)SBS_EXECUTABLE_EXT, G_PATH"src/math/"F(*f)".c");
     }
     
     int err = SBS_run(&cmd, 1);
     if (err) return err;
     
-    if ((flag_all->assigned || flag_sa->assigned) && !flag_debug->assigned) err = SBS_taskRun(sbs_task_("gcc", "-o", G_PATH"bin/sl_all", G_PATH"src/sl_all.c"));
+    if ((flag_all->assigned || flag_sa->assigned) && !flag_debug->assigned) err = SBS_taskRun("gcc", "-o", G_PATH"bin/sl_all", G_PATH"src/sl_all.c");
     if (err) return err;
-
-    SL_aforeach(f, to_build) SBS_addTask(&cmd, G_PATH"bin/"CT(*f) SBS_EXECUTABLE_EXT);
+    
+    SL_aforeach(f, to_build) SBS_addTask(&cmd, G_PATH"bin/"F(*f)SBS_EXECUTABLE_EXT);
     err = SBS_run(&cmd, 1);
     if (err) return err;
 
-    if ((flag_all->assigned || flag_sa->assigned)) return SBS_taskRun(sbs_task_(G_PATH"bin/sl_all"SBS_EXECUTABLE_EXT));
+
+    if ((flag_all->assigned || flag_sa->assigned)) return SBS_taskRun(G_PATH"bin/sl_all"SBS_EXECUTABLE_EXT);
 }

@@ -72,26 +72,26 @@ SL_header bool SL_cmd_arg_parse(int argc, char **argv, SL_array(sl_cmd_arg) *arg
                 } break;
                 case SL_CMD_ARG_INT:
                 {
-                    if (++i == argc || argv[i][0] == '-') return __SL_ERROR(SL_ERR_MISSING_VALUE), false;
+                    if (++i == argc || argv[i][0] == '-') return __SL_ERROR(SL_ERROR_MISSING_VALUE), false;
                     arguments->data[j].assigned_value.integer = atoll(argv[i]);
                     arguments->data[j].assigned = true;
                 } break;
                 case SL_CMD_ARG_REAL:
                 {
-                    if (++i == argc || argv[i][0] == '-') return __SL_ERROR(SL_ERR_MISSING_VALUE), false;
+                    if (++i == argc || argv[i][0] == '-') return __SL_ERROR(SL_ERROR_MISSING_VALUE), false;
                     arguments->data[j].assigned_value.real = atof(argv[i]);
                     arguments->data[j].assigned = true;
                 } break;
                 case SL_CMD_ARG_STRING:
                 {
-                    if (++i == argc || argv[i][0] == '-') return __SL_ERROR(SL_ERR_MISSING_VALUE), false;
+                    if (++i == argc || argv[i][0] == '-') return __SL_ERROR(SL_ERROR_MISSING_VALUE), false;
                     arguments->data[j].assigned_value.string = argv[i];
                     arguments->data[j].assigned = true;
                 } break;
                 
                 default:
                 {
-                    return __SL_ERROR(SL_ERR_OUT_OF_BOUNDS), false;
+                    return __SL_ERROR(SL_ERROR_OUT_OF_BOUNDS), false;
                 } break;
             }
         }

@@ -1,35 +1,35 @@
 #define SL_GEN_MAIN
 #define SL_IMPLEMENTATION
-#include "genmaths.h"
+#include "../generate.h"
 
-void pushMatDef(FILE *f, type type_) {
-
+void pushMatDef(FILE *f, type type_)
+{
     c_type ctype = type_.as.m.type;
     usize r = type_.as.m.r;
     usize c = type_.as.m.c;
 
     if (r < 2) {
-        print("/// @brief Matrix of %s with arbitrary dimensions\n", ctypeAsStr(ctype));
-        print("typedef struct {\n    union { usize r, c; luv2 size; };\n    %s *data;\n} %s;\n\n", ctypeAsStr(ctype), typeAsStr(type_, true));
-        print("#define "SL_PREFIX"as%s(sized_mat) ((%s){.size = "SL_PREFIX"msize(sized_mat), .data = sized_mat.data})", typeAsStr(type_, true), typeAsStr(type_, true));
+        push("/// @brief Matrix of %s with arbitrary dimensions\n", ctypeAsStr(ctype));
+        push("typedef struct {\n    union { usize r, c; luv2 size; };\n    %s *data;\n} %s;\n\n", ctypeAsStr(ctype), typeAsStr(type_, true));
+        push("#define "SL_PREFIX"as%s(sized_mat) ((%s){.size = "SL_PREFIX"msize(sized_mat), .data = sized_mat.data})", typeAsStr(type_, true), typeAsStr(type_, true));
         prefDefAdd("as%s", typeAsStr(type_, true));
-        print("\n");
+        push("\n");
         return;
     }
 
-    print("/// @brief Matrix of %s of size %u x %u\n", ctypeAsStr(ctype), r, c);
-    print("typedef union {\n    %s data[%u * %u];\n    %s m[%u][%u];\n    struct {\n", ctypeAsStr(ctype), r, c, ctypeAsStr(ctype), r, c);
+    push("/// @brief Matrix of %s of size %zu x %zu\n", ctypeAsStr(ctype), r, c);
+    push("typedef union {\n    %s data[%zu * %zu];\n    %s m[%zu][%zu];\n    struct {\n", ctypeAsStr(ctype), r, c, ctypeAsStr(ctype), r, c);
     
     for (usize i = 0; i < c; ++i) {
-        print("        %s m%u%u", ctypeAsStr(ctype), i, 0);
+        push("        %s m%zu%zu", ctypeAsStr(ctype), i, 0ul);
         for (usize j = 1; j < r; ++j) {
-            print(", m%u%u", i, j);
+            push(", m%zu%zu", i, j);
         }
-        print(";\n");
+        push(";\n");
     }
-    print("    };\n    struct { %s r0", typeAsStr(V(ctype, c), false));
-    for (usize j = 1; j < r; ++j) print(", r%u", j);
-    print("; };\n} %s;\n\n", typeAsStr(type_, false));
+    push("    };\n    struct { %s r0", typeAsStr(V(ctype, c), false));
+    for (usize j = 1; j < r; ++j) push(", r%zu", j);
+    push("; };\n} %s;\n\n", typeAsStr(type_, false));
 
     pushDefine(f, type_, "_zero", " ((@o){0})");
     if (r == c) {
@@ -47,7 +47,7 @@ void pushMatDef(FILE *f, type type_) {
 BREAK:  
         pushDefine(f, type_, "_identity", " ((@o){ %s })", buffer);
     }
-    print("\n");
+    push("\n");
 }
 
 void pushMatrixOp(FILE *f, const char *name, func_sig sig, const char *desc, const char *pre, const char *def) {
@@ -62,50 +62,50 @@ void pushMatrixOp(FILE *f, const char *name, func_sig sig, const char *desc, con
         case VARIANT_C: {
             if (def[0] == '%' && def[1] == 'S') def += 2;
 
-            print("return ");
+            push("return ");
             pushFmtIndex(f, sig, def, .tab = 1);
-            print(";");
+            push(";");
         } break;
 
         case VARIANT_V: {
             
             if (def[0] == '%' && def[1] == 'S') { // Single line result
-                print("return ");
+                push("return ");
                 pushFmtIndex(f, sig, def + 2, .tab = 1);
-                print(";");
+                push(";");
             }
             else { // Basic structured result
-                print("return (%s) {\n        ", typeAsStr(sig.ret, false));
+                push("return (%s) {\n        ", typeAsStr(sig.ret, false));
                 pushFmtV(f, sig, 0, def, .tab = 2);
                 for (usize i = 1; i < sig.ret.as.v.size; ++i) {
-                    print(",\n        ");
+                    push(",\n        ");
                     pushFmtV(f, sig, i, def, .tab = 2);
                 }
-                print("\n    };");
+                push("\n    };");
             }
         } break;
 
         case VARIANT_M: {
 
             if (def[0] == '%' && def[1] == 'S') { // Single line result
-                print("return ");
+                push("return ");
                 pushFmtIndex(f, sig, def + 2, .tab = 1);
-                print(";");
+                push(";");
             }
             else { // Basic structured result
-                print("return (%s) {\n        ", typeAsStr(sig.ret, false));
+                push("return (%s) {\n        ", typeAsStr(sig.ret, false));
 
                 for (usize i = 0; i < sig.ret.as.m.c; ++i) {
                     
                     pushFmtM(f, sig, i, 0, def, .tab = 2);
                     for (usize j = 1; j < sig.ret.as.m.r; ++j) {
-                        print(", ");
+                        push(", ");
                         pushFmtM(f, sig, i, j, def, .tab = 2);
                     }
                     if (i == sig.ret.as.m.c - 1) break; 
-                    print(",\n        ");
+                    push(",\n        ");
                 }
-                print("\n    };");
+                push("\n    };");
             }
         } break;
     
@@ -128,7 +128,7 @@ int main() {
         mtypes[NB_M_VARIANTS * i + 0] = (type) {
             .variant = VARIANT_M,
             .ptr = 0,
-            .as.m = (mat_type) {
+            .as.m = (mtype) {
                 .r = 0,
                 .c = 0,
                 .type = ctypes[i]
@@ -138,7 +138,7 @@ int main() {
             mtypes[NB_M_VARIANTS * i + j] = (type) {
                 .variant = VARIANT_M,
                 .ptr = 0,
-                .as.m = (mat_type) {
+                .as.m = (mtype) {
                     .r = j + 1,
                     .c = j + 1,
                     .type = ctypes[i]
@@ -148,26 +148,26 @@ int main() {
     }
 
     FILE *f = fopen(S_PATH"SupSyLibraries/include/math/matrix.h", "w");
-    print("#ifndef __SL_MATRIX_H\n#define __SL_MATRIX_H\n\n#include \"../base.h\"\n#include \"vector.h\"\n#include \"quaternion.h\"\n\n");
+    push("#ifndef _SL_MATRIX_H_\n#define _SL_MATRIX_H_\n\n#include \"../base.h\"\n#include \"vector.h\"\n#include \"quaternion.h\"\n\n");
     
     pushDefine_(f, "msize", "(M)      "SL_PREFIX"luv2_(sizeof(((typeof(M) *)NULL)->r0) / sizeof(((typeof(M) *)NULL)->m00), sizeof(((typeof(M) *)NULL)->r0) / sizeof(((typeof(M) *)NULL)->m00))");
     pushDefine_(f, "mget", "(M, i, j) ((M).data[j + i * (M).c])");
-    print("\n");
+    push("\n");
     pushDefine_(f, "XPD_M2X2", "(M) (M).m00, (M).m01, (M).m10, (M).m11");
     pushDefine_(f, "XPD_M3X3", "(M) (M).m00, (M).m01, (M).m02, (M).m10, (M).m11, (M).m12, (M).m20, (M).m21, (M).m22");
     pushDefine_(f, "XPD_M4X4", "(M) (M).m00, (M).m01, (M).m02, (M).m03, (M).m10, (M).m11, (M).m12, (M).m13, (M).m20, (M).m21, (M).m22, (M).m23, (M).m30, (M).m31, (M).m32, (M).m33");
-    print("\n");
+    push("\n");
     pushDefine_(f, "FMT_M2X2", "(fmt, ...) \"[ \"fmt\" \"fmt\" ]\"__VA_ARGS__\"[ \"fmt\" \"fmt\" ]\"");
     pushDefine_(f, "FMT_M3X3", "(fmt, ...) \"[ \"fmt\" \"fmt\" \"fmt\" ]\"__VA_ARGS__\"[ \"fmt\" \"fmt\" \"fmt\" ]\"__VA_ARGS__\"[ \"fmt\" \"fmt\" \"fmt\" ]\"");
     pushDefine_(f, "FMT_M4X4", "(fmt, ...) \"[ \"fmt\" \"fmt\" \"fmt\" \"fmt\" ]\"__VA_ARGS__\"[ \"fmt\" \"fmt\" \"fmt\" \"fmt\" ]\"__VA_ARGS__\"[ \"fmt\" \"fmt\" \"fmt\" \"fmt\" ]\"__VA_ARGS__\"[ \"fmt\" \"fmt\" \"fmt\" \"fmt\" ]\"");
-    print("\n\n");
+    push("\n\n");
 
 
     for (usize i = 0; i < ctypes_count; ++i) {
 
         char buffer[1024];
         strcpy(buffer, ctypeAsStr(ctypes[i]));
-        print("#pragma region %s\n\n", strupper(buffer));
+        push("#pragma region %s\n\n", strupper(buffer));
         
         #define ctype C(ctypes[i])
         #define vtype V(ctypes[i], mtype.as.m.c)
@@ -178,7 +178,7 @@ int main() {
 
         for (usize j = 0; j < NB_M_VARIANTS; ++j) {
             pushMatDef(f, mtype);
-            print("\n");
+            push("\n");
 
             if (j == 1) pushDefine(f, mtype, "diag", "(m00_, m11_) ((@o){.m00 = m00_, .m11 = m11_})");
             if (j == 2) pushDefine(f, mtype, "diag", "(m00_, m11_, m22_) ((@o){.m00 = m00_, .m11 = m11_, .m22 = m22_})");
@@ -188,7 +188,7 @@ int main() {
             // if (j == 2) pushDefine(f, mtype, "_", "(m00_, m01_, m02_, m10_, m11_, m12_, m02_, m12_, m22_) ((@o){.m00 = m00_, .m11 = m11_, .m22 = m22_})");
             // if (j == 3) pushDefine(f, mtype, "_", "(m00_, m11_, m22_, m33_) ((@o){.m00 = m00_, .m11 = m11_, .m22 = m22_, .m33 = m33_})");
 
-            print("\n");
+            push("\n");
 
             pushMatrixOp(f, "add",      sig(mtype, mtype, var("lhs", mtype), var("rhs", mtype)), "Addition of two @o", NULL, "# = lhs# + rhs#");
             pushMatrixOp(f, "sub",      sig(mtype, mtype, var("lhs", mtype), var("rhs", mtype)), "Difference of two @o", NULL, "# = lhs# - rhs#");
@@ -213,9 +213,8 @@ int main() {
                     "%S"SL_PREFIX"@r_("SL_PREFIX"$rdot(lhs.r0, rhs), "SL_PREFIX"$rdot(lhs.r1, rhs), "SL_PREFIX"$rdot(lhs.r2, rhs), "SL_PREFIX"$rdot(lhs.r3, rhs))"
                 );
                 if (j > 1) {
-                    pushMatrixOp(f, "apply",      sig(mtype, V(ctypes[i], mtype.as.m.c - 1), var("m", mtype), var("v", vltype)), "Apply transformation represented by @o to a @r", NULL,
-                        j == 2 ? tmpf("%%S"SL_PREFIX"$omulv(m, "SL_PREFIX"%sv(v, 1)).xy",  typeAsStr(vtype, false)) :
-                                 tmpf("%%S"SL_PREFIX"$omulv(m, "SL_PREFIX"%sv(v, 1)).xyz", typeAsStr(vtype, false))
+                    pushMatrixOp(f, "apply",      sig(mtype, vltype, var("m", mtype), var("v", vltype)), "Apply transformation represented by @o to a @r", NULL,
+                        j == 2 ? "%S"SL_PREFIX"$omulv(m, "SL_PREFIX"$Ov3v(v, 1)).xy" : "%S"SL_PREFIX"$omulv(m, "SL_PREFIX"$Ov4v(v, 1)).xyz"
                     );
                 }
                 pushMatrixOp(f, "divs",      sig(mtype, mtype, var("lhs", mtype), var("rhs", ctype)), "Component-wise division of a @o with a scalar", NULL, "# = lhs# / rhs");
@@ -286,7 +285,7 @@ int main() {
                     "@o trsp_comat = { .m00 = m.m11, .m10 = -m.m10, .m10 = -m.m10, .m11 = m.m00 };\n"
                     "\n"
                     "@O det = trsp_comat.m00 * m.m00 + trsp_comat.m01 * m.m10;\n"
-                    "if (det == 0.0) return __SL_ERROR(SL_ERR_DIVISION_BY_ZERO), "SL_PREFIX"@o_zero;\n"
+                    "if (det == 0.0) return __SL_ERROR(SL_ERROR_DIVISION_BY_ZERO), "SL_PREFIX"@o_zero;\n"
                     ,
                     "%S"SL_PREFIX"$omuls(trsp_comat, 1.0 / det)"
                 );
@@ -303,7 +302,7 @@ int main() {
                     "}\n"
                     "\n"
                     "@O det = trsp_comat.m00 * m.m00 + trsp_comat.m01 * m.m10 + trsp_comat.m02 * m.m20;\n"
-                    "if (det == 0.0) return __SL_ERROR(SL_ERR_DIVISION_BY_ZERO), "SL_PREFIX"@o_zero;\n"
+                    "if (det == 0.0) return __SL_ERROR(SL_ERROR_DIVISION_BY_ZERO), "SL_PREFIX"@o_zero;\n"
                     , 
                     "%S"SL_PREFIX"$omuls(trsp_comat, 1.0 / det)"
                 );
@@ -321,7 +320,7 @@ int main() {
                     "}\n"
                     "\n"
                     "@O det = trsp_comat.m00 * m.m00 + trsp_comat.m01 * m.m10 + trsp_comat.m02 * m.m20 + trsp_comat.m03 * m.m30;\n"
-                    "if (det == 0.0) return __SL_ERROR(SL_ERR_DIVISION_BY_ZERO), "SL_PREFIX"@o_zero;\n"
+                    "if (det == 0.0) return __SL_ERROR(SL_ERROR_DIVISION_BY_ZERO), "SL_PREFIX"@o_zero;\n"
                     , 
                     "%S"SL_PREFIX"$omuls(trsp_comat, 1.0 / det)"
                 );
@@ -338,23 +337,10 @@ int main() {
                     "}"
                 );
                 if (j == 2) {
-                    // pushMatrixOp(f, "from_angle", sig(mtype, mtype, var("angle", vtype)), "Matrix @o representing a 3D rotation",
-                    //     "double sin, cos; sincos(angle, &sin, &cos);\n"
-                    //     ,
-                    //     "%S(@o) {\n"
-                    //     "    .m00 = -sin, .m01 = cos,\n"
-                    //     "    .m10 =  cos, .m11 = sin\n"
-                    //     "}"
-                    // );
                     pushMatrixOp(f, "from_quat", sig(mtype, mtype, var("quat", qtype)), "Matrix @o from a @V1",
                         "@O wx = quat.w*quat.x, wy = quat.w*quat.y, wz = quat.w*quat.z, xy = quat.x*quat.y, yz = quat.y*quat.z, xz = quat.x*quat.z;\n"
                         "@O w2 = quat.w*quat.w, x2 = quat.x*quat.x, y2 = quat.y*quat.y, z2 = quat.z*quat.z;\n"
                         ,
-                        // "%S(@o) {\n"
-                        // "    .m00 = w2 + x2 - y2 - z2, .m01 = 2 * (xy - wz),     .m02 = 2 * (xz + wy),\n"
-                        // "    .m10 = 2 * (xy + wz),     .m11 = w2 - x2 + y2 - z2, .m12 = 2 * (yz - wx),\n"
-                        // "    .m20 = 2 * (xz - wy),     .m21 = 2 * (yz + wx),     .m22 = w2 - x2 - y2 + z2\n"
-                        // "}"
                         "%S(@o) {\n"
                         "    .m00 = w2 + x2 - y2 - z2, .m10 = 2 * (xy - wz),     .m20 = 2 * (xz + wy),\n"
                         "    .m01 = 2 * (xy + wz),     .m11 = w2 - x2 + y2 - z2, .m21 = 2 * (yz - wx),\n"
@@ -403,15 +389,16 @@ int main() {
             /// TODO: dot product (standard like vector)
             /// TODO: rot by angle for 2x2 matrix, rot angle-axis + rot quaternion + rot euler angles for 3x3 matrix
 
-            print("\n\n\n");
+            push("\n\n\n");
         }
 
-        print("#pragma endregion %s\n", buffer);
+        push("#pragma endregion %s\n", buffer);
     }
 
     pushStripPrefix(f);
 
-    print("\n#endif // __SL_MATRIX_H");
+    push("\n#endif // _SL_MATRIX_H_\n\n");
+    pushGenerationData(f, "matrix.h");
     fclose(f);
 
     return 0;

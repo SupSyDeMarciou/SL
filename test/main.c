@@ -1,5 +1,5 @@
 #define SL_STRIP_PREFIX
-#define SL_IMPLEMENTATION
+// #define SL_IMPLEMENTATION
 #include "../include/sl.h"
 
 
@@ -16,43 +16,33 @@ int foo(uint ID, uint seconds)
 {
     printf("[%u] Starting FOO (%u)\n", ID, seconds);
     sleep(seconds);
-    if (ID < 2) await(foo_async(ID, seconds));
+    if (ID < 2) await(foo_async(ID + 1, seconds));
     sleep(seconds);
     printf("[%u] Finished FOO (%u)\n", ID, seconds);
+    return 0;
 }
 
-int main() { 
-    // /*
-    const foo_task *p = foo_async(0, 2000);
-    sleep(2500);
+
+
+int main()
+{
+    const foo_task *p = foo_async(0, 2);
+    sleep(2);
     if (p->status != SL_TASK_DONE) printf("Didn't finish\n");
     printf("back to main\n");
-    // while (p->state != SL_PROCESS_DONE);
-    
-    // float ret;
-    // if (!await(p, &ret)) printf("ERROR: coudln't finish execution of BAR\n");
-    // printf("Returned %f\n", ret);
-    
-    while (p->status == SL_TASK_DONE) sleep(1000);
     await(p);
-    // */
 
 
     // fv3 *v0 = new(fv3); *v0 = fv3_(0, 1, 2);
     //     <=>
     fv3 *v1 = new(fv3_(0, 1, 2));
-
     printf("v1 = (%f, %f, %f)\n", v1->x, v1->y, v1->z);
 
     f64 f = SL_PI;
     printf("double f = %lf\n", f);
 
-    fv3 x = fv3_(0, 0, 1), 
-        y = fv3_(1, 0, 0),
-        z = fv3_(0, 1, 0);
-
-    i64v3 iw = i64v3_(10, 20, 30);
-    printf("iw = (%d, %d, %d)\n", iw);
+    // i64v3 iw = i64v3_(10, 20, 30);
+    // printf("iw = (%d, %d, %d)\n", iw);
 
     // fv3 w = vadd(vsub(x, y), z);
     // printf("w = ("); aforeach(comp, arrayWrap(float, vcount(w), w.data)) if (comp + 1 == __comp_MAX__) printf("%f)\n", *comp); else printf("%f, ", *comp);
@@ -71,19 +61,18 @@ int main() {
 
     dictRemove(udico, 0);
 
-    printf("udico: dict[");
-    bool first = true;
-    dforeach(pair, udico) {
-        printf("{%u: %u}", pair->key, pair->value);
-        if (!first) printf(", ");
-        first = false;
-    }
-    printf("]\n");
-
+    put("udico: dict[ ", PUT_WRAPPER(
+        bool first = true;
+        dforeach(pair, udico) {
+            first ? first = false : printf(", ");
+            printf("{%u: %u}", pair->key, pair->value);
+        }
+    ), " ]\n");
+    
     uint *ures = SL_dictGet(udico, 1024);
-    printf("Dico[1024] = %u\n", *ures);
+    put("Dico[1024] = %u\n", *ures);
     ures = SL_dictGet(udico, 10);
-    printf("Dico[10] = %u\n", *ures);
+    put("Dico[10] = %u\n", *ures);
     dictClear(udico);
 
     array(uint) temp = arrayCreate(uint, 10); 
@@ -95,10 +84,10 @@ int main() {
     uint values0[] = {4, 5, 6, 7, 8};
     arrayAddRange(a, 5, values0);
     
-    if (!arrayInsert(a, 1, 10)) printf("ERROR 0\n");
+    if (!arrayInsert(a, 1, 10)) put("ERROR 0\n");
 
     uint values[] = {20, 21};
-    if (!arrayInsertRange(a, 7, 2, values)) printf("ERROR 1\n");
+    if (!arrayInsertRange(a, 7, 2, values)) put("ERROR 1\n");
 
     arrayRemove(a, 7);
     arrayRemoveRange(a, 2, 2);
@@ -107,10 +96,10 @@ int main() {
     SL_arrayAddVar(a, 200);
 
     arrayQSort(a, uint_cmp);
-    printf("Array: (%u / %u) ", a.count, a.capa); SL_arrayPrintf(a, stdout, "%u"); printf("\n");
+    put("Array: (%zu / %zu) ", a.count, a.capa, putArray(a, "%u"), "\n");
     
     arrayDestroy(a);
-    printf("Array = (%p, %u, %u)\n", a.data, a.capa, a.capa);
+    put("Array = (%p, %zu, %zu)\n", a.data, a.capa, a.capa);
     
     list(uint) b = {0};
 
@@ -123,8 +112,8 @@ int main() {
     listInsert(b, 2, 101);
     
     usize idx = 3;
-    if (!listRemove(b, idx)) printf("Error: %s", SL_strerr(SL_ERROR));
+    if (!listRemove(b, idx)) put("Error: %s", SL_strerr(SL_ERROR));
     
-    printf("List: "); listPrintf(b, stdout, "%u"); printf("\n");
-    printf("List[3] = %u\n", *listAt(b, 3));
+    put("List: ", putList(b, "%u"), "\n");
+    put("List[3] = %u\n", *listAt(b, 3));
 }

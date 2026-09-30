@@ -1,7 +1,9 @@
-#ifndef __SL_VECTOR_H
-#define __SL_VECTOR_H
+#ifndef _SL_VECTOR_H_
+#define _SL_VECTOR_H_
 
 #include "../base.h"
+
+#include "math.h"
 
 #define SL_XPD_V(V)  (V).count, (V).data
 #define SL_XPD_V2(V) (V).x, (V).y
@@ -112,6 +114,55 @@ typedef union {
 
 
 
+/// @brief Equality of two i8v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header bool SL_i8vequ_(i8* lhs, i8* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    bool dest = true;
+    for (usize i = 0; i < count; ++i) dest &= lhs[i] == rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Equality of two i8v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header bool SL_i8vequ(i8v* lhs, i8v* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i8vequ_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Equality of two i8v2
+SL_header bool SL_i8v2equ(i8v2 lhs, i8v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y;
+}
+#else
+;
+#endif
+/// @brief Equality of two i8v3
+SL_header bool SL_i8v3equ(i8v3 lhs, i8v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
+}
+#else
+;
+#endif
+/// @brief Equality of two i8v4
+SL_header bool SL_i8v4equ(i8v4 lhs, i8v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
+}
+#else
+;
+#endif
 /// @brief Addition of two i8v*
 /// @note All vectors are assumed to be of size 'count'
 /// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
@@ -2405,6 +2456,55 @@ typedef union {
 
 
 
+/// @brief Equality of two i16v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header bool SL_i16vequ_(i16* lhs, i16* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    bool dest = true;
+    for (usize i = 0; i < count; ++i) dest &= lhs[i] == rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Equality of two i16v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header bool SL_i16vequ(i16v* lhs, i16v* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i16vequ_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Equality of two i16v2
+SL_header bool SL_i16v2equ(i16v2 lhs, i16v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y;
+}
+#else
+;
+#endif
+/// @brief Equality of two i16v3
+SL_header bool SL_i16v3equ(i16v3 lhs, i16v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
+}
+#else
+;
+#endif
+/// @brief Equality of two i16v4
+SL_header bool SL_i16v4equ(i16v4 lhs, i16v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
+}
+#else
+;
+#endif
 /// @brief Addition of two i16v*
 /// @note All vectors are assumed to be of size 'count'
 /// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
@@ -4698,6 +4798,55 @@ typedef union {
 
 
 
+/// @brief Equality of two i32v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header bool SL_i32vequ_(i32* lhs, i32* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    bool dest = true;
+    for (usize i = 0; i < count; ++i) dest &= lhs[i] == rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Equality of two i32v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header bool SL_i32vequ(i32v* lhs, i32v* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i32vequ_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Equality of two i32v2
+SL_header bool SL_i32v2equ(i32v2 lhs, i32v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y;
+}
+#else
+;
+#endif
+/// @brief Equality of two i32v3
+SL_header bool SL_i32v3equ(i32v3 lhs, i32v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
+}
+#else
+;
+#endif
+/// @brief Equality of two i32v4
+SL_header bool SL_i32v4equ(i32v4 lhs, i32v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
+}
+#else
+;
+#endif
 /// @brief Addition of two i32v*
 /// @note All vectors are assumed to be of size 'count'
 /// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
@@ -6991,6 +7140,55 @@ typedef union {
 
 
 
+/// @brief Equality of two i64v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header bool SL_i64vequ_(i64* lhs, i64* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    bool dest = true;
+    for (usize i = 0; i < count; ++i) dest &= lhs[i] == rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Equality of two i64v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header bool SL_i64vequ(i64v* lhs, i64v* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_i64vequ_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Equality of two i64v2
+SL_header bool SL_i64v2equ(i64v2 lhs, i64v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y;
+}
+#else
+;
+#endif
+/// @brief Equality of two i64v3
+SL_header bool SL_i64v3equ(i64v3 lhs, i64v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
+}
+#else
+;
+#endif
+/// @brief Equality of two i64v4
+SL_header bool SL_i64v4equ(i64v4 lhs, i64v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
+}
+#else
+;
+#endif
 /// @brief Addition of two i64v*
 /// @note All vectors are assumed to be of size 'count'
 /// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
@@ -9279,6 +9477,55 @@ typedef union {
 
 
 
+/// @brief Equality of two u8v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header bool SL_u8vequ_(u8* lhs, u8* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    bool dest = true;
+    for (usize i = 0; i < count; ++i) dest &= lhs[i] == rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Equality of two u8v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header bool SL_u8vequ(u8v* lhs, u8v* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u8vequ_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Equality of two u8v2
+SL_header bool SL_u8v2equ(u8v2 lhs, u8v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y;
+}
+#else
+;
+#endif
+/// @brief Equality of two u8v3
+SL_header bool SL_u8v3equ(u8v3 lhs, u8v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
+}
+#else
+;
+#endif
+/// @brief Equality of two u8v4
+SL_header bool SL_u8v4equ(u8v4 lhs, u8v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
+}
+#else
+;
+#endif
 /// @brief Addition of two u8v*
 /// @note All vectors are assumed to be of size 'count'
 /// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
@@ -11418,6 +11665,55 @@ typedef union {
 
 
 
+/// @brief Equality of two u16v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header bool SL_u16vequ_(u16* lhs, u16* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    bool dest = true;
+    for (usize i = 0; i < count; ++i) dest &= lhs[i] == rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Equality of two u16v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header bool SL_u16vequ(u16v* lhs, u16v* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u16vequ_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Equality of two u16v2
+SL_header bool SL_u16v2equ(u16v2 lhs, u16v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y;
+}
+#else
+;
+#endif
+/// @brief Equality of two u16v3
+SL_header bool SL_u16v3equ(u16v3 lhs, u16v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
+}
+#else
+;
+#endif
+/// @brief Equality of two u16v4
+SL_header bool SL_u16v4equ(u16v4 lhs, u16v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
+}
+#else
+;
+#endif
 /// @brief Addition of two u16v*
 /// @note All vectors are assumed to be of size 'count'
 /// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
@@ -13557,6 +13853,55 @@ typedef union {
 
 
 
+/// @brief Equality of two u32v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header bool SL_u32vequ_(u32* lhs, u32* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    bool dest = true;
+    for (usize i = 0; i < count; ++i) dest &= lhs[i] == rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Equality of two u32v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header bool SL_u32vequ(u32v* lhs, u32v* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u32vequ_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Equality of two u32v2
+SL_header bool SL_u32v2equ(u32v2 lhs, u32v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y;
+}
+#else
+;
+#endif
+/// @brief Equality of two u32v3
+SL_header bool SL_u32v3equ(u32v3 lhs, u32v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
+}
+#else
+;
+#endif
+/// @brief Equality of two u32v4
+SL_header bool SL_u32v4equ(u32v4 lhs, u32v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
+}
+#else
+;
+#endif
 /// @brief Addition of two u32v*
 /// @note All vectors are assumed to be of size 'count'
 /// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
@@ -15696,6 +16041,55 @@ typedef union {
 
 
 
+/// @brief Equality of two u64v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header bool SL_u64vequ_(u64* lhs, u64* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    bool dest = true;
+    for (usize i = 0; i < count; ++i) dest &= lhs[i] == rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Equality of two u64v*
+/// @note All vectors are assumed to be of size 'count'
+SL_header bool SL_u64vequ(u64v* lhs, u64v* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_u64vequ_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Equality of two u64v2
+SL_header bool SL_u64v2equ(u64v2 lhs, u64v2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y;
+}
+#else
+;
+#endif
+/// @brief Equality of two u64v3
+SL_header bool SL_u64v3equ(u64v3 lhs, u64v3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
+}
+#else
+;
+#endif
+/// @brief Equality of two u64v4
+SL_header bool SL_u64v4equ(u64v4 lhs, u64v4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
+}
+#else
+;
+#endif
 /// @brief Addition of two u64v*
 /// @note All vectors are assumed to be of size 'count'
 /// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
@@ -17840,6 +18234,55 @@ typedef union {
 
 
 
+/// @brief Equality of two fv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header bool SL_fvequ_(float* lhs, float* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    bool dest = true;
+    for (usize i = 0; i < count; ++i) dest &= lhs[i] == rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Equality of two fv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header bool SL_fvequ(fv* lhs, fv* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_fvequ_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Equality of two fv2
+SL_header bool SL_fv2equ(fv2 lhs, fv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y;
+}
+#else
+;
+#endif
+/// @brief Equality of two fv3
+SL_header bool SL_fv3equ(fv3 lhs, fv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
+}
+#else
+;
+#endif
+/// @brief Equality of two fv4
+SL_header bool SL_fv4equ(fv4 lhs, fv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
+}
+#else
+;
+#endif
 /// @brief Addition of two fv*
 /// @note All vectors are assumed to be of size 'count'
 /// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
@@ -19920,6 +20363,15 @@ SL_header fv2 SL_fv2rot_sc(fv2 v, float sina, float cosa)
 #else
 ;
 #endif
+/// @brief Rotate fv2 by angle encoded in vector `cs`
+SL_header fv2 SL_fv2rot_cs(fv2 v, fv2 cs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_fv2_(v.x * cs.x - v.y * cs.y, v.x * cs.y + v.y * cs.x);
+}
+#else
+;
+#endif
 /// @brief Rotate fv2 by angle
 SL_header fv2 SL_fv2rot(fv2 v, float a)
 #if defined(SL_IMPLEMENTATION)
@@ -20051,6 +20503,55 @@ typedef union {
 
 
 
+/// @brief Equality of two dv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header bool SL_dvequ_(double* lhs, double* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    bool dest = true;
+    for (usize i = 0; i < count; ++i) dest &= lhs[i] == rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Equality of two dv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header bool SL_dvequ(dv* lhs, dv* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_dvequ_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Equality of two dv2
+SL_header bool SL_dv2equ(dv2 lhs, dv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y;
+}
+#else
+;
+#endif
+/// @brief Equality of two dv3
+SL_header bool SL_dv3equ(dv3 lhs, dv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
+}
+#else
+;
+#endif
+/// @brief Equality of two dv4
+SL_header bool SL_dv4equ(dv4 lhs, dv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
+}
+#else
+;
+#endif
 /// @brief Addition of two dv*
 /// @note All vectors are assumed to be of size 'count'
 /// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
@@ -22131,6 +22632,15 @@ SL_header dv2 SL_dv2rot_sc(dv2 v, double sina, double cosa)
 #else
 ;
 #endif
+/// @brief Rotate dv2 by angle encoded in vector `cs`
+SL_header dv2 SL_dv2rot_cs(dv2 v, dv2 cs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_dv2_(v.x * cs.x - v.y * cs.y, v.x * cs.y + v.y * cs.x);
+}
+#else
+;
+#endif
 /// @brief Rotate dv2 by angle
 SL_header dv2 SL_dv2rot(dv2 v, double a)
 #if defined(SL_IMPLEMENTATION)
@@ -22257,6 +22767,55 @@ typedef union {
 
 
 
+/// @brief Equality of two bv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header bool SL_bvequ_(bool* lhs, bool* rhs, usize count)
+#if defined(SL_IMPLEMENTATION)
+{
+    bool dest = true;
+    for (usize i = 0; i < count; ++i) dest &= lhs[i] == rhs[i];
+    return dest;
+}
+#else
+;
+#endif
+/// @brief Equality of two bv*
+/// @note All vectors are assumed to be of size 'count'
+SL_header bool SL_bvequ(bv* lhs, bv* rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return SL_bvequ_(lhs->data, rhs->data, lhs->count);
+}
+#else
+;
+#endif
+/// @brief Equality of two bv2
+SL_header bool SL_bv2equ(bv2 lhs, bv2 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y;
+}
+#else
+;
+#endif
+/// @brief Equality of two bv3
+SL_header bool SL_bv3equ(bv3 lhs, bv3 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
+}
+#else
+;
+#endif
+/// @brief Equality of two bv4
+SL_header bool SL_bv4equ(bv4 lhs, bv4 rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
+}
+#else
+;
+#endif
 /// @brief Addition of two bv*
 /// @note All vectors are assumed to be of size 'count'
 /// @note Result is stored in 'dest' (which is returned to allow chaining function calls)
@@ -24217,6 +24776,11 @@ typedef i32v4 iv4;
 
 
 
+#define SL_ivequ_ SL_i32vequ_
+#define SL_ivequ SL_i32vequ
+#define SL_iv2equ SL_i32v2equ
+#define SL_iv3equ SL_i32v3equ
+#define SL_iv4equ SL_i32v4equ
 #define SL_ivadd_ SL_i32vadd_
 #define SL_ivadd SL_i32vadd
 #define SL_iv2add SL_i32v2add
@@ -24437,6 +25001,11 @@ typedef u32v4 uv4;
 
 
 
+#define SL_uvequ_ SL_u32vequ_
+#define SL_uvequ SL_u32vequ
+#define SL_uv2equ SL_u32v2equ
+#define SL_uv3equ SL_u32v3equ
+#define SL_uv4equ SL_u32v4equ
 #define SL_uvadd_ SL_u32vadd_
 #define SL_uvadd SL_u32vadd
 #define SL_uv2add SL_u32v2add
@@ -24650,6 +25219,11 @@ typedef i64v4 liv4;
 
 
 
+#define SL_livequ_ SL_i64vequ_
+#define SL_livequ SL_i64vequ
+#define SL_liv2equ SL_i64v2equ
+#define SL_liv3equ SL_i64v3equ
+#define SL_liv4equ SL_i64v4equ
 #define SL_livadd_ SL_i64vadd_
 #define SL_livadd SL_i64vadd
 #define SL_liv2add SL_i64v2add
@@ -24870,6 +25444,11 @@ typedef u64v4 luv4;
 
 
 
+#define SL_luvequ_ SL_u64vequ_
+#define SL_luvequ SL_u64vequ
+#define SL_luv2equ SL_u64v2equ
+#define SL_luv3equ SL_u64v3equ
+#define SL_luv4equ SL_u64v4equ
 #define SL_luvadd_ SL_u64vadd_
 #define SL_luvadd SL_u64vadd
 #define SL_luv2add SL_u64v2add
@@ -25079,6 +25658,11 @@ typedef u64v4 luv4;
 #   define  i8v2v SL_i8v2v
 #   define  i8v3v SL_i8v3v
 #   define  i8v4v SL_i8v4v
+#   define  i8vequ_ SL_i8vequ_
+#   define  i8vequ SL_i8vequ
+#   define  i8v2equ SL_i8v2equ
+#   define  i8v3equ SL_i8v3equ
+#   define  i8v4equ SL_i8v4equ
 #   define  i8vadd_ SL_i8vadd_
 #   define  i8vadd SL_i8vadd
 #   define  i8v2add SL_i8v2add
@@ -25290,6 +25874,11 @@ typedef u64v4 luv4;
 #   define  i16v2v SL_i16v2v
 #   define  i16v3v SL_i16v3v
 #   define  i16v4v SL_i16v4v
+#   define  i16vequ_ SL_i16vequ_
+#   define  i16vequ SL_i16vequ
+#   define  i16v2equ SL_i16v2equ
+#   define  i16v3equ SL_i16v3equ
+#   define  i16v4equ SL_i16v4equ
 #   define  i16vadd_ SL_i16vadd_
 #   define  i16vadd SL_i16vadd
 #   define  i16v2add SL_i16v2add
@@ -25501,6 +26090,11 @@ typedef u64v4 luv4;
 #   define  i32v2v SL_i32v2v
 #   define  i32v3v SL_i32v3v
 #   define  i32v4v SL_i32v4v
+#   define  i32vequ_ SL_i32vequ_
+#   define  i32vequ SL_i32vequ
+#   define  i32v2equ SL_i32v2equ
+#   define  i32v3equ SL_i32v3equ
+#   define  i32v4equ SL_i32v4equ
 #   define  i32vadd_ SL_i32vadd_
 #   define  i32vadd SL_i32vadd
 #   define  i32v2add SL_i32v2add
@@ -25712,6 +26306,11 @@ typedef u64v4 luv4;
 #   define  i64v2v SL_i64v2v
 #   define  i64v3v SL_i64v3v
 #   define  i64v4v SL_i64v4v
+#   define  i64vequ_ SL_i64vequ_
+#   define  i64vequ SL_i64vequ
+#   define  i64v2equ SL_i64v2equ
+#   define  i64v3equ SL_i64v3equ
+#   define  i64v4equ SL_i64v4equ
 #   define  i64vadd_ SL_i64vadd_
 #   define  i64vadd SL_i64vadd
 #   define  i64v2add SL_i64v2add
@@ -25918,6 +26517,11 @@ typedef u64v4 luv4;
 #   define  u8v2v SL_u8v2v
 #   define  u8v3v SL_u8v3v
 #   define  u8v4v SL_u8v4v
+#   define  u8vequ_ SL_u8vequ_
+#   define  u8vequ SL_u8vequ
+#   define  u8v2equ SL_u8v2equ
+#   define  u8v3equ SL_u8v3equ
+#   define  u8v4equ SL_u8v4equ
 #   define  u8vadd_ SL_u8vadd_
 #   define  u8vadd SL_u8vadd
 #   define  u8v2add SL_u8v2add
@@ -26112,6 +26716,11 @@ typedef u64v4 luv4;
 #   define  u16v2v SL_u16v2v
 #   define  u16v3v SL_u16v3v
 #   define  u16v4v SL_u16v4v
+#   define  u16vequ_ SL_u16vequ_
+#   define  u16vequ SL_u16vequ
+#   define  u16v2equ SL_u16v2equ
+#   define  u16v3equ SL_u16v3equ
+#   define  u16v4equ SL_u16v4equ
 #   define  u16vadd_ SL_u16vadd_
 #   define  u16vadd SL_u16vadd
 #   define  u16v2add SL_u16v2add
@@ -26306,6 +26915,11 @@ typedef u64v4 luv4;
 #   define  u32v2v SL_u32v2v
 #   define  u32v3v SL_u32v3v
 #   define  u32v4v SL_u32v4v
+#   define  u32vequ_ SL_u32vequ_
+#   define  u32vequ SL_u32vequ
+#   define  u32v2equ SL_u32v2equ
+#   define  u32v3equ SL_u32v3equ
+#   define  u32v4equ SL_u32v4equ
 #   define  u32vadd_ SL_u32vadd_
 #   define  u32vadd SL_u32vadd
 #   define  u32v2add SL_u32v2add
@@ -26500,6 +27114,11 @@ typedef u64v4 luv4;
 #   define  u64v2v SL_u64v2v
 #   define  u64v3v SL_u64v3v
 #   define  u64v4v SL_u64v4v
+#   define  u64vequ_ SL_u64vequ_
+#   define  u64vequ SL_u64vequ
+#   define  u64v2equ SL_u64v2equ
+#   define  u64v3equ SL_u64v3equ
+#   define  u64v4equ SL_u64v4equ
 #   define  u64vadd_ SL_u64vadd_
 #   define  u64vadd SL_u64vadd
 #   define  u64v2add SL_u64v2add
@@ -26699,6 +27318,11 @@ typedef u64v4 luv4;
 #   define  fv2v SL_fv2v
 #   define  fv3v SL_fv3v
 #   define  fv4v SL_fv4v
+#   define  fvequ_ SL_fvequ_
+#   define  fvequ SL_fvequ
+#   define  fv2equ SL_fv2equ
+#   define  fv3equ SL_fv3equ
+#   define  fv4equ SL_fv4equ
 #   define  fvadd_ SL_fvadd_
 #   define  fvadd SL_fvadd
 #   define  fv2add SL_fv2add
@@ -26875,6 +27499,7 @@ typedef u64v4 luv4;
 #   define  fv2from_angle SL_fv2from_angle
 #   define  fv3from_yawPitch SL_fv3from_yawPitch
 #   define  fv2rot_sc SL_fv2rot_sc
+#   define  fv2rot_cs SL_fv2rot_cs
 #   define  fv2rot SL_fv2rot
 #   define  fv2cross SL_fv2cross
 #   define  fv3cross SL_fv3cross
@@ -26903,6 +27528,11 @@ typedef u64v4 luv4;
 #   define  dv2v SL_dv2v
 #   define  dv3v SL_dv3v
 #   define  dv4v SL_dv4v
+#   define  dvequ_ SL_dvequ_
+#   define  dvequ SL_dvequ
+#   define  dv2equ SL_dv2equ
+#   define  dv3equ SL_dv3equ
+#   define  dv4equ SL_dv4equ
 #   define  dvadd_ SL_dvadd_
 #   define  dvadd SL_dvadd
 #   define  dv2add SL_dv2add
@@ -27079,6 +27709,7 @@ typedef u64v4 luv4;
 #   define  dv2from_angle SL_dv2from_angle
 #   define  dv3from_yawPitch SL_dv3from_yawPitch
 #   define  dv2rot_sc SL_dv2rot_sc
+#   define  dv2rot_cs SL_dv2rot_cs
 #   define  dv2rot SL_dv2rot
 #   define  dv2cross SL_dv2cross
 #   define  dv3cross SL_dv3cross
@@ -27102,6 +27733,11 @@ typedef u64v4 luv4;
 #   define  bv2v SL_bv2v
 #   define  bv3v SL_bv3v
 #   define  bv4v SL_bv4v
+#   define  bvequ_ SL_bvequ_
+#   define  bvequ SL_bvequ
+#   define  bv2equ SL_bv2equ
+#   define  bv3equ SL_bv3equ
+#   define  bv4equ SL_bv4equ
 #   define  bvadd_ SL_bvadd_
 #   define  bvadd SL_bvadd
 #   define  bv2add SL_bv2add
@@ -27291,6 +27927,11 @@ typedef u64v4 luv4;
 #   define  iv2v SL_iv2v
 #   define  iv3v SL_iv3v
 #   define  iv4v SL_iv4v
+#   define  ivequ_ SL_ivequ_
+#   define  ivequ SL_ivequ
+#   define  iv2equ SL_iv2equ
+#   define  iv3equ SL_iv3equ
+#   define  iv4equ SL_iv4equ
 #   define  ivadd_ SL_ivadd_
 #   define  ivadd SL_ivadd
 #   define  iv2add SL_iv2add
@@ -27497,6 +28138,11 @@ typedef u64v4 luv4;
 #   define  uv2v SL_uv2v
 #   define  uv3v SL_uv3v
 #   define  uv4v SL_uv4v
+#   define  uvequ_ SL_uvequ_
+#   define  uvequ SL_uvequ
+#   define  uv2equ SL_uv2equ
+#   define  uv3equ SL_uv3equ
+#   define  uv4equ SL_uv4equ
 #   define  uvadd_ SL_uvadd_
 #   define  uvadd SL_uvadd
 #   define  uv2add SL_uv2add
@@ -27696,6 +28342,11 @@ typedef u64v4 luv4;
 #   define  liv2v SL_liv2v
 #   define  liv3v SL_liv3v
 #   define  liv4v SL_liv4v
+#   define  livequ_ SL_livequ_
+#   define  livequ SL_livequ
+#   define  liv2equ SL_liv2equ
+#   define  liv3equ SL_liv3equ
+#   define  liv4equ SL_liv4equ
 #   define  livadd_ SL_livadd_
 #   define  livadd SL_livadd
 #   define  liv2add SL_liv2add
@@ -27902,6 +28553,11 @@ typedef u64v4 luv4;
 #   define  luv2v SL_luv2v
 #   define  luv3v SL_luv3v
 #   define  luv4v SL_luv4v
+#   define  luvequ_ SL_luvequ_
+#   define  luvequ SL_luvequ
+#   define  luv2equ SL_luv2equ
+#   define  luv3equ SL_luv3equ
+#   define  luv4equ SL_luv4equ
 #   define  luvadd_ SL_luvadd_
 #   define  luvadd SL_luvadd
 #   define  luv2add SL_luv2add
@@ -28079,3 +28735,5 @@ typedef u64v4 luv4;
 #endif
 
 #endif // __SL_VECTOR_H
+
+// vector.h: THIS FILE WAS GENERATED ON 30/09/2026 AT 02:22:56

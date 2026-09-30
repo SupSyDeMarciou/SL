@@ -1,5 +1,5 @@
-#ifndef __SL_MATRIX_H
-#define __SL_MATRIX_H
+#ifndef _SL_MATRIX_H_
+#define _SL_MATRIX_H_
 
 #include "../base.h"
 #include "vector.h"
@@ -2780,7 +2780,7 @@ SL_header fm2x2 SL_fm2x2inv(fm2x2 m)
     fm2x2 trsp_comat = { .m00 = m.m11, .m10 = -m.m10, .m10 = -m.m10, .m11 = m.m00 };
     
     float det = trsp_comat.m00 * m.m00 + trsp_comat.m01 * m.m10;
-    if (det == 0.0) return __SL_ERROR(SL_ERR_DIVISION_BY_ZERO), SL_fm2x2_zero;
+    if (det == 0.0) return __SL_ERROR(SL_ERROR_DIVISION_BY_ZERO), SL_fm2x2_zero;
 
     return SL_fm2x2muls(trsp_comat, 1.0 / det);
 }
@@ -3039,7 +3039,7 @@ SL_header fm3x3 SL_fm3x3inv(fm3x3 m)
     }
     
     float det = trsp_comat.m00 * m.m00 + trsp_comat.m01 * m.m10 + trsp_comat.m02 * m.m20;
-    if (det == 0.0) return __SL_ERROR(SL_ERR_DIVISION_BY_ZERO), SL_fm3x3_zero;
+    if (det == 0.0) return __SL_ERROR(SL_ERROR_DIVISION_BY_ZERO), SL_fm3x3_zero;
 
     return SL_fm3x3muls(trsp_comat, 1.0 / det);
 }
@@ -3331,7 +3331,7 @@ SL_header fm4x4 SL_fm4x4inv(fm4x4 m)
     }
     
     float det = trsp_comat.m00 * m.m00 + trsp_comat.m01 * m.m10 + trsp_comat.m02 * m.m20 + trsp_comat.m03 * m.m30;
-    if (det == 0.0) return __SL_ERROR(SL_ERR_DIVISION_BY_ZERO), SL_fm4x4_zero;
+    if (det == 0.0) return __SL_ERROR(SL_ERROR_DIVISION_BY_ZERO), SL_fm4x4_zero;
 
     return SL_fm4x4muls(trsp_comat, 1.0 / det);
 }
@@ -3593,7 +3593,7 @@ SL_header dm2x2 SL_dm2x2inv(dm2x2 m)
     dm2x2 trsp_comat = { .m00 = m.m11, .m10 = -m.m10, .m10 = -m.m10, .m11 = m.m00 };
     
     double det = trsp_comat.m00 * m.m00 + trsp_comat.m01 * m.m10;
-    if (det == 0.0) return __SL_ERROR(SL_ERR_DIVISION_BY_ZERO), SL_dm2x2_zero;
+    if (det == 0.0) return __SL_ERROR(SL_ERROR_DIVISION_BY_ZERO), SL_dm2x2_zero;
 
     return SL_dm2x2muls(trsp_comat, 1.0 / det);
 }
@@ -3852,7 +3852,7 @@ SL_header dm3x3 SL_dm3x3inv(dm3x3 m)
     }
     
     double det = trsp_comat.m00 * m.m00 + trsp_comat.m01 * m.m10 + trsp_comat.m02 * m.m20;
-    if (det == 0.0) return __SL_ERROR(SL_ERR_DIVISION_BY_ZERO), SL_dm3x3_zero;
+    if (det == 0.0) return __SL_ERROR(SL_ERROR_DIVISION_BY_ZERO), SL_dm3x3_zero;
 
     return SL_dm3x3muls(trsp_comat, 1.0 / det);
 }
@@ -4144,7 +4144,7 @@ SL_header dm4x4 SL_dm4x4inv(dm4x4 m)
     }
     
     double det = trsp_comat.m00 * m.m00 + trsp_comat.m01 * m.m10 + trsp_comat.m02 * m.m20 + trsp_comat.m03 * m.m30;
-    if (det == 0.0) return __SL_ERROR(SL_ERR_DIVISION_BY_ZERO), SL_dm4x4_zero;
+    if (det == 0.0) return __SL_ERROR(SL_ERROR_DIVISION_BY_ZERO), SL_dm4x4_zero;
 
     return SL_dm4x4muls(trsp_comat, 1.0 / det);
 }
@@ -5213,4 +5213,6 @@ SL_header bool SL_bm4x4det(bm4x4 m)
 #   define  bm4x4det SL_bm4x4det
 #endif
 
-#endif // __SL_MATRIX_H
+#endif // _SL_MATRIX_H_
+
+// matrix.h: THIS FILE WAS GENERATED ON 30/09/2026 AT 02:22:56

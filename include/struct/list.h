@@ -76,12 +76,12 @@ struct __dlist_gen_node { __dlist_gen_node *next, *prev; void *data; };         
 /// @param list List
 /// @return A pointer to the value if exists, NULL otherwise
 /// @note Error status is recorded in SL_ERROR
-#define SL_listFirst(list) ((list).first ? &(list).first->data : (__SL_ERROR(SL_ERR_OUT_OF_BOUNDS), NULL))
+#define SL_listFirst(list) ((typeof((list).first->data) *)((list).first ? &(list).first->data : (__SL_ERROR(SL_ERROR_OUT_OF_BOUNDS), NULL)))
 /// @brief Get last value in list
 /// @param list List
 /// @return A pointer to the value if exists, NULL otherwise
 /// @note Error status is recorded in SL_ERROR
-#define SL_listLast(list) ((list).last ? &(list).last->data : (__SL_ERROR(SL_ERR_OUT_OF_BOUNDS), NULL))
+#define SL_listLast(list)  ((typeof((list).first->data) *)((list).last ? &(list).last->data : (__SL_ERROR(SL_ERROR_OUT_OF_BOUNDS), NULL)))
 
 SL_header void *__SL_listNodeAt (void *first, void *last, usize count, usize index);
 SL_header void *__SL_dlistNodeAt(void *first, void *last, usize count, usize index);
@@ -150,29 +150,6 @@ SL_header bool __SL_dlistRemoveRef(void **first, void **last, usize *count, sl_a
 
 
 
-/// @brief Print list to an arbitrary reciever with user defined formatting
-/// @param list List
-/// @param varname The name of the iterator
-/// @param dst Destination in which to print. Uses generic "gprintf" function to differenciate between printing to a string or a file
-/// @param fmt The format of the data to print
-/// @param ... How to expand the value stored to fit the format specified with 'fmt'
-/// @note Can be used with both "list" and "dlist" types.
-#define SL_listPrintf_full(list, dst, fmt, varname, ...) do { \
-    if (!(list).first) SL_gprintf(dst, "list[]"); \
-    else { \
-        SL_lforeach(varname, list) SL_gprintf(dst, SL_lindex(varname) == 0 ? "list["fmt : ", "fmt, ##__VA_ARGS__); \
-        SL_gprintf(dst, "]"); \
-    } \
-} while (0)
-
-/// @brief Print list to a string
-/// @param list List
-/// @param dst Destination string
-/// @param fmt The format of the data to print
-#define SL_listPrintf(list, dst, fmt) SL_listPrintf_full(list, dst, fmt, __SL_VARNAME__, *__SL_VARNAME__)
-
-
-
 /// @brief Iterate over every item into a list
 /// @param varname The name of the iterator
 /// @param list List
@@ -187,6 +164,36 @@ for ( \
 #define SL_lindex(varname)   ((usize)__##varname##_INDEX__)
 #define SL_lnext(list, ptr)  (                       (ptr) && ((typeof((list).first))((void *)(ptr) - (1 + __SL_IS_DLIST(list)) * sizeof(void *)))->next ? &((typeof((list).first))((void *)(ptr) - (1 + __SL_IS_DLIST(list)) * sizeof(void *)))->next->data : NULL)
 #define SL_dlprev(list, ptr) (__SL_IS_DLIST(list) && (ptr) && ((typeof((list).first))((void *)(ptr) -                         2 * sizeof(void *)))->prev ? &((typeof((list).first))((void *)(ptr) -                         2 * sizeof(void *)))->prev->data : NULL)
+
+
+
+#include "../misc/io.h"
+
+/// @brief Print list to an arbitrary reciever with user defined formatting
+/// @param dst Destination in which to print. Uses generic "gprintf" function to differenciate between printing to a string or a file
+/// @param list List
+/// @param fmt The format of the data to print
+/// @param varname The name of the iterator
+/// @param ... How to expand the value stored to fit the format specified with 'fmt'
+/// @note Can be used with both "list" and "dlist" types.
+#define SL_listPrintf_full(dst, list, fmt, varname, ...) do { \
+    if (!(list).first) SL_gprintf(dst, "list[]"); \
+    else { \
+        SL_lforeach(varname, list) SL_gprintf(dst, SL_lindex(varname) == 0 ? "list["fmt : ", "fmt, ##__VA_ARGS__); \
+        SL_gprintf(dst, "]"); \
+    } \
+} while (0)
+
+/// @brief Print list to a string
+/// @param dst Destination string
+/// @param list List
+/// @param fmt The format of the data to print
+#define SL_listPrintf(dst, list, fmt) SL_listPrintf_full(dst, list, fmt, __SL_VARNAME__, *__SL_VARNAME__)
+
+
+
+#define SL_putList_full(...) SL_PUT_WRAPPER(SL_listPrintf_full(SL_PUT_TARGET, __VA_ARGS__))
+#define SL_putList(...)      SL_PUT_WRAPPER(SL_listPrintf(SL_PUT_TARGET, __VA_ARGS__))
 
 
 
@@ -213,6 +220,8 @@ for ( \
 #   define dlprev           SL_dlprev
 #   define listPrintf_full  SL_listPrintf_full
 #   define listPrintf       SL_listPrintf
+#   define putList_full     SL_putList_full
+#   define putList          SL_putList
 #endif
 
 
@@ -223,7 +232,7 @@ SL_header void *__SL_listNodeAt(void *first, void *last, usize count, usize inde
     (void)last; (void)count;
 
     while (first && index) --index, first = ((__list_gen_node *)first)->next;
-    return first ? first : (__SL_ERROR(SL_ERR_OUT_OF_BOUNDS), NULL);
+    return first ? first : (__SL_ERROR(SL_ERROR_OUT_OF_BOUNDS), NULL);
 }
 SL_header void *__SL_dlistNodeAt(void *first, void *last, usize count, usize index)
 {
@@ -231,12 +240,12 @@ SL_header void *__SL_dlistNodeAt(void *first, void *last, usize count, usize ind
         index = count - 1 - index;
         __dlist_gen_node *cur = last;
         while (cur && index) --index, cur = cur->prev;
-        return cur ? cur : (__SL_ERROR(SL_ERR_OUT_OF_BOUNDS), NULL);
+        return cur ? cur : (__SL_ERROR(SL_ERROR_OUT_OF_BOUNDS), NULL);
     }
     else {
         __dlist_gen_node *cur = first;
         while (cur && index) --index, cur = cur->next;
-        return cur ? cur : (__SL_ERROR(SL_ERR_OUT_OF_BOUNDS), NULL);
+        return cur ? cur : (__SL_ERROR(SL_ERROR_OUT_OF_BOUNDS), NULL);
     }
 }
 SL_header void *__SL_listValueFromNode(void *node_ptr, bool is_dlist)
@@ -250,7 +259,7 @@ SL_header void *__SL_listNodeFromValue(void *value_ptr, bool is_dlist)
 
 SL_header void *__SL_listInsert(void **first, void **last, usize *count, sl_allocator *alloc, usize elemSize, usize index, void *value)
 {
-    if (index > *count) return __SL_ERROR(SL_ERR_OUT_OF_BOUNDS), NULL;
+    if (index > *count) return __SL_ERROR(SL_ERROR_OUT_OF_BOUNDS), NULL;
     
     __list_gen_node *node_ptr = SL_aalloc(alloc, sizeof(void *) + elemSize);
     if (value) memcpy((void *)node_ptr + sizeof(void *), value, elemSize);
@@ -277,7 +286,7 @@ SL_header void *__SL_listInsert(void **first, void **last, usize *count, sl_allo
 }
 SL_header void *__SL_dlistInsert(void **first, void **last, usize *count, sl_allocator *alloc, usize elemSize, usize index, void *value)
 {
-    if (index > *count) return __SL_ERROR(SL_ERR_OUT_OF_BOUNDS), NULL;
+    if (index > *count) return __SL_ERROR(SL_ERROR_OUT_OF_BOUNDS), NULL;
 
     __dlist_gen_node *node_ptr = SL_aalloc(alloc, elemSize + 2 * sizeof(void *));
     if (value) memcpy(&node_ptr->data, value, elemSize);
@@ -314,7 +323,7 @@ SL_header bool __SL_listRemove(void **first, void **last, usize *count, sl_alloc
     __list_gen_node *to_free;
     if (index == 0) {
         to_free = *first;
-        if (!to_free) return __SL_ERROR(SL_ERR_OUT_OF_BOUNDS), false;
+        if (!to_free) return __SL_ERROR(SL_ERROR_OUT_OF_BOUNDS), false;
         *first = to_free->next;
         if (!*first) *last = NULL;
     }
@@ -325,7 +334,7 @@ SL_header bool __SL_listRemove(void **first, void **last, usize *count, sl_alloc
         parent->next = to_free->next;
     }
 
-    if (into) memcpy(into, to_free + sizeof(void *), elemSize);
+    if (into) memcpy(into, (void *)to_free + sizeof(void *), elemSize);
     SL_afree(alloc, to_free);
     --*count;
     return true;
@@ -372,7 +381,7 @@ SL_header bool __SL_listRemoveRef(void **first, void **last, usize *count, sl_al
         __list_gen_node *parent = *first;
 
         if (parent) while (parent->next && parent->next != to_free) parent = parent->next;
-        if (!parent || !parent->next) return __SL_ERROR(SL_ERR_OUT_OF_BOUNDS), false;
+        if (!parent || !parent->next) return __SL_ERROR(SL_ERROR_OUT_OF_BOUNDS), false;
 
         parent->next = to_free->next;
         if (parent->next == NULL) *last = parent;

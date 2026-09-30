@@ -1,5 +1,5 @@
-#ifndef __SL_QUATERNION_H
-#define __SL_QUATERNION_H
+#ifndef _SL_QUATERNION_H_
+#define _SL_QUATERNION_H_
 
 #include "../base.h"
 
@@ -8,8 +8,6 @@
 
 #define SL_XPD_Q(Q) (Q).w, (Q).x, (Q).y, (Q).z
 #define SL_FMT_Q(fmt) "quat("fmt" + "fmt"i + "fmt"j + "fmt"k)"
-#pragma region ARITHMETIC
-
 /// @brief Quaternion of float
 typedef union {
     float data[4];
@@ -46,6 +44,26 @@ typedef union {
 
 
 
+#pragma region ARITHMETIC
+
+/// @brief Equality of two fq
+SL_header bool SL_fqequ(fq lhs, fq rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.w == rhs.w && lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
+}
+#else
+;
+#endif
+/// @brief Equality of two dq
+SL_header bool SL_dqequ(dq lhs, dq rhs)
+#if defined(SL_IMPLEMENTATION)
+{
+    return lhs.w == rhs.w && lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
+}
+#else
+;
+#endif
 /// @brief Addition of two fq
 SL_header fq SL_fqadd(fq lhs, fq rhs)
 #if defined(SL_IMPLEMENTATION)
@@ -583,8 +601,11 @@ SL_header dq SL_dqslerp_u(dq a, dq b, double t)
 ;
 #endif
 
+
 #pragma endregion ARITHMETIC
+
 #pragma region CONVERSION
+
 /// @brief Unit fq representing XYZ (yaw pitch roll) euler rotation
 SL_header fq SL_fqfrom_euler(double yaw, double pitch, double roll)
 #if defined(SL_IMPLEMENTATION)
@@ -619,7 +640,7 @@ SL_header dq SL_dqfrom_euler(double yaw, double pitch, double roll)
 #else
 ;
 #endif
-/// @brief Assumed unit fq to euler angles representing XYZ (yaw pitch roll) rotation
+/// @brief Assumed unit fq to euler angles representing XYZ (yaw pitch roll) euler rotation
 SL_header fv3 SL_fqto_euler(fq q)
 #if defined(SL_IMPLEMENTATION)
 {
@@ -655,7 +676,7 @@ SL_header fv3 SL_fqto_euler(fq q)
 #else
 ;
 #endif
-/// @brief Assumed unit dq to euler angles representing XYZ (yaw pitch roll) rotation
+/// @brief Assumed unit dq to euler angles representing XYZ (yaw pitch roll) euler rotation
 SL_header dv3 SL_dqto_euler(dq q)
 #if defined(SL_IMPLEMENTATION)
 {
@@ -717,12 +738,39 @@ SL_header dq SL_dqfrom_angleAxis(double angle, dv3 axis)
 #else
 ;
 #endif
+/// @brief Angle-axis pair based on assumed unit fq
+/// @note The returned vector is of the form `(fv4){ .xyz = axis, .w = angle }`
+SL_header fv4 SL_fqto_angleAxis(fq q)
+#if defined(SL_IMPLEMENTATION)
+{
+    double sin_half_angle = SL_fv3len(q.iv);
+    return (fv4) {
+        .xyz = SL_fv3muls(q.iv, 1.0 / sin_half_angle),
+        .w = 2.0 * asin(sin_half_angle)
+    };
+}
+#else
+;
+#endif
+/// @brief Angle-axis pair based on assumed unit dq
+/// @note The returned vector is of the form `(dv4){ .xyz = axis, .w = angle }`
+SL_header dv4 SL_dqto_angleAxis(dq q)
+#if defined(SL_IMPLEMENTATION)
+{
+    double sin_half_angle = SL_dv3len(q.iv);
+    return (dv4) {
+        .xyz = SL_dv3muls(q.iv, 1.0 / sin_half_angle),
+        .w = 2.0 * asin(sin_half_angle)
+    };
+}
+#else
+;
+#endif
 /// @brief Unit fq representing the rotation from one fv3 to another fv3
 SL_header fq SL_fqfrom_fromTo(fv3 from, fv3 to)
 #if defined(SL_IMPLEMENTATION)
 {
-    SL_terminate(-1, "[UNIPMLEMENTED]");
-    fv3 axis = SL_fv3cross(from, to);
+    fv3 axis = SL_fv3cross(to, from);
     if (axis.x || axis.y || axis.z) {
         float angle = acos(SL_fv3dot(from, to));
         return SL_fqfrom_angleAxis(angle, SL_fv3norm(axis));
@@ -736,8 +784,7 @@ SL_header fq SL_fqfrom_fromTo(fv3 from, fv3 to)
 SL_header dq SL_dqfrom_fromTo(dv3 from, dv3 to)
 #if defined(SL_IMPLEMENTATION)
 {
-    SL_terminate(-1, "[UNIPMLEMENTED]");
-    dv3 axis = SL_dv3cross(from, to);
+    dv3 axis = SL_dv3cross(to, from);
     if (axis.x || axis.y || axis.z) {
         float angle = acos(SL_dv3dot(from, to));
         return SL_dqfrom_angleAxis(angle, SL_dv3norm(axis));
@@ -785,6 +832,7 @@ SL_header dv4 SL_dqto_v4(dq q)
 #endif
 
 #pragma endregion CONVERSION
+
 #ifdef SL_STRIP_PREFIX
 #   define  XPD_Q SL_XPD_Q
 #   define  FMT_Q SL_FMT_Q
@@ -800,6 +848,8 @@ SL_header dv4 SL_dqto_v4(dq q)
 #   define  dqq SL_dqq
 #   define  fqasfv4 SL_fqasfv4
 #   define  dqasdv4 SL_dqasdv4
+#   define  fqequ SL_fqequ
+#   define  dqequ SL_dqequ
 #   define  fqadd SL_fqadd
 #   define  dqadd SL_dqadd
 #   define  fqsub SL_fqsub
@@ -844,6 +894,8 @@ SL_header dv4 SL_dqto_v4(dq q)
 #   define  dqto_euler SL_dqto_euler
 #   define  fqfrom_angleAxis SL_fqfrom_angleAxis
 #   define  dqfrom_angleAxis SL_dqfrom_angleAxis
+#   define  fqto_angleAxis SL_fqto_angleAxis
+#   define  dqto_angleAxis SL_dqto_angleAxis
 #   define  fqfrom_fromTo SL_fqfrom_fromTo
 #   define  dqfrom_fromTo SL_dqfrom_fromTo
 #   define  fqfrom_v4 SL_fqfrom_v4
@@ -852,4 +904,6 @@ SL_header dv4 SL_dqto_v4(dq q)
 #   define  dqto_v4 SL_dqto_v4
 #endif
 
-#endif // __SL_QUATERNION_H
+#endif // _SL_QUATERNION_H_
+
+// quaternion.h: THIS FILE WAS GENERATED ON 30/09/2026 AT 02:22:56

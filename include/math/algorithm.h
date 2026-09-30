@@ -8,8 +8,8 @@
 #include "quaternion.h"
 #include "matrix.h"
 
-bool fmSolve_pivot(fm lhs, fv* rhs);
-bool fmSolve_GaussSeidel(fm lhs, fv* rhs, float* x, float maxError, uint maxIter);
+SL_header bool fmSolve_pivot(fm lhs, fv* rhs);
+SL_header bool fmSolve_GaussSeidel(fm lhs, fv* rhs, float* x, float maxError, uint maxIter);
 
 
 
@@ -26,11 +26,11 @@ bool fmSolve_GaussSeidel(fm lhs, fv* rhs, float* x, float maxError, uint maxIter
 #ifdef SL_IMPLEMENTATION
 // Row reduction algorithm (I think)
 // /!\ O(n^3), really slow for big systems (n = systemMatrix.r)
-bool fmSolve_pivot(fm lhs, fv* rhs) {
+SL_header bool fmSolve_pivot(fm lhs, fv* rhs) {
 
     usize r = lhs.r;
     usize c = lhs.c;
-    if (r != c || r != rhs->count) return __SL_ERROR(SL_ERR_MISSMATCHING_DIMENSIONS), false;
+    if (r != c || r != rhs->count) return __SL_ERROR(SL_ERROR_MISSMATCHING_DIMENSIONS), false;
 
     // Make diagonal 1 and triangular
     for (usize t = 0; t < c; t++) {
@@ -41,7 +41,7 @@ bool fmSolve_pivot(fm lhs, fv* rhs) {
             for (; nt < r && SL_mget(lhs, nt, t) == 0.0; nt++);
 
             // The entire column is 0
-            if (nt >= r) __SL_ERROR(SL_ERR_DIVISION_BY_ZERO), false;
+            if (nt >= r) __SL_ERROR(SL_ERROR_DIVISION_BY_ZERO), false;
 
             // Set (t, t) to one using this new-found row
             float l = 1.0 / SL_mget(lhs, nt, t);
@@ -75,10 +75,10 @@ bool fmSolve_pivot(fm lhs, fv* rhs) {
     // Tada!!!
     return true;
 }
-bool fmSolve_GaussSeidel(fm lhs, fv* rhs, float* x, float maxError, uint maxIter) {
+SL_header bool fmSolve_GaussSeidel(fm lhs, fv* rhs, float* x, float maxError, uint maxIter) {
 
     int size = lhs.r;
-    if (lhs.c != size || rhs->count != size) return __SL_ERROR(SL_ERR_MISSMATCHING_DIMENSIONS), false;
+    if (lhs.c != size || rhs->count != size) return __SL_ERROR(SL_ERROR_MISSMATCHING_DIMENSIONS), false;
     size = lhs.r;
 
     if (!x) x = (float*)malloc(sizeof(usize) + sizeof(float) * size);
@@ -93,7 +93,7 @@ bool fmSolve_GaussSeidel(fm lhs, fv* rhs, float* x, float maxError, uint maxIter
             for (j++; j < size; j++) new -= SL_mget(lhs, i, j) * x[j]; // x[j] k
             
             float vii = SL_mget(lhs, i, i);
-            if (vii == 0.0) return __SL_ERROR(SL_ERR_DIVISION_BY_ZERO), false;
+            if (vii == 0.0) return __SL_ERROR(SL_ERROR_DIVISION_BY_ZERO), false;
             x[i] = new / vii;
         }
 
@@ -108,6 +108,7 @@ bool fmSolve_GaussSeidel(fm lhs, fv* rhs, float* x, float maxError, uint maxIter
         }
         if (e <= maxError) break;
         NEXT:
+        (void)0; // Avoid label warning
     }
 
     return x;

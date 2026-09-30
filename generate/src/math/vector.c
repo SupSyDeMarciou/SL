@@ -1,6 +1,6 @@
 #define SL_GEN_MAIN
 #define SL_IMPLEMENTATION
-#include "genmaths.h"
+#include "../generate.h"
 
 void pushVectorDef(FILE *f, type vtype) {
 
@@ -12,7 +12,7 @@ void pushVectorDef(FILE *f, type vtype) {
         type p_type = V(p_ctype, size);
         char temp[512];
 
-        print("typedef %s %s;\n", typeAsStr(p_type, false), typeAsStr(vtype, true));
+        push("typedef %s %s;\n", typeAsStr(p_type, false), typeAsStr(vtype, true));
         if (size >= 2) {
             sprintf(temp, "  "SL_PREFIX"%s_zero", typeAsStr(p_type, true)); pushDefine(f, vtype, "_zero", temp);
             sprintf(temp, "   "SL_PREFIX"%s_one", typeAsStr(p_type, true)); pushDefine(f, vtype, "_one", temp);
@@ -30,55 +30,34 @@ void pushVectorDef(FILE *f, type vtype) {
         return;
     }
 
-
     if (vtype.as.v.size < 2) {
-        print("/// @brief Vector of %s with arbitrary dimension\n", ctypeAsStr(ctype));
-        print("typedef struct {\n    const usize count;\n    %s data[];\n} %sv;\n\n", ctypeAsStr(ctype), ctypePrefixAsStr(ctype));
+        push("/// @brief Vector of %s with arbitrary dimension\n", ctypeAsStr(ctype));
+        push("typedef struct {\n    const usize count;\n    %s data[];\n} %sv;\n\n", ctypeAsStr(ctype), ctypePrefixAsStr(ctype));
         return;
     }
 
-    // typedef union dv3 {
-    //     double data[3];
-    //     struct { double x, y, z; };
-    //     struct { dv2 xy; double __z0; };
-    //     struct { double __x0; dv2 yz; };
-    // } dv3;
-
-    // typedef union dv4 {
-    //     double data[4];
-    //     struct { double x, y, z, w; };
-    //     struct { dv2 xy, zw; };
-    //     struct { double __x0; dv2 yz; double __w0; };
-    //     struct { dv3 xyz; double __w1; };
-    //     struct { double __x1; dv3 xyz; };
-    // } dv4;
-
     char *cstr = ctypeAsStr(ctype);
-    print("/// @brief Vector of %s with dimension %u\n", cstr, size);
-    print("typedef union {\n    %s data[%u];\n", cstr, size);
+    push("/// @brief Vector of %s with dimension %zu\n", cstr, size);
+    push("typedef union {\n    %s data[%zu];\n", cstr, size);
     switch (size) {
-        case 2: print("    struct {\n        union { %s x, r, u; };\n        union { %s y, g, v; };\n    };\n", cstr, cstr); break;
+        case 2: 
+            push("    struct {\n        union { %s x, r, u; };\n        union { %s y, g, v; };\n    };\n", cstr, cstr); 
+            break;
         case 3: 
-            print("    struct {\n        union { %s x, r, u; };\n        union { %s y, g, v; };\n        union { %s z, b, s; };\n    };\n", cstr, cstr, cstr);
-            print("    struct {\n        union { %s __x, __r, __u; };\n        union { %s yz, gb, vs; };\n    };\n", ctypeAsStr(ctype), vtypeAsStr(V(ctype, 2).as.v, false));
-            print("    struct {\n        union { %s xy, rg, uv; };\n        union { %s __z, __b, __s; };\n    };\n", vtypeAsStr(V(ctype, 2).as.v, false), ctypeAsStr(ctype));
+            push("    struct {\n        union { %s x, r, u; };\n        union { %s y, g, v; };\n        union { %s z, b, s; };\n    };\n", cstr, cstr, cstr);
+            push("    struct {\n        union { %s __x, __r, __u; };\n        union { %s yz, gb, vs; };\n    };\n", ctypeAsStr(ctype), vtypeAsStr(V(ctype, 2).as.v, false));
+            push("    struct {\n        union { %s xy, rg, uv; };\n        union { %s __z, __b, __s; };\n    };\n", vtypeAsStr(V(ctype, 2).as.v, false), ctypeAsStr(ctype));
             break;
         case 4: 
-            print("    struct {\n        union { %s x, r, u; };\n        union { %s y, g, v; };\n        union { %s z, b, s; };\n        union { %s w, a, t; };\n    };\n", cstr, cstr, cstr, cstr);
-            print("    struct {\n        union { %s __x0, __r0, __u0; };\n        union { %s yz, gb, vs; };\n        union { %s __w0, __a0, __t0; };\n    };\n", ctypeAsStr(ctype), vtypeAsStr(V(ctype, 2).as.v, false), ctypeAsStr(ctype));
-            print("    struct {\n        union { %s xy, rb, uv; };\n        union { %s zw, ba, st; };\n    };\n", vtypeAsStr(V(ctype, 2).as.v, false), vtypeAsStr(V(ctype, 2).as.v, false));
-            print("    struct {\n        union { %s xyz, rgb, uvs; };\n        union { %s __w1, __a1, __t1; };\n    };\n", vtypeAsStr(V(ctype, 3).as.v, false), ctypeAsStr(ctype));
-            print("    struct {\n        union { %s __x1, __r1, __u1; };\n        union { %s yzw, gba, vst; };\n    };\n", ctypeAsStr(ctype), vtypeAsStr(V(ctype, 3).as.v, false));
+            push("    struct {\n        union { %s x, r, u; };\n        union { %s y, g, v; };\n        union { %s z, b, s; };\n        union { %s w, a, t; };\n    };\n", cstr, cstr, cstr, cstr);
+            push("    struct {\n        union { %s __x0, __r0, __u0; };\n        union { %s yz, gb, vs; };\n        union { %s __w0, __a0, __t0; };\n    };\n", ctypeAsStr(ctype), vtypeAsStr(V(ctype, 2).as.v, false), ctypeAsStr(ctype));
+            push("    struct {\n        union { %s xy, rb, uv; };\n        union { %s zw, ba, st; };\n    };\n", vtypeAsStr(V(ctype, 2).as.v, false), vtypeAsStr(V(ctype, 2).as.v, false));
+            push("    struct {\n        union { %s xyz, rgb, uvs; };\n        union { %s __w1, __a1, __t1; };\n    };\n", vtypeAsStr(V(ctype, 3).as.v, false), ctypeAsStr(ctype));
+            push("    struct {\n        union { %s __x1, __r1, __u1; };\n        union { %s yzw, gba, vst; };\n    };\n", ctypeAsStr(ctype), vtypeAsStr(V(ctype, 3).as.v, false));
             break;
-
-
-
-        // case 2:  print("    struct { %s x, y; };\n    struct { %s r, g; };\n    struct { %s u, v; };\n", ctypeAsStr(ctype), ctypeAsStr(ctype), ctypeAsStr(ctype)); break;
-        // case 3:  print("    struct { %s x, y, z; };\n    struct { %s r, g, b; };\n    struct { %s u, v, s; };\n", ctypeAsStr(ctype), ctypeAsStr(ctype), ctypeAsStr(ctype)); break;
-        // case 4:  print("    struct { %s x, y, z, w; };\n    struct { %s r, g, b, a; };\n    struct { %s u, v, s, t; };\n", ctypeAsStr(ctype), ctypeAsStr(ctype), ctypeAsStr(ctype)); break;
     }
-    print("} %sv%u;\n", ctypePrefixAsStr(ctype), size);
-    print("\n");
+    push("} %sv%zu;\n", ctypePrefixAsStr(ctype), size);
+    push("\n");
 
     switch (size) {
         case 2: {
@@ -110,7 +89,7 @@ void pushVectorDef(FILE *f, type vtype) {
             pushDefine(f, vtype, "_one",   "   ((@o){.x = 1, .y = 1, .z = 1, .w = 1})");
         } break;
     }
-    print("\n");
+    push("\n");
 }
 
 void pushVectorOp(FILE *f, const char *name, func_sig sig, const char *desc, const char *pre, const char *def) {
@@ -152,14 +131,14 @@ void pushVectorOp(FILE *f, const char *name, func_sig sig, const char *desc, con
         pushFuncCommon(f, new_name, sig, new_desc, pre, 0);
 
         if (def[0] == '%' && def[1] == 'S') { // Single line result
-            print("return ");
+            push("return ");
             pushFmtIndex(f, sig, def + 2, .tab = 1);
-            print(";");
+            push(";");
         }
         else {
-            print("for (usize i = 0; i < count; ++i) dest");
+            push("for (usize i = 0; i < count; ++i) dest");
             pushFmtIndex(f, sig, def);
-            print(";\n    return dest;");
+            push(";\n    return dest;");
         }
         pushFuncDefinitionEnd(f);
         
@@ -170,16 +149,16 @@ void pushVectorOp(FILE *f, const char *name, func_sig sig, const char *desc, con
         if (!returns) strcat(strcpy(new_desc, desc), "\nnote Result is stored in \'dest\' (which is returned to allow chaining function calls)");
         pushFuncCommon(f, name, sig, new_desc, NULL, 0);
 
-        if (returns) print("return SL_%s%s_(", typeAsStr(sig.on, true), name);
-        else print("(void)SL_%s%s_(", typeAsStr(sig.on, true), name);
+        if (returns) push("return SL_%s%s_(", typeAsStr(sig.on, true), name);
+        else push("(void)SL_%s%s_(", typeAsStr(sig.on, true), name);
 
         for (usize i = 0; i < sig.var_count; ++i) {
-            if (sig.vars[i].type.variant == VARIANT_V) print("%s->data, ", sig.vars[i].name); 
-            else print("%s, ", sig.vars[i].name);
+            if (sig.vars[i].type.variant == VARIANT_V) push("%s->data, ", sig.vars[i].name); 
+            else push("%s, ", sig.vars[i].name);
         }
 
-        if (returns) print("%s->count);", sig.vars[0].name);
-        else print("dest->count);\n    return dest;");
+        if (returns) push("%s->count);", sig.vars[0].name);
+        else push("dest->count);\n    return dest;");
         pushFuncDefinitionEnd(f);
         return;
     }
@@ -190,26 +169,26 @@ void pushVectorOp(FILE *f, const char *name, func_sig sig, const char *desc, con
         case VARIANT_C: {
             if (def[0] == '%' && def[1] == 'S') def += 2;
 
-            print("return ");
+            push("return ");
             pushFmtIndex(f, sig, def, .tab = 1);
-            print(";");
+            push(";");
         } break;
 
         case VARIANT_V: {
             
             if (def[0] == '%' && def[1] == 'S') { // Single line result
-                print("return ");
+                push("return ");
                 pushFmtIndex(f, sig, def + 2, .tab = 1);
-                print(";");
+                push(";");
             }
             else { // Basic structured result
-                print("return (%s) {\n        ", typeAsStr(sig.ret, false));
+                push("return (%s) {\n        ", typeAsStr(sig.ret, false));
                 pushFmtV(f, sig, 0, def, .tab = 2);
                 for (usize i = 1; i < sig.ret.as.v.size; ++i) {
-                    print(",\n        ");
+                    push(",\n        ");
                     pushFmtV(f, sig, i, def, .tab = 2);
                 }
-                print("\n    };");
+                push("\n    };");
             }
         } break;
     
@@ -221,78 +200,71 @@ void pushVectorOp(FILE *f, const char *name, func_sig sig, const char *desc, con
 
 int main() {
 
-    c_type ctypes[] = {TYPE_I8, TYPE_I16, TYPE_I32, TYPE_I64, TYPE_U8, TYPE_U16, TYPE_U32, TYPE_U64, TYPE_FLOAT, TYPE_DOUBLE, TYPE_BOOL, TYPE_I, TYPE_U, TYPE_LI, TYPE_LU};
-    const usize ctypes_count = sizeof(ctypes)/sizeof(c_type);
+    c_type ctypes[] = { TYPE_I8, TYPE_I16, TYPE_I32, TYPE_I64, TYPE_U8, TYPE_U16, TYPE_U32, TYPE_U64, TYPE_FLOAT, TYPE_DOUBLE, TYPE_BOOL, TYPE_I, TYPE_U, TYPE_LI, TYPE_LU };
+    const usize ctypes_count = static_count(ctypes);
 
-    type vtypes[sizeof(ctypes)/sizeof(c_type) * 4]; // v2, v3, v4, (v and ctype *)
-    const usize vtypes_count = sizeof(vtypes)/sizeof(type);
+    type vtypes[ctypes_count * 4]; // v2, v3, v4, [v and ctype *]
+    const usize vtypes_count = static_count(vtypes);
 
-    for (usize i = 0; i < ctypes_count; ++i) {
-        vtypes[4 * i + 0] = (type) {
+    for (usize i = 0; i < ctypes_count; ++i)
+    for (usize j = 0; j < 4; ++j)
+        vtypes[j + i * 4] = (type) {
             .variant = VARIANT_V,
-            .ptr = 1,
-            .as.v = (vec_type) {
-                .size = 0,
+            .ptr = j == 0,
+            .as.v = (vtype) {
+                .size = j == 0 ? 0 : j + 1,
                 .type = ctypes[i]
             }
         };
 
-        for (usize j = 1; j <= 3; ++j) {
-            vtypes[4 * i + j] = (type) {
-                .variant = VARIANT_V,
-                .ptr = 0,
-                .as.v = (vec_type) {
-                    .size = j + 1,
-                    .type = ctypes[i]
-                }
-            };
-        }
-    }
-
     FILE *f = fopen(S_PATH"SupSyLibraries/include/math/vector.h", "w");
-    print("#ifndef __SL_VECTOR_H\n#define __SL_VECTOR_H\n\n#include \"../base.h\"\n\n");
+    push("#ifndef _SL_VECTOR_H_\n#define _SL_VECTOR_H_\n\n#include \"../base.h\"\n\n#include \"math.h\"\n\n");
 
     pushDefine_(f, "XPD_V", "(V)  (V).count, (V).data");
     pushDefine_(f, "XPD_V2", "(V) (V).x, (V).y");
     pushDefine_(f, "XPD_V3", "(V) (V).x, (V).y, (V).z");
     pushDefine_(f, "XPD_V4", "(V) (V).x, (V).y, (V).z, (V).w");
-    print("\n");
+    push("\n");
     pushDefine_(f, "FMT_V2", "(fmt) \"v2(\"fmt\", \"fmt\")\"");
     pushDefine_(f, "FMT_V3", "(fmt) \"v3(\"fmt\", \"fmt\", \"fmt\")\"");
     pushDefine_(f, "FMT_V4", "(fmt) \"v4(\"fmt\", \"fmt\", \"fmt\", \"fmt\")\"");
-    print("\n");
+    push("\n");
     pushDefine_(f, "vsize", "(V) (sizeof(V) / sizeof(((typeof(V) *)(NULL))->data[0]))");
 
-    print("\n");
+    push("\n");
     
     for (usize i = 0; i < ctypes_count; ++i) {
 
         char buffer[1024];
         strcpy(buffer, ctypeAsStr(ctypes[i]));
-        print("#pragma region %s\n\n", strupper(buffer));
+        push("#pragma region %s\n\n", strupper(buffer));
         
         #define ctype C(ctypes[i])
         #define vtype vtypes[4 * i + j]
 
         for (usize j = 0; j < 4; ++j) pushVectorDef(f, vtype);
-        print("\n\n");
+        push("\n\n");
 
         pushDefine(f, vtypes[4 * i + 1], "_", "(X, Y)       ((@o){.x = X, .y = Y})");
         pushDefine(f, vtypes[4 * i + 2], "_", "(X, Y, Z)    ((@o){.x = X, .y = Y, .z = Z})");
         pushDefine(f, vtypes[4 * i + 3], "_", "(X, Y, Z, W) ((@o){.x = X, .y = Y, .z = Z, .w = W})");
-        print("\n");
+        push("\n");
         pushDefine(f, vtypes[4 * i + 1], "s", "(S)          ((@o){.x = S, .y = S})");
         pushDefine(f, vtypes[4 * i + 2], "s", "(S)          ((@o){.x = S, .y = S, .z = S})");
         pushDefine(f, vtypes[4 * i + 3], "s", "(S)          ((@o){.x = S, .y = S, .z = S, .w = S})");
-        print("\n");
+        push("\n");
         pushDefine(f, vtypes[4 * i + 1], "v", "(V, ...)     ((@o){.x = (V).x, .y = (V).y})");
         pushDefine(f, vtypes[4 * i + 2], "v", "(V, ...)     ((@o){.x = (V).x, .y = (V).y, .z = ("SL_PREFIX"vsize(V) >= 3 ? (V).data[2] : (0, ##__VA_ARGS__))})");
         pushDefine(f, vtypes[4 * i + 3], "v", "(V, ...)     ((@o){.x = (V).x, .y = (V).y, .z = ("SL_PREFIX"vsize(V) >= 3 ? (V).data[2] : ((const float[]){0, ##__VA_ARGS__, 0})[1]), .w = ("SL_PREFIX"vsize(V) >= 4 ? (V).data[3] : ((const float[]){0, ##__VA_ARGS__, 0, 0})[2])})");
 
-        print("\n\n\n");
+        push("\n\n\n");
         
-        
-
+        {
+            pushVectorOp(f, "equ", sig(vtypes[4 * i + 0], BOOL, var("lhs", vtypes[4 * i + 0]), var("rhs", vtypes[4 * i + 0])), "Equality of two @o", "@r dest = true;", " &= lhs# == rhs#");
+            pushVectorOp(f, "equ", sig(vtypes[4 * i + 1], BOOL, var("lhs", vtypes[4 * i + 1]), var("rhs", vtypes[4 * i + 1])), "Equality of two @o", NULL, "%Slhs.x == rhs.x && lhs.y == rhs.y");
+            pushVectorOp(f, "equ", sig(vtypes[4 * i + 2], BOOL, var("lhs", vtypes[4 * i + 2]), var("rhs", vtypes[4 * i + 2])), "Equality of two @o", NULL, "%Slhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z");
+            pushVectorOp(f, "equ", sig(vtypes[4 * i + 3], BOOL, var("lhs", vtypes[4 * i + 3]), var("rhs", vtypes[4 * i + 3])), "Equality of two @o", NULL, "%Slhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w");
+        }        
         for (usize j = 0; j < 4; ++j) pushVectorOp(f, "add",        sig(vtype, vtype, var("lhs", vtype), var("rhs", vtype)), "Addition of two @o", NULL, "# = lhs# + rhs#");
         for (usize j = 0; j < 4; ++j) pushVectorOp(f, "sub",        sig(vtype, vtype, var("lhs", vtype), var("rhs", vtype)), "Difference of two @o", NULL, "# = lhs# - rhs#");
         for (usize j = 0; j < 4; ++j) pushVectorOp(f, "mul",        sig(vtype, vtype, var("lhs", vtype), var("rhs", vtype)), "Component-wise multiplication of two @o", NULL, "# = lhs# * rhs#");
@@ -319,10 +291,10 @@ int main() {
         for (usize j = 0; j < 4; ++j) pushVectorOp(f, "max",        sig(vtype, vtype, var("lhs", vtype), var("rhs", vtype)), "Component-wise maximum of two @o", NULL, "# = lhs# > rhs# ? lhs# : rhs#");
         
         {
-            pushVectorOp(f, "dot",      sig(vtypes[4 * i + 0], C(ctype_parent[ctypes[i]]), var("lhs", vtypes[4 * i + 0]), var("rhs", vtypes[4 * i + 0])), "Dot product of two @o", "@r dest = 0;", " += lhs# * rhs#");
-            pushVectorOp(f, "dot",      sig(vtypes[4 * i + 1], C(ctype_parent[ctypes[i]]), var("lhs", vtypes[4 * i + 1]), var("rhs", vtypes[4 * i + 1])), "Dot product of two @o", NULL, "lhs.x * rhs.x + lhs.y * rhs.y");
-            pushVectorOp(f, "dot",      sig(vtypes[4 * i + 2], C(ctype_parent[ctypes[i]]), var("lhs", vtypes[4 * i + 2]), var("rhs", vtypes[4 * i + 2])), "Dot product of two @o", NULL, "lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z");
-            pushVectorOp(f, "dot",      sig(vtypes[4 * i + 3], C(ctype_parent[ctypes[i]]), var("lhs", vtypes[4 * i + 3]), var("rhs", vtypes[4 * i + 3])), "Dot product of two @o", NULL, "lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z + lhs.w * rhs.w");
+            pushVectorOp(f, "dot",          sig(vtypes[4 * i + 0], C(ctype_parent[ctypes[i]]), var("lhs", vtypes[4 * i + 0]), var("rhs", vtypes[4 * i + 0])), "Dot product of two @o", "@r dest = 0;", " += lhs# * rhs#");
+            pushVectorOp(f, "dot",          sig(vtypes[4 * i + 1], C(ctype_parent[ctypes[i]]), var("lhs", vtypes[4 * i + 1]), var("rhs", vtypes[4 * i + 1])), "Dot product of two @o", NULL, "lhs.x * rhs.x + lhs.y * rhs.y");
+            pushVectorOp(f, "dot",          sig(vtypes[4 * i + 2], C(ctype_parent[ctypes[i]]), var("lhs", vtypes[4 * i + 2]), var("rhs", vtypes[4 * i + 2])), "Dot product of two @o", NULL, "lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z");
+            pushVectorOp(f, "dot",          sig(vtypes[4 * i + 3], C(ctype_parent[ctypes[i]]), var("lhs", vtypes[4 * i + 3]), var("rhs", vtypes[4 * i + 3])), "Dot product of two @o", NULL, "lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z + lhs.w * rhs.w");
         }
         if (ctype_parent[ctypes[i]] == TYPE_U64) { // Unsigned types, no need to take the absolute value
             {
@@ -405,6 +377,7 @@ int main() {
             { usize j = 1; pushVectorOp(f, "from_angle",            sig(vtype, vtype, var("angle", ctype)), "Unit @o oriented based on given angle", "double c, s; sincos(angle, &s, &c);", "%S"SL_PREFIX"$o_(c, s)"); }
             { usize j = 2; pushVectorOp(f, "from_yawPitch",         sig(vtype, vtype, var("yaw", ctype), var("pitch", ctype)), "Unit @o oriented based on given angles", "double cy, sy; sincos(yaw, &sy, &cy);\ndouble cp, sp; sincos(pitch, &sp, &cp);", "%S"SL_PREFIX"$o_(sy * cp, sp, cy * cp)"); }
             { usize j = 1; pushVectorOp(f, "rot_sc",                sig(vtype, vtype, var("v", vtype), var("sina", ctype), var("cosa", ctype)), "Rotate @o by angle encoded by `cosa` and `sina`", NULL, "%S"SL_PREFIX"$o_(v.x * cosa - v.y * sina, v.y * cosa + v.x * sina)"); }
+            { usize j = 1; pushVectorOp(f, "rot_cs",                sig(vtype, vtype, var("v", vtype), var("cs", vtype)), "Rotate @o by angle encoded in vector `cs`", NULL, "%S"SL_PREFIX"$o_(v.x * cs.x - v.y * cs.y, v.x * cs.y + v.y * cs.x)"); }
             { usize j = 1; pushVectorOp(f, "rot",                   sig(vtype, vtype, var("v", vtype), var("a", ctype)), "Rotate @o by angle", "double sina, cosa; sincos(a, &sina, &cosa);", "%S"SL_PREFIX"$orot_sc(v, sina, cosa)"); }
         }
 
@@ -425,12 +398,13 @@ int main() {
             pushVectorOp(f, "cross", sig(vtypes[4 * i + 2], vtypes[4 * i + 2], var("lhs", vtypes[4 * i + 2]), var("rhs", vtypes[4 * i + 2])), "Cross-product of two @o", NULL, "%S(@o) {\n    .x = lhs.y * rhs.z - lhs.z * rhs.y,\n    .y = lhs.z * rhs.x - lhs.x * rhs.z,\n    .z = lhs.x * rhs.y - lhs.y * rhs.x\n}");
         }
 
-        print("#pragma endregion %s\n", buffer);
+        push("#pragma endregion %s\n", buffer);
     }
 
     pushStripPrefix(f);
 
-    print("\n#endif // __SL_VECTOR_H");
+    push("\n#endif // __SL_VECTOR_H\n\n");
+    pushGenerationData(f, "vector.h");
     fclose(f);
 
     return 0;

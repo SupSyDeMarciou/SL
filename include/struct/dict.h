@@ -175,15 +175,15 @@ SL_header void *__SL_dictGet(struct __dict_gen *dict, usize keySize, const void 
     usize hash = dict->hash(key) % dict->capa;
     struct __dict_gen_bucket *node = dict->data[hash];
     while (node && dict->cmp(&node->key, key) != 0) node = node->next;
-    return node ? (void *)node + sizeof(void *) + keySize : (__SL_ERROR(SL_ERR_OUT_OF_BOUNDS), NULL);
+    return node ? (void *)node + sizeof(void *) + keySize : (__SL_ERROR(SL_ERROR_OUT_OF_BOUNDS), NULL);
 }
 
 SL_header void *__SL_dictAdd(struct __dict_gen *dict, usize keySize, const void *key, usize valueSize, const void *value)
 {
     struct __dict_gen_bucket *new = SL_aalloc(dict->alloc, sizeof(void *) + keySize + valueSize);
-    if (!new) return __SL_ERROR(SL_ERR_MEMORY), NULL;
-    if (!memcpy((void *)&new->key, key, keySize))               return SL_afree(dict->alloc, new), __SL_ERROR(SL_ERR_MEMORY), NULL;
-    if (!memcpy((void *)&new->key + keySize, value, valueSize)) return SL_afree(dict->alloc, new), __SL_ERROR(SL_ERR_MEMORY), NULL;
+    if (!new) return __SL_ERROR(SL_ERROR_MEMORY), NULL;
+    if (!memcpy((void *)&new->key, key, keySize))               return SL_afree(dict->alloc, new), __SL_ERROR(SL_ERROR_MEMORY), NULL;
+    if (!memcpy((void *)&new->key + keySize, value, valueSize)) return SL_afree(dict->alloc, new), __SL_ERROR(SL_ERROR_MEMORY), NULL;
 
     if (dict->count / (double)dict->capa > 3.0)
     {
@@ -220,13 +220,13 @@ SL_header bool __SL_dictRemove(struct __dict_gen *dict, usize keySize, void *key
     usize hash = dict->hash(key) % dict->capa;
     struct __dict_gen_bucket *node = dict->data[hash];
 
-    if (!node) return __SL_ERROR(SL_ERR_OUT_OF_BOUNDS), false;
+    if (!node) return __SL_ERROR(SL_ERROR_OUT_OF_BOUNDS), false;
 
     if (dict->cmp(&node->key, key) == 0) dict->data[hash] = node->next;
     else {
         while (node->next && dict->cmp(&node->next->key, key) != 0) node = node->next;
 
-        if (node->next == NULL) return __SL_ERROR(SL_ERR_OUT_OF_BOUNDS), false;
+        if (node->next == NULL) return __SL_ERROR(SL_ERROR_OUT_OF_BOUNDS), false;
 
         struct __dict_gen_bucket *to_free = node->next;
         node->next = to_free->next;
