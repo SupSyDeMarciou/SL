@@ -1,14 +1,6 @@
 #define SL_STRIP_PREFIX
 #define SL_IMPLEMENTATION
-// #include "../../include/struct/array.h"
-// #include "../../include/misc/io.h"
 #include "generate.h"
-
-#ifdef _WIN32
-#   define S_PATH "C:/Users/vlada/Desktop/Coding/C/SupSy/"
-#else
-#   define S_PATH "/home/supsy/Coding/C/SupSy/"
-#endif
 
 usize ifdef(array(char) *dict, u8 *_p)
 {
@@ -58,7 +50,7 @@ int main(int argc, char **argv)
     array(char) no_defines = arrayCreate(char, 2048);
     
     FILE *f = fopen(S_PATH"SupSyLibraries/include/sl_all.h", "w");
-    aforeach(path, slice_(ptr(char), static_count(paths), paths))
+    aforeach(path, slice_(ptr(char), sa_count(paths), paths))
     {
         printf("[%zu] %s\n", aindex(path), *path);
         push("// SOURCE: %s\n", *path);

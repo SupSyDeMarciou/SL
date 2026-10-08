@@ -138,13 +138,22 @@ SL_header bool __SL_dictRemove(struct __dict_gen *dict, usize keySize, void *key
 
 
 
+/// @brief Define a hash function to use with dict
+/// @param type Type of the hashed key
+/// @param key Name of the key operand
+/// @return Definition of the function `usize {key_type}_hash(const {key_type} *{key_name})`
+#define SL_DEF_HASH_FUNC(key_type, key_name) SL_header usize key_type##_hash(const key_type *key_name)
+
+
+
 #ifdef SL_STRIP_PREFIX
-#   define  DICT_FIELDS         SL_DICT_FIELDS
 #   define  DEF_DICT            SL_DEF_DICT
 #   define  dict                SL_dict
 #   define  dictClear           SL_dictClear
 #   define  dictCreate          SL_dictCreate
+#   define  dictCreate_full     SL_dictCreate_full
 #   define  dictCreateA         SL_dictCreateA
+#   define  dictCreateA_full    SL_dictCreateA_full
 #   define  dictHash            SL_dictHash
 #   define  dictDestroy         SL_dictDestroy
 #   define  dictGet             SL_dictGet
@@ -152,6 +161,7 @@ SL_header bool __SL_dictRemove(struct __dict_gen *dict, usize keySize, void *key
 #   define  dictRemove          SL_dictRemove
 #   define  dictKey             SL_dictKey
 #   define  dforeach            SL_dforeach
+#   define  DEF_HASH_FUNC       SL_DEF_HASH_FUNC
 #endif
 
 
@@ -237,5 +247,20 @@ SL_header bool __SL_dictRemove(struct __dict_gen *dict, usize keySize, void *key
     --dict->count;
     return true;
 }
+#endif
+
+
+
+#ifndef SL_NO_DEFINES
+SL_DEF_HASH_FUNC(char_p, key) SL_implement
+({
+    usize h = 0x02468ACE;
+    for (const char *c = *key; *c; ++c) {
+        h ^= *c;
+        h *= 0x5bd1e995;
+        h ^= h >> 15;
+    }
+    return h;
+});
 #endif
 #endif // _SL_DICT_H_

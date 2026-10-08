@@ -18,6 +18,16 @@
 #   define SL_PREFIX "SL_"
 #endif
 
+#ifdef DEBUG
+#   define push(msg, ...) fprintf(stdout, msg, ##__VA_ARGS__)
+#   define pushc(char)    fputc(char, stdout)
+#else
+#   define push(msg, ...) fprintf(f, msg, ##__VA_ARGS__)
+#   define pushc(char)    fputc(char, f)
+#endif
+
+
+
 #pragma region TYPE
 
 typedef enum CType {
@@ -41,21 +51,26 @@ typedef enum CType {
     TYPE_LU,
 } c_type;
 static c_type ctype_parent[] = {
-    [TYPE_U8] = TYPE_U64,       [TYPE_U16] = TYPE_U64,
-    [TYPE_U32] = TYPE_U64,      [TYPE_U64] = TYPE_U64,
-    [TYPE_I8] = TYPE_I64,       [TYPE_I16] = TYPE_I64,
-    [TYPE_I32] = TYPE_I64,      [TYPE_I64] = TYPE_I64,
+    [TYPE_U8]    = TYPE_U64,    [TYPE_U16]    = TYPE_U64,
+    [TYPE_U32]   = TYPE_U64,    [TYPE_U64]    = TYPE_U64,
+    [TYPE_I8]    = TYPE_I64,    [TYPE_I16]    = TYPE_I64,
+    [TYPE_I32]   = TYPE_I64,    [TYPE_I64]    = TYPE_I64,
     [TYPE_FLOAT] = TYPE_DOUBLE, [TYPE_DOUBLE] = TYPE_DOUBLE,
-    [TYPE_BOOL] = TYPE_U64,
+    [TYPE_BOOL]  = TYPE_U64,
 
     [TYPE_I] = TYPE_I64,        [TYPE_LI] = TYPE_I64,
     [TYPE_U] = TYPE_U64,        [TYPE_LU] = TYPE_U64,
 };
 static c_type ctype_alias[] = {
-    [TYPE_I] = TYPE_I32,
-    [TYPE_LI] = TYPE_I64,
-    [TYPE_U] = TYPE_U32,
-    [TYPE_LU] = TYPE_U64,
+    [TYPE_U8]    = TYPE_U8,    [TYPE_U16]    = TYPE_U16,
+    [TYPE_U32]   = TYPE_U32,   [TYPE_U64]    = TYPE_U64,
+    [TYPE_I8]    = TYPE_I8,    [TYPE_I16]    = TYPE_I16,
+    [TYPE_I32]   = TYPE_I32,   [TYPE_I64]    = TYPE_I64,
+    [TYPE_FLOAT] = TYPE_FLOAT, [TYPE_DOUBLE] = TYPE_DOUBLE,
+    [TYPE_BOOL]  = TYPE_BOOL,
+
+    [TYPE_I] = TYPE_I32,       [TYPE_LI] = TYPE_I64,
+    [TYPE_U] = TYPE_U32,       [TYPE_LU] = TYPE_U64,
 };
 SL_header char *ctypeAsStr(c_type type) {
     switch (type) {
@@ -106,14 +121,6 @@ SL_header char *ctypePrefixAsStr(c_type type) {
         default: return "[UNIMPLEMENTED]";
     }
 }
-
-#ifdef DEBUG
-#   define push(msg, ...) fprintf(stdout, msg, ##__VA_ARGS__)
-#   define pushc(char)    fputc(char, stdout)
-#else
-#   define push(msg, ...) fprintf(f, msg, ##__VA_ARGS__)
-#   define pushc(char)    fputc(char, f)
-#endif
 
 typedef struct VectorType {
     c_type type;
@@ -185,7 +192,7 @@ SL_header char *typeAsStr(type t, bool funcName) {
     static const char stars[] = "********************************";
     static char buffer[32][32];
     static usize buffI = 0;
-    buffI = (buffI + 1) % static_count(buffer);
+    buffI = (buffI + 1) % sa_count(buffer);
     
     int l = 0;
     switch (t.variant) {
@@ -268,24 +275,23 @@ typedef struct Variable {
     char *name;
     type type;
 } var;
+DEF_ARRAY(var);
 #define var(name_, type_) ((var){.name = name_, .type = type_})
 
 typedef struct FunctionSignature {
     type on, ret;
-    usize var_count;
-    var *vars;
+    slice(var) vars;
 } func_sig;
 SL_header void funcSigSwitchType(func_sig *sig, c_type oldType, c_type newType) {
-    if (sig->on.as.c == oldType)  sig->on.as.c = newType;
+    if (sig->on.as.c  == oldType) sig->on.as.c  = newType;
     if (sig->ret.as.c == oldType) sig->ret.as.c = newType;
-    for (usize i = 0; i < sig->var_count; ++i)
-        if (sig->vars[i].type.as.c == oldType) sig->vars[i].type.as.c = newType;
+    aforeach(var, sig->vars)
+        if (var->type.as.c == oldType) var->type.as.c = newType;
 }
 #define sig(type_on, type_ret, ...)                                            \
     ((func_sig){.on = type_on,                                                 \
                 .ret = type_ret,                                               \
-                .var_count = sizeof((var[]){__VA_ARGS__}) / sizeof(var),       \
-                .vars = (var[]){__VA_ARGS__}})
+                .vars = slicev(var, __VA_ARGS__)})
 
 typedef struct FunctionDefinition {
     char *name;
@@ -341,11 +347,11 @@ SL_header void pushFmtString_params(FILE *f, func_sig sig, fmt_hash fmt, usize c
             bool funcName = *c == '$';
             switch (*++c) {
                 case 'r': push(typeAsStr(sig.ret, funcName)); break; // Return full type
-                case 'R': push(typeAsStr((type){.variant = VARIANT_C, .as.c = sig.ret.as.c, .ptr = 0}, funcName)); break; // Return ctype
+                case 'R': push(typeAsStr(C(sig.ret.as.c), funcName)); break; // Return ctype
                 case 'o': push(typeAsStr(sig.on, funcName)); break; // "On" full type
-                case 'O': push(typeAsStr((type){.variant = VARIANT_C, .as.c = sig.on.as.c, .ptr = 0}, funcName)); break; // "On" ctype
-                case 'v': push(typeAsStr(sig.vars[*++c - '0' + params.var_offset].type, funcName)); break; // var[i] full type
-                case 'V': push(typeAsStr((type){.variant = VARIANT_C, .as.c = sig.vars[*++c - '0' + params.var_offset].type.as.c, .ptr = 0}, funcName)); break; // var[i] ctype
+                case 'O': push(typeAsStr(C(sig.on.as.c), funcName)); break; // "On" ctype
+                case 'v': push(typeAsStr(sig.vars.data[*++c - '0' + params.var_offset].type, funcName)); break; // var[i] full type
+                case 'V': push(typeAsStr(C(sig.vars.data[*++c - '0' + params.var_offset].type.as.c), funcName)); break; // var[i] ctype
                 default: SL_terminate(-1, "Failed to parse \'%c%c\'", *(c - 1), *c);
             }
         } break;
@@ -377,10 +383,8 @@ SL_header void pushFuncCommon(FILE *f, const char *name, func_sig sig, const cha
 
     pushFuncDescription(f, sig, desc, var_offset);
     push("\n" SL_PREFIX "header %s SL_%s%s(", typeAsStr(sig.ret, false), typeAsStr(sig.on, true), name);
-    if (sig.var_count) {
-        push("%s %s", typeAsStr(sig.vars[0].type, false), sig.vars[0].name);
-        for (usize i = 1; i < sig.var_count; ++i) push(", %s %s", typeAsStr(sig.vars[i].type, false), sig.vars[i].name);
-    }
+    if (sig.vars.count)
+        aforeach(var, sig.vars) push(aindex(var) == 0 ? "%s %s" : ", %s %s", typeAsStr(var->type, false), var->name);
     push(")");
     pushFuncDefinitionStart(f);
     if (pre) {

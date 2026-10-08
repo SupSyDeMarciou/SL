@@ -8,6 +8,7 @@
 #define SL_msize(M)      SL_luv2_(sizeof(((typeof(M) *)NULL)->r0) / sizeof(((typeof(M) *)NULL)->m00), sizeof(((typeof(M) *)NULL)->r0) / sizeof(((typeof(M) *)NULL)->m00))
 #define SL_mget(M, i, j) ((M).data[j + i * (M).c])
 
+#define SL_XPD_M(M)    (M).r, (M).c, (M).data
 #define SL_XPD_M2X2(M) (M).m00, (M).m01, (M).m10, (M).m11
 #define SL_XPD_M3X3(M) (M).m00, (M).m01, (M).m02, (M).m10, (M).m11, (M).m12, (M).m20, (M).m21, (M).m22
 #define SL_XPD_M4X4(M) (M).m00, (M).m01, (M).m02, (M).m03, (M).m10, (M).m11, (M).m12, (M).m13, (M).m20, (M).m21, (M).m22, (M).m23, (M).m30, (M).m31, (M).m32, (M).m33
@@ -31,6 +32,7 @@ typedef struct {
 
 
 
+
 /// @brief Matrix of i32 of size 2 x 2
 typedef union {
     i32 data[2 * 2];
@@ -46,7 +48,9 @@ typedef union {
 #define SL_i32m2x2_identity ((i32m2x2){ 1, 0, 0, 1 })
 
 
+
 #define SL_i32m2x2diag(m00_, m11_) ((i32m2x2){.m00 = m00_, .m11 = m11_})
+#define SL_i32m2x2_(m00_, m01_, m10_, m11_) ((i32m2x2){.m00 = m00_, .m01 = m01_, .m10 = m10_, .m11 = m11_})
 
 /// @brief Addition of two i32m2x2
 SL_header i32m2x2 SL_i32m2x2add(i32m2x2 lhs, i32m2x2 rhs)
@@ -248,7 +252,9 @@ typedef union {
 #define SL_i32m3x3_identity ((i32m3x3){ 1, 0, 0, 0, 1, 0, 0, 0, 1 })
 
 
+
 #define SL_i32m3x3diag(m00_, m11_, m22_) ((i32m3x3){.m00 = m00_, .m11 = m11_, .m22 = m22_})
+#define SL_i32m3x3_(m00_, m01_, m02_, m10_, m11_, m12_, m20_, m21_, m22_) ((i32m3x3){.m00 = m00_, .m01 = m01_, .m02 = m02_, .m10 = m10_, .m11 = m11_, .m12 = m12_, .m20 = m20_, .m21 = m21_, .m22 = m22_})
 
 /// @brief Addition of two i32m3x3
 SL_header i32m3x3 SL_i32m3x3add(i32m3x3 lhs, i32m3x3 rhs)
@@ -471,7 +477,9 @@ typedef union {
 #define SL_i32m4x4_identity ((i32m4x4){ 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 })
 
 
+
 #define SL_i32m4x4diag(m00_, m11_, m22_, m33_) ((i32m4x4){.m00 = m00_, .m11 = m11_, .m22 = m22_, .m33 = m33_})
+#define SL_i32m4x4_(m00_, m01_, m02_, m03_, m10_, m11_, m12_, m13_, m20_, m21_, m22_, m23_, m30_, m31_, m32_, m33_) ((i32m4x4){.m00 = m00_, .m01 = m01_, .m02 = m02_, .m03 = m03_, .m10 = m10_, .m11 = m11_, .m12 = m12_, .m13 = m13_, .m20 = m20_, .m21 = m21_, .m22 = m22_, .m23 = m23_, .m30 = m30_, .m31 = m31_, .m32 = m32_, .m33 = m33_})
 
 /// @brief Addition of two i32m4x4
 SL_header i32m4x4 SL_i32m4x4add(i32m4x4 lhs, i32m4x4 rhs)
@@ -706,6 +714,7 @@ typedef struct {
 
 
 
+
 /// @brief Matrix of i64 of size 2 x 2
 typedef union {
     i64 data[2 * 2];
@@ -721,7 +730,9 @@ typedef union {
 #define SL_i64m2x2_identity ((i64m2x2){ 1, 0, 0, 1 })
 
 
+
 #define SL_i64m2x2diag(m00_, m11_) ((i64m2x2){.m00 = m00_, .m11 = m11_})
+#define SL_i64m2x2_(m00_, m01_, m10_, m11_) ((i64m2x2){.m00 = m00_, .m01 = m01_, .m10 = m10_, .m11 = m11_})
 
 /// @brief Addition of two i64m2x2
 SL_header i64m2x2 SL_i64m2x2add(i64m2x2 lhs, i64m2x2 rhs)
@@ -923,7 +934,9 @@ typedef union {
 #define SL_i64m3x3_identity ((i64m3x3){ 1, 0, 0, 0, 1, 0, 0, 0, 1 })
 
 
+
 #define SL_i64m3x3diag(m00_, m11_, m22_) ((i64m3x3){.m00 = m00_, .m11 = m11_, .m22 = m22_})
+#define SL_i64m3x3_(m00_, m01_, m02_, m10_, m11_, m12_, m20_, m21_, m22_) ((i64m3x3){.m00 = m00_, .m01 = m01_, .m02 = m02_, .m10 = m10_, .m11 = m11_, .m12 = m12_, .m20 = m20_, .m21 = m21_, .m22 = m22_})
 
 /// @brief Addition of two i64m3x3
 SL_header i64m3x3 SL_i64m3x3add(i64m3x3 lhs, i64m3x3 rhs)
@@ -1146,7 +1159,9 @@ typedef union {
 #define SL_i64m4x4_identity ((i64m4x4){ 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 })
 
 
+
 #define SL_i64m4x4diag(m00_, m11_, m22_, m33_) ((i64m4x4){.m00 = m00_, .m11 = m11_, .m22 = m22_, .m33 = m33_})
+#define SL_i64m4x4_(m00_, m01_, m02_, m03_, m10_, m11_, m12_, m13_, m20_, m21_, m22_, m23_, m30_, m31_, m32_, m33_) ((i64m4x4){.m00 = m00_, .m01 = m01_, .m02 = m02_, .m03 = m03_, .m10 = m10_, .m11 = m11_, .m12 = m12_, .m13 = m13_, .m20 = m20_, .m21 = m21_, .m22 = m22_, .m23 = m23_, .m30 = m30_, .m31 = m31_, .m32 = m32_, .m33 = m33_})
 
 /// @brief Addition of two i64m4x4
 SL_header i64m4x4 SL_i64m4x4add(i64m4x4 lhs, i64m4x4 rhs)
@@ -1381,6 +1396,7 @@ typedef struct {
 
 
 
+
 /// @brief Matrix of u32 of size 2 x 2
 typedef union {
     u32 data[2 * 2];
@@ -1396,7 +1412,9 @@ typedef union {
 #define SL_u32m2x2_identity ((u32m2x2){ 1, 0, 0, 1 })
 
 
+
 #define SL_u32m2x2diag(m00_, m11_) ((u32m2x2){.m00 = m00_, .m11 = m11_})
+#define SL_u32m2x2_(m00_, m01_, m10_, m11_) ((u32m2x2){.m00 = m00_, .m01 = m01_, .m10 = m10_, .m11 = m11_})
 
 /// @brief Addition of two u32m2x2
 SL_header u32m2x2 SL_u32m2x2add(u32m2x2 lhs, u32m2x2 rhs)
@@ -1574,7 +1592,9 @@ typedef union {
 #define SL_u32m3x3_identity ((u32m3x3){ 1, 0, 0, 0, 1, 0, 0, 0, 1 })
 
 
+
 #define SL_u32m3x3diag(m00_, m11_, m22_) ((u32m3x3){.m00 = m00_, .m11 = m11_, .m22 = m22_})
+#define SL_u32m3x3_(m00_, m01_, m02_, m10_, m11_, m12_, m20_, m21_, m22_) ((u32m3x3){.m00 = m00_, .m01 = m01_, .m02 = m02_, .m10 = m10_, .m11 = m11_, .m12 = m12_, .m20 = m20_, .m21 = m21_, .m22 = m22_})
 
 /// @brief Addition of two u32m3x3
 SL_header u32m3x3 SL_u32m3x3add(u32m3x3 lhs, u32m3x3 rhs)
@@ -1771,7 +1791,9 @@ typedef union {
 #define SL_u32m4x4_identity ((u32m4x4){ 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 })
 
 
+
 #define SL_u32m4x4diag(m00_, m11_, m22_, m33_) ((u32m4x4){.m00 = m00_, .m11 = m11_, .m22 = m22_, .m33 = m33_})
+#define SL_u32m4x4_(m00_, m01_, m02_, m03_, m10_, m11_, m12_, m13_, m20_, m21_, m22_, m23_, m30_, m31_, m32_, m33_) ((u32m4x4){.m00 = m00_, .m01 = m01_, .m02 = m02_, .m03 = m03_, .m10 = m10_, .m11 = m11_, .m12 = m12_, .m13 = m13_, .m20 = m20_, .m21 = m21_, .m22 = m22_, .m23 = m23_, .m30 = m30_, .m31 = m31_, .m32 = m32_, .m33 = m33_})
 
 /// @brief Addition of two u32m4x4
 SL_header u32m4x4 SL_u32m4x4add(u32m4x4 lhs, u32m4x4 rhs)
@@ -1978,6 +2000,7 @@ typedef struct {
 
 
 
+
 /// @brief Matrix of u64 of size 2 x 2
 typedef union {
     u64 data[2 * 2];
@@ -1993,7 +2016,9 @@ typedef union {
 #define SL_u64m2x2_identity ((u64m2x2){ 1, 0, 0, 1 })
 
 
+
 #define SL_u64m2x2diag(m00_, m11_) ((u64m2x2){.m00 = m00_, .m11 = m11_})
+#define SL_u64m2x2_(m00_, m01_, m10_, m11_) ((u64m2x2){.m00 = m00_, .m01 = m01_, .m10 = m10_, .m11 = m11_})
 
 /// @brief Addition of two u64m2x2
 SL_header u64m2x2 SL_u64m2x2add(u64m2x2 lhs, u64m2x2 rhs)
@@ -2171,7 +2196,9 @@ typedef union {
 #define SL_u64m3x3_identity ((u64m3x3){ 1, 0, 0, 0, 1, 0, 0, 0, 1 })
 
 
+
 #define SL_u64m3x3diag(m00_, m11_, m22_) ((u64m3x3){.m00 = m00_, .m11 = m11_, .m22 = m22_})
+#define SL_u64m3x3_(m00_, m01_, m02_, m10_, m11_, m12_, m20_, m21_, m22_) ((u64m3x3){.m00 = m00_, .m01 = m01_, .m02 = m02_, .m10 = m10_, .m11 = m11_, .m12 = m12_, .m20 = m20_, .m21 = m21_, .m22 = m22_})
 
 /// @brief Addition of two u64m3x3
 SL_header u64m3x3 SL_u64m3x3add(u64m3x3 lhs, u64m3x3 rhs)
@@ -2368,7 +2395,9 @@ typedef union {
 #define SL_u64m4x4_identity ((u64m4x4){ 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 })
 
 
+
 #define SL_u64m4x4diag(m00_, m11_, m22_, m33_) ((u64m4x4){.m00 = m00_, .m11 = m11_, .m22 = m22_, .m33 = m33_})
+#define SL_u64m4x4_(m00_, m01_, m02_, m03_, m10_, m11_, m12_, m13_, m20_, m21_, m22_, m23_, m30_, m31_, m32_, m33_) ((u64m4x4){.m00 = m00_, .m01 = m01_, .m02 = m02_, .m03 = m03_, .m10 = m10_, .m11 = m11_, .m12 = m12_, .m13 = m13_, .m20 = m20_, .m21 = m21_, .m22 = m22_, .m23 = m23_, .m30 = m30_, .m31 = m31_, .m32 = m32_, .m33 = m33_})
 
 /// @brief Addition of two u64m4x4
 SL_header u64m4x4 SL_u64m4x4add(u64m4x4 lhs, u64m4x4 rhs)
@@ -2575,6 +2604,7 @@ typedef struct {
 
 
 
+
 /// @brief Matrix of float of size 2 x 2
 typedef union {
     float data[2 * 2];
@@ -2590,7 +2620,9 @@ typedef union {
 #define SL_fm2x2_identity ((fm2x2){ 1, 0, 0, 1 })
 
 
+
 #define SL_fm2x2diag(m00_, m11_) ((fm2x2){.m00 = m00_, .m11 = m11_})
+#define SL_fm2x2_(m00_, m01_, m10_, m11_) ((fm2x2){.m00 = m00_, .m01 = m01_, .m10 = m10_, .m11 = m11_})
 
 /// @brief Addition of two fm2x2
 SL_header fm2x2 SL_fm2x2add(fm2x2 lhs, fm2x2 rhs)
@@ -2820,7 +2852,9 @@ typedef union {
 #define SL_fm3x3_identity ((fm3x3){ 1, 0, 0, 0, 1, 0, 0, 0, 1 })
 
 
+
 #define SL_fm3x3diag(m00_, m11_, m22_) ((fm3x3){.m00 = m00_, .m11 = m11_, .m22 = m22_})
+#define SL_fm3x3_(m00_, m01_, m02_, m10_, m11_, m12_, m20_, m21_, m22_) ((fm3x3){.m00 = m00_, .m01 = m01_, .m02 = m02_, .m10 = m10_, .m11 = m11_, .m12 = m12_, .m20 = m20_, .m21 = m21_, .m22 = m22_})
 
 /// @brief Addition of two fm3x3
 SL_header fm3x3 SL_fm3x3add(fm3x3 lhs, fm3x3 rhs)
@@ -3097,7 +3131,9 @@ typedef union {
 #define SL_fm4x4_identity ((fm4x4){ 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 })
 
 
+
 #define SL_fm4x4diag(m00_, m11_, m22_, m33_) ((fm4x4){.m00 = m00_, .m11 = m11_, .m22 = m22_, .m33 = m33_})
+#define SL_fm4x4_(m00_, m01_, m02_, m03_, m10_, m11_, m12_, m13_, m20_, m21_, m22_, m23_, m30_, m31_, m32_, m33_) ((fm4x4){.m00 = m00_, .m01 = m01_, .m02 = m02_, .m03 = m03_, .m10 = m10_, .m11 = m11_, .m12 = m12_, .m13 = m13_, .m20 = m20_, .m21 = m21_, .m22 = m22_, .m23 = m23_, .m30 = m30_, .m31 = m31_, .m32 = m32_, .m33 = m33_})
 
 /// @brief Addition of two fm4x4
 SL_header fm4x4 SL_fm4x4add(fm4x4 lhs, fm4x4 rhs)
@@ -3388,6 +3424,7 @@ typedef struct {
 
 
 
+
 /// @brief Matrix of double of size 2 x 2
 typedef union {
     double data[2 * 2];
@@ -3403,7 +3440,9 @@ typedef union {
 #define SL_dm2x2_identity ((dm2x2){ 1, 0, 0, 1 })
 
 
+
 #define SL_dm2x2diag(m00_, m11_) ((dm2x2){.m00 = m00_, .m11 = m11_})
+#define SL_dm2x2_(m00_, m01_, m10_, m11_) ((dm2x2){.m00 = m00_, .m01 = m01_, .m10 = m10_, .m11 = m11_})
 
 /// @brief Addition of two dm2x2
 SL_header dm2x2 SL_dm2x2add(dm2x2 lhs, dm2x2 rhs)
@@ -3633,7 +3672,9 @@ typedef union {
 #define SL_dm3x3_identity ((dm3x3){ 1, 0, 0, 0, 1, 0, 0, 0, 1 })
 
 
+
 #define SL_dm3x3diag(m00_, m11_, m22_) ((dm3x3){.m00 = m00_, .m11 = m11_, .m22 = m22_})
+#define SL_dm3x3_(m00_, m01_, m02_, m10_, m11_, m12_, m20_, m21_, m22_) ((dm3x3){.m00 = m00_, .m01 = m01_, .m02 = m02_, .m10 = m10_, .m11 = m11_, .m12 = m12_, .m20 = m20_, .m21 = m21_, .m22 = m22_})
 
 /// @brief Addition of two dm3x3
 SL_header dm3x3 SL_dm3x3add(dm3x3 lhs, dm3x3 rhs)
@@ -3910,7 +3951,9 @@ typedef union {
 #define SL_dm4x4_identity ((dm4x4){ 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 })
 
 
+
 #define SL_dm4x4diag(m00_, m11_, m22_, m33_) ((dm4x4){.m00 = m00_, .m11 = m11_, .m22 = m22_, .m33 = m33_})
+#define SL_dm4x4_(m00_, m01_, m02_, m03_, m10_, m11_, m12_, m13_, m20_, m21_, m22_, m23_, m30_, m31_, m32_, m33_) ((dm4x4){.m00 = m00_, .m01 = m01_, .m02 = m02_, .m03 = m03_, .m10 = m10_, .m11 = m11_, .m12 = m12_, .m13 = m13_, .m20 = m20_, .m21 = m21_, .m22 = m22_, .m23 = m23_, .m30 = m30_, .m31 = m31_, .m32 = m32_, .m33 = m33_})
 
 /// @brief Addition of two dm4x4
 SL_header dm4x4 SL_dm4x4add(dm4x4 lhs, dm4x4 rhs)
@@ -4201,6 +4244,7 @@ typedef struct {
 
 
 
+
 /// @brief Matrix of bool of size 2 x 2
 typedef union {
     bool data[2 * 2];
@@ -4216,7 +4260,9 @@ typedef union {
 #define SL_bm2x2_identity ((bm2x2){ 1, 0, 0, 1 })
 
 
+
 #define SL_bm2x2diag(m00_, m11_) ((bm2x2){.m00 = m00_, .m11 = m11_})
+#define SL_bm2x2_(m00_, m01_, m10_, m11_) ((bm2x2){.m00 = m00_, .m01 = m01_, .m10 = m10_, .m11 = m11_})
 
 /// @brief Addition of two bm2x2
 SL_header bm2x2 SL_bm2x2add(bm2x2 lhs, bm2x2 rhs)
@@ -4394,7 +4440,9 @@ typedef union {
 #define SL_bm3x3_identity ((bm3x3){ 1, 0, 0, 0, 1, 0, 0, 0, 1 })
 
 
+
 #define SL_bm3x3diag(m00_, m11_, m22_) ((bm3x3){.m00 = m00_, .m11 = m11_, .m22 = m22_})
+#define SL_bm3x3_(m00_, m01_, m02_, m10_, m11_, m12_, m20_, m21_, m22_) ((bm3x3){.m00 = m00_, .m01 = m01_, .m02 = m02_, .m10 = m10_, .m11 = m11_, .m12 = m12_, .m20 = m20_, .m21 = m21_, .m22 = m22_})
 
 /// @brief Addition of two bm3x3
 SL_header bm3x3 SL_bm3x3add(bm3x3 lhs, bm3x3 rhs)
@@ -4591,7 +4639,9 @@ typedef union {
 #define SL_bm4x4_identity ((bm4x4){ 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 })
 
 
+
 #define SL_bm4x4diag(m00_, m11_, m22_, m33_) ((bm4x4){.m00 = m00_, .m11 = m11_, .m22 = m22_, .m33 = m33_})
+#define SL_bm4x4_(m00_, m01_, m02_, m03_, m10_, m11_, m12_, m13_, m20_, m21_, m22_, m23_, m30_, m31_, m32_, m33_) ((bm4x4){.m00 = m00_, .m01 = m01_, .m02 = m02_, .m03 = m03_, .m10 = m10_, .m11 = m11_, .m12 = m12_, .m13 = m13_, .m20 = m20_, .m21 = m21_, .m22 = m22_, .m23 = m23_, .m30 = m30_, .m31 = m31_, .m32 = m32_, .m33 = m33_})
 
 /// @brief Addition of two bm4x4
 SL_header bm4x4 SL_bm4x4add(bm4x4 lhs, bm4x4 rhs)
@@ -4787,6 +4837,7 @@ SL_header bool SL_bm4x4det(bm4x4 m)
 #ifdef SL_STRIP_PREFIX
 #   define  msize SL_msize
 #   define  mget SL_mget
+#   define  XPD_M SL_XPD_M
 #   define  XPD_M2X2 SL_XPD_M2X2
 #   define  XPD_M3X3 SL_XPD_M3X3
 #   define  XPD_M4X4 SL_XPD_M4X4
@@ -4797,6 +4848,7 @@ SL_header bool SL_bm4x4det(bm4x4 m)
 #   define  i32m2x2_zero SL_i32m2x2_zero
 #   define  i32m2x2_identity SL_i32m2x2_identity
 #   define  i32m2x2diag SL_i32m2x2diag
+#   define  i32m2x2_ SL_i32m2x2_
 #   define  i32m2x2add SL_i32m2x2add
 #   define  i32m2x2sub SL_i32m2x2sub
 #   define  i32m2x2mul SL_i32m2x2mul
@@ -4816,6 +4868,7 @@ SL_header bool SL_bm4x4det(bm4x4 m)
 #   define  i32m3x3_zero SL_i32m3x3_zero
 #   define  i32m3x3_identity SL_i32m3x3_identity
 #   define  i32m3x3diag SL_i32m3x3diag
+#   define  i32m3x3_ SL_i32m3x3_
 #   define  i32m3x3add SL_i32m3x3add
 #   define  i32m3x3sub SL_i32m3x3sub
 #   define  i32m3x3mul SL_i32m3x3mul
@@ -4836,6 +4889,7 @@ SL_header bool SL_bm4x4det(bm4x4 m)
 #   define  i32m4x4_zero SL_i32m4x4_zero
 #   define  i32m4x4_identity SL_i32m4x4_identity
 #   define  i32m4x4diag SL_i32m4x4diag
+#   define  i32m4x4_ SL_i32m4x4_
 #   define  i32m4x4add SL_i32m4x4add
 #   define  i32m4x4sub SL_i32m4x4sub
 #   define  i32m4x4mul SL_i32m4x4mul
@@ -4857,6 +4911,7 @@ SL_header bool SL_bm4x4det(bm4x4 m)
 #   define  i64m2x2_zero SL_i64m2x2_zero
 #   define  i64m2x2_identity SL_i64m2x2_identity
 #   define  i64m2x2diag SL_i64m2x2diag
+#   define  i64m2x2_ SL_i64m2x2_
 #   define  i64m2x2add SL_i64m2x2add
 #   define  i64m2x2sub SL_i64m2x2sub
 #   define  i64m2x2mul SL_i64m2x2mul
@@ -4876,6 +4931,7 @@ SL_header bool SL_bm4x4det(bm4x4 m)
 #   define  i64m3x3_zero SL_i64m3x3_zero
 #   define  i64m3x3_identity SL_i64m3x3_identity
 #   define  i64m3x3diag SL_i64m3x3diag
+#   define  i64m3x3_ SL_i64m3x3_
 #   define  i64m3x3add SL_i64m3x3add
 #   define  i64m3x3sub SL_i64m3x3sub
 #   define  i64m3x3mul SL_i64m3x3mul
@@ -4896,6 +4952,7 @@ SL_header bool SL_bm4x4det(bm4x4 m)
 #   define  i64m4x4_zero SL_i64m4x4_zero
 #   define  i64m4x4_identity SL_i64m4x4_identity
 #   define  i64m4x4diag SL_i64m4x4diag
+#   define  i64m4x4_ SL_i64m4x4_
 #   define  i64m4x4add SL_i64m4x4add
 #   define  i64m4x4sub SL_i64m4x4sub
 #   define  i64m4x4mul SL_i64m4x4mul
@@ -4917,6 +4974,7 @@ SL_header bool SL_bm4x4det(bm4x4 m)
 #   define  u32m2x2_zero SL_u32m2x2_zero
 #   define  u32m2x2_identity SL_u32m2x2_identity
 #   define  u32m2x2diag SL_u32m2x2diag
+#   define  u32m2x2_ SL_u32m2x2_
 #   define  u32m2x2add SL_u32m2x2add
 #   define  u32m2x2sub SL_u32m2x2sub
 #   define  u32m2x2mul SL_u32m2x2mul
@@ -4934,6 +4992,7 @@ SL_header bool SL_bm4x4det(bm4x4 m)
 #   define  u32m3x3_zero SL_u32m3x3_zero
 #   define  u32m3x3_identity SL_u32m3x3_identity
 #   define  u32m3x3diag SL_u32m3x3diag
+#   define  u32m3x3_ SL_u32m3x3_
 #   define  u32m3x3add SL_u32m3x3add
 #   define  u32m3x3sub SL_u32m3x3sub
 #   define  u32m3x3mul SL_u32m3x3mul
@@ -4952,6 +5011,7 @@ SL_header bool SL_bm4x4det(bm4x4 m)
 #   define  u32m4x4_zero SL_u32m4x4_zero
 #   define  u32m4x4_identity SL_u32m4x4_identity
 #   define  u32m4x4diag SL_u32m4x4diag
+#   define  u32m4x4_ SL_u32m4x4_
 #   define  u32m4x4add SL_u32m4x4add
 #   define  u32m4x4sub SL_u32m4x4sub
 #   define  u32m4x4mul SL_u32m4x4mul
@@ -4971,6 +5031,7 @@ SL_header bool SL_bm4x4det(bm4x4 m)
 #   define  u64m2x2_zero SL_u64m2x2_zero
 #   define  u64m2x2_identity SL_u64m2x2_identity
 #   define  u64m2x2diag SL_u64m2x2diag
+#   define  u64m2x2_ SL_u64m2x2_
 #   define  u64m2x2add SL_u64m2x2add
 #   define  u64m2x2sub SL_u64m2x2sub
 #   define  u64m2x2mul SL_u64m2x2mul
@@ -4988,6 +5049,7 @@ SL_header bool SL_bm4x4det(bm4x4 m)
 #   define  u64m3x3_zero SL_u64m3x3_zero
 #   define  u64m3x3_identity SL_u64m3x3_identity
 #   define  u64m3x3diag SL_u64m3x3diag
+#   define  u64m3x3_ SL_u64m3x3_
 #   define  u64m3x3add SL_u64m3x3add
 #   define  u64m3x3sub SL_u64m3x3sub
 #   define  u64m3x3mul SL_u64m3x3mul
@@ -5006,6 +5068,7 @@ SL_header bool SL_bm4x4det(bm4x4 m)
 #   define  u64m4x4_zero SL_u64m4x4_zero
 #   define  u64m4x4_identity SL_u64m4x4_identity
 #   define  u64m4x4diag SL_u64m4x4diag
+#   define  u64m4x4_ SL_u64m4x4_
 #   define  u64m4x4add SL_u64m4x4add
 #   define  u64m4x4sub SL_u64m4x4sub
 #   define  u64m4x4mul SL_u64m4x4mul
@@ -5025,6 +5088,7 @@ SL_header bool SL_bm4x4det(bm4x4 m)
 #   define  fm2x2_zero SL_fm2x2_zero
 #   define  fm2x2_identity SL_fm2x2_identity
 #   define  fm2x2diag SL_fm2x2diag
+#   define  fm2x2_ SL_fm2x2_
 #   define  fm2x2add SL_fm2x2add
 #   define  fm2x2sub SL_fm2x2sub
 #   define  fm2x2mul SL_fm2x2mul
@@ -5046,6 +5110,7 @@ SL_header bool SL_bm4x4det(bm4x4 m)
 #   define  fm3x3_zero SL_fm3x3_zero
 #   define  fm3x3_identity SL_fm3x3_identity
 #   define  fm3x3diag SL_fm3x3diag
+#   define  fm3x3_ SL_fm3x3_
 #   define  fm3x3add SL_fm3x3add
 #   define  fm3x3sub SL_fm3x3sub
 #   define  fm3x3mul SL_fm3x3mul
@@ -5069,6 +5134,7 @@ SL_header bool SL_bm4x4det(bm4x4 m)
 #   define  fm4x4_zero SL_fm4x4_zero
 #   define  fm4x4_identity SL_fm4x4_identity
 #   define  fm4x4diag SL_fm4x4diag
+#   define  fm4x4_ SL_fm4x4_
 #   define  fm4x4add SL_fm4x4add
 #   define  fm4x4sub SL_fm4x4sub
 #   define  fm4x4mul SL_fm4x4mul
@@ -5093,6 +5159,7 @@ SL_header bool SL_bm4x4det(bm4x4 m)
 #   define  dm2x2_zero SL_dm2x2_zero
 #   define  dm2x2_identity SL_dm2x2_identity
 #   define  dm2x2diag SL_dm2x2diag
+#   define  dm2x2_ SL_dm2x2_
 #   define  dm2x2add SL_dm2x2add
 #   define  dm2x2sub SL_dm2x2sub
 #   define  dm2x2mul SL_dm2x2mul
@@ -5114,6 +5181,7 @@ SL_header bool SL_bm4x4det(bm4x4 m)
 #   define  dm3x3_zero SL_dm3x3_zero
 #   define  dm3x3_identity SL_dm3x3_identity
 #   define  dm3x3diag SL_dm3x3diag
+#   define  dm3x3_ SL_dm3x3_
 #   define  dm3x3add SL_dm3x3add
 #   define  dm3x3sub SL_dm3x3sub
 #   define  dm3x3mul SL_dm3x3mul
@@ -5137,6 +5205,7 @@ SL_header bool SL_bm4x4det(bm4x4 m)
 #   define  dm4x4_zero SL_dm4x4_zero
 #   define  dm4x4_identity SL_dm4x4_identity
 #   define  dm4x4diag SL_dm4x4diag
+#   define  dm4x4_ SL_dm4x4_
 #   define  dm4x4add SL_dm4x4add
 #   define  dm4x4sub SL_dm4x4sub
 #   define  dm4x4mul SL_dm4x4mul
@@ -5161,6 +5230,7 @@ SL_header bool SL_bm4x4det(bm4x4 m)
 #   define  bm2x2_zero SL_bm2x2_zero
 #   define  bm2x2_identity SL_bm2x2_identity
 #   define  bm2x2diag SL_bm2x2diag
+#   define  bm2x2_ SL_bm2x2_
 #   define  bm2x2add SL_bm2x2add
 #   define  bm2x2sub SL_bm2x2sub
 #   define  bm2x2mul SL_bm2x2mul
@@ -5178,6 +5248,7 @@ SL_header bool SL_bm4x4det(bm4x4 m)
 #   define  bm3x3_zero SL_bm3x3_zero
 #   define  bm3x3_identity SL_bm3x3_identity
 #   define  bm3x3diag SL_bm3x3diag
+#   define  bm3x3_ SL_bm3x3_
 #   define  bm3x3add SL_bm3x3add
 #   define  bm3x3sub SL_bm3x3sub
 #   define  bm3x3mul SL_bm3x3mul
@@ -5196,6 +5267,7 @@ SL_header bool SL_bm4x4det(bm4x4 m)
 #   define  bm4x4_zero SL_bm4x4_zero
 #   define  bm4x4_identity SL_bm4x4_identity
 #   define  bm4x4diag SL_bm4x4diag
+#   define  bm4x4_ SL_bm4x4_
 #   define  bm4x4add SL_bm4x4add
 #   define  bm4x4sub SL_bm4x4sub
 #   define  bm4x4mul SL_bm4x4mul
@@ -5215,4 +5287,4 @@ SL_header bool SL_bm4x4det(bm4x4 m)
 
 #endif // _SL_MATRIX_H_
 
-// matrix.h: THIS FILE WAS GENERATED ON 30/09/2026 AT 02:22:56
+// matrix.h: THIS FILE WAS GENERATED ON 08/10/2026 AT 04:08:07

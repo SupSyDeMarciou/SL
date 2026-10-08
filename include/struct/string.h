@@ -16,7 +16,6 @@
 
 #include "../base.h"
 #include "array.h"
-#include "../math/math.h"
 
 typedef SL_slice(char) sl_string;
 SL_DEF_ARRAY(sl_string);
@@ -94,7 +93,7 @@ SL_header sl_string SL_stringCapitalize(sl_string str);
 
 #ifdef SL_STRIP_PREFIX
     typedef sl_string       string;
-    SL_DEF_ALIAS(SL_array(sl_string), SL_array(string));
+    typedef SL_array(sl_string) SL_array(string);
 #   define  string_         SL_string_
 #   define  stringc         SL_stringc
 #   define  stringa         SL_stringa
@@ -117,7 +116,7 @@ SL_header sl_string SL_stringCapitalize(sl_string str);
 #ifdef SL_IMPLEMENTATION
 SL_header int SL_stringCmp(sl_string lhs, sl_string rhs)
 {
-    return strncmp(lhs.data, rhs.data, SL_u64min(lhs.count, rhs.count));
+    return strncmp(lhs.data, rhs.data, lhs.count < rhs.count ? lhs.count : rhs.count);
 }
 SL_header bool SL_stringStart(sl_string str, sl_string fact)
 {
@@ -186,7 +185,7 @@ SL_header usize SL_stringSplit(sl_string str, sl_string separator, SL_array(sl_s
 }
 SL_header sl_string SL_stringSlice(sl_string str, usize start, usize count)
 {
-    return (sl_string){.data = start > str.count ? NULL : str.data + start, .count = SL_i64min(start + count, str.count) - start};
+    return (sl_string){.data = start > str.count ? NULL : str.data + start, .count = (start + count < str.count ? start + count : str.count) - start};
 }
 
 SL_header sl_string SL_stringUpper(sl_string str)

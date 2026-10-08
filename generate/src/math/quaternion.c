@@ -2,20 +2,25 @@
 #define SL_IMPLEMENTATION
 #include "../generate.h"
 
-void pushQuatDef(FILE *f, type qtype) {
+void pushQuatDef(FILE *f, type qtype) 
+{
+    const type ctype = C(qtype.as.q.type);
+    const char *ctype_s = typeAsStr(ctype, false);
+    const char *ctype_f = typeAsStr(ctype, true);
 
-    push("/// @brief Quaternion of %s\n", ctypeAsStr(qtype.as.c));
+    push("/// @brief Quaternion of %s\n", ctype_s);
     push(
         "typedef union {\n"
         "    %s data[4];\n"
         "    struct { %s a, b, c, d; };\n"
         "    struct { %s w, x, y, z; };\n"
-        "    struct { %s r; union { %s iv; struct { %s i, j, k; }; }; };\n"
+        "    struct { %s r; union { %sv3 iv; struct { %s i, j, k; }; }; };\n"
+        "    %sv4 %sv4;\n"
         "} %sq;\n",
-        ctypeAsStr(qtype.as.c), ctypeAsStr(qtype.as.c), ctypeAsStr(qtype.as.c), ctypeAsStr(qtype.as.c), typeAsStr(V(qtype.as.c, 3), false), ctypeAsStr(qtype.as.c), ctypePrefixAsStr(qtype.as.c)
+        ctype_s, ctype_s, ctype_s, ctype_s, ctype_f, ctype_s, ctype_f, ctype_f, ctype_f
     );
     push("\n");
-    pushDefine(f, qtype, "_zero", "     ((@o){0})");
+    pushDefine(f, qtype, "_zero", "     ((@o){.a = 0, .b = 0, .c = 0, .d = 0})");
     pushDefine(f, qtype, "_identity", " ((@o){.a = 1, .b = 0, .c = 0, .d = 0})");
     push("\n");
 }
@@ -23,7 +28,6 @@ void pushQuatDef(FILE *f, type qtype) {
 void pushQuatOp(FILE *f, const char *name, func_sig sig, const char *desc, const char *pre, const char *def) {
     
     pushFuncCommon(f, name, sig, desc, pre, 0);
-
     switch (sig.ret.variant) {
         case VARIANT_C: {
             if (def[0] == '%' && def[1] == 'S') def += 2; // Ignore "single line" prefix
@@ -60,13 +64,13 @@ void pushQuatOp(FILE *f, const char *name, func_sig sig, const char *desc, const
 
         default: SL_terminate(-1, "Return type \"%s\" not handled!", typeAsStr(sig.ret, false)); break;
     }
-
     pushFuncDefinitionEnd(f);
 }
 
 int main() {
     
-    type qtypes[2] = {Q(TYPE_FLOAT), Q(TYPE_DOUBLE)};
+    const type qtypes[2] = {Q(TYPE_FLOAT), Q(TYPE_DOUBLE)};
+    const usize qtypes_count = sa_count(qtypes);
     
     FILE *f = fopen(S_PATH"SupSyLibraries/include/math/quaternion.h", "w");
     push("#ifndef _SL_QUATERNION_H_\n#define _SL_QUATERNION_H_\n\n#include \"../base.h\"\n\n#include \"math.h\"\n#include \"vector.h\"\n\n");
@@ -76,16 +80,13 @@ int main() {
 
     pushDefine_(f, "XPD_Q", "(Q) (Q).w, (Q).x, (Q).y, (Q).z");
     pushDefine_(f, "FMT_Q", "(fmt) \"quat(\"fmt\" + \"fmt\"i + \"fmt\"j + \"fmt\"k)\"");
+    push("\n");
 
-    
     for (usize i = 0; i < 2; ++i) pushQuatDef(f, qtype);
     push("\n\n");
     for (usize i = 0; i < 2; ++i) pushDefine(f, qtype, "_", "(R, I, J, K) ((@o){.r = R, .i = I, .j = J, .k = K})");
     for (usize i = 0; i < 2; ++i) pushDefine(f, qtype, "v", "(R, IV)      ((@o){.r = R, .iv = IV})");
     for (usize i = 0; i < 2; ++i) pushDefine(f, qtype, "q", "(Q)          ((@o){"SL_PREFIX"XPD_Q(Q)})");
-    push("\n");
-    pushDefine(f, qtypes[0], "asfv4", "(Q)     (*($Ov4*)Q.data)");
-    pushDefine(f, qtypes[1], "asdv4", "(Q)     (*($Ov4*)Q.data)");
     push("\n\n\n");
     
     push("#pragma region ARITHMETIC\n\n");
@@ -100,8 +101,8 @@ int main() {
         "    .c = lhs.a*rhs.y - lhs.b*rhs.z + lhs.c*rhs.w + lhs.d*rhs.x,\n"
         "    .d = lhs.a*rhs.z + lhs.b*rhs.y - lhs.c*rhs.x + lhs.d*rhs.w\n}"
     );
+    for (usize i = 0; i < 2; ++i) pushQuatOp(f, "muls",     sig(qtype, qtype, var("q", qtype), var("s", ctype)), "Component-wise multiplication of a @o with a scalar", NULL, "# = q# * s");
     for (usize i = 0; i < 2; ++i) pushQuatOp(f, "neg",      sig(qtype, qtype, var("q", qtype)), "Negation of a @o", NULL, "# = -q#");
-    for (usize i = 0; i < 2; ++i) pushQuatOp(f, "scale",    sig(qtype, qtype, var("q", qtype), var("s", ctype)), "Component-wise multiplication of a @o with a scalar", NULL, "# = q# * s");
     for (usize i = 0; i < 2; ++i) pushQuatOp(f, "len_sqr",  sig(qtype, F64,   var("q", qtype)), "Canonic squared length of a @o", NULL, "q.a * q.a + q.b * q.b + q.c * q.c + q.d * q.d");
     for (usize i = 0; i < 2; ++i) pushQuatOp(f, "len",      sig(qtype, F64,   var("q", qtype)), "Canonic length of a @o", NULL, i ? "sqrt("SL_PREFIX"$olen_sqr(q))" : "sqrtf("SL_PREFIX"$olen_sqr(q))");
     
@@ -135,12 +136,12 @@ int main() {
         "    v.z * (w2 - x2 - y2 + z2) + 2 * ((xz + wy) * v.x + (yz - wx) * v.y)\n"
         ")"
     );
-    for (usize i = 0; i < 2; ++i) pushQuatOp(f, "slerp", sig(qtype, qtype, var("a", qtype), var("b", qtype), var("t", ctype)), 
+    for (usize i = 0; i < 2; ++i) pushQuatOp(f, "serp", sig(qtype, qtype, var("a", qtype), var("b", qtype), var("t", ctype)), 
         "Spherical interpolation with parameter @v2 t from @o a to @o b\nnote With unit quaternions, this acts as an interpolation between two rotations",
         NULL,
         "%S"SL_PREFIX"$omul(a, "SL_PREFIX"$opow("SL_PREFIX"$omul("SL_PREFIX"$oinv(a), b), t))"
     );
-    for (usize i = 0; i < 2; ++i) pushQuatOp(f, "slerp_u", sig(qtype, qtype, var("a", qtype), var("b", qtype), var("t", ctype)), 
+    for (usize i = 0; i < 2; ++i) pushQuatOp(f, "serp_u", sig(qtype, qtype, var("a", qtype), var("b", qtype), var("t", ctype)), 
         "Spherical interpolation with parameter @v2 t from @o a to @o b, both assumed of unit length\nnote This acts as an interpolation between two rotations, allways following the shortest path",
         "@o inv_a = "SL_PREFIX"$otrsp(a);\n"
         "@o delta_q = "SL_PREFIX"$omul(inv_a, b);\n"
@@ -183,33 +184,30 @@ int main() {
         "}\n",
         "(@r) {\n    .x = fmod(t1 + SL_TAU, SL_TAU),\n    .y = fmod(t2 - SL_PI/2 + SL_TAU, SL_TAU),\n    .z = fmod(SL_TAU - t3, SL_TAU)\n}"
     );
-    for (usize i = 0; i < 2; ++i) pushQuatOp(f, "from_angleAxis", sig(qtype, qtype, var("angle", F64), var("axis", V(qtype.as.c, 3))), 
+    for (usize i = 0; i < 2; ++i) pushQuatOp(f, "from_axisAngle", sig(qtype, qtype, var("axis", V(qtype.as.c, 3)), var("angle", F64)), 
         "Unit @o based on angle-axis pair", "double sin_angle = sin(angle *= 0.5);",
-        "%S(@o) {\n    .r = cos(angle),\n    .iv = "SL_PREFIX"$v1muls(axis, sin_angle)\n}"
+        "%S(@o) {\n    .r = cos(angle),\n    .iv = "SL_PREFIX"$v0muls(axis, sin_angle)\n}"
     );
-    for (usize i = 0; i < 2; ++i) pushQuatOp(f, "to_angleAxis", sig(qtype, V(qtype.as.c, 4), var("q", qtype)), 
+    for (usize i = 0; i < 2; ++i) pushQuatOp(f, "to_axisAngle", sig(qtype, V(qtype.as.c, 4), var("q", qtype)), 
         "Angle-axis pair based on assumed unit @o\nnote The returned vector is of the form `(@r){ .xyz = axis, .w = angle }`", "double sin_half_angle = "SL_PREFIX"$Ov3len(q.iv);",
         "%S(@r) {\n    .xyz = "SL_PREFIX"$Ov3muls(q.iv, 1.0 / sin_half_angle),\n    .w = 2.0 * asin(sin_half_angle)\n}"
     );
 
     for (usize i = 0; i < 2; ++i) pushQuatOp(f, "from_fromTo", sig(qtype, qtype, var("from", V(qtype.as.c, 3)), var("to", V(qtype.as.c, 3))), 
         "Unit @o representing the rotation from one @v1 to another @v1",
-        "@v0 axis = "SL_PREFIX"$v0cross(to, from);\nif (axis.x || axis.y || axis.z) {\n    float angle = acos("SL_PREFIX"$v0dot(from, to));\n    return "SL_PREFIX"$rfrom_angleAxis(angle, "SL_PREFIX"$v0norm(axis));\n}",
+        "@v0 axis = "SL_PREFIX"$v0cross(to, from);\nif (axis.x || axis.y || axis.z) {\n    float angle = acos("SL_PREFIX"$v0dot(from, to));\n    return "SL_PREFIX"$rfrom_axisAngle("SL_PREFIX"$v0norm(axis), angle);\n}",
         "%S"SL_PREFIX"@o_identity"
     );
 
-    // TODO: add "from_rotVec" | Can be added using angleAxis functions, so are these really necessary ?
+    // TODO: add "from_rotVec" | Can be added using axisAngle functions, so are these really necessary ?
     // TODO: add "to_rotVec"   |
-
-    for (usize i = 0; i < 2; ++i) pushQuatOp(f, "from_v4",  sig(qtype, qtype, var("v", V(qtype.as.c, 4))), "@o from a @v0", NULL, "%S(@r) { .w = v.x, .x = v.y, .y = v.z, .z = v.w }");
-    for (usize i = 0; i < 2; ++i) pushQuatOp(f, "to_v4",    sig(qtype, V(qtype.as.c, 4), var("q", qtype)), "@o to a @r",    NULL, "%S(@r) { .x = q.w, .y = q.x, .z = q.y, .w = q.z }");
-
+    
     push("\n#pragma endregion CONVERSION\n\n");
+    
+    // pushImplementation(f);
     pushStripPrefix(f);
 
     push("\n#endif // _SL_QUATERNION_H_\n\n");
     pushGenerationData(f, "quaternion.h");
-    fclose(f);
-    
-    return 0;
+    return fclose(f);
 }

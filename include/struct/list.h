@@ -429,12 +429,12 @@ SL_header bool __SL_dlistRemoveRef(void **first, void **last, usize *count, sl_a
     SL_DEF_LIST(f32);   SL_DEF_LIST(f64);
     SL_DEF_LIST(SL_ptr(char));
 
-    SL_DEF_ALIAS(SL_list(f32), SL_list(float));                     SL_DEF_ALIAS(SL_dlist(f32), SL_dlist(float)); 
-    SL_DEF_ALIAS(SL_list(f64), SL_list(double));                    SL_DEF_ALIAS(SL_dlist(f64), SL_dlist(double));
+    typedef SL_list(f32) SL_list(float);            typedef SL_dlist(f32) SL_dlist(float); 
+    typedef SL_list(f64) SL_list(double);           typedef SL_dlist(f64) SL_dlist(double);
 
-    SL_DEF_ALIAS(SL_list(u8), SL_list(char8), SL_list(char));       SL_DEF_ALIAS(SL_dlist(u8), SL_dlist(char8), SL_dlist(char));
-    SL_DEF_ALIAS(SL_list(u16), SL_list(char16), SL_list(wchar_t));  SL_DEF_ALIAS(SL_dlist(u16), SL_dlist(char16), SL_dlist(wchar_t));
-    SL_DEF_ALIAS(SL_list(u32), SL_list(char32));                    SL_DEF_ALIAS(SL_dlist(u32), SL_dlist(char32));
+    SL_list(u8)  SL_list(ch8),  SL_list(char);      typedef SL_dlist(u8)  SL_dlist(ch8),  SL_dlist(char);
+    SL_list(u16) SL_list(ch16), SL_list(wchar_t);   typedef SL_dlist(u16) SL_dlist(ch16), SL_dlist(wchar_t);
+    SL_list(u32) SL_list(ch32);                     typedef SL_dlist(u32) SL_dlist(ch32);
 
     SL_DEF_LIST(void_p);
 #endif

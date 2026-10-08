@@ -363,11 +363,11 @@ SL_header void __SL_arrayFill(void *array_data, usize array_count, usize elemSiz
     SL_DEF_ARRAY(f16);    SL_DEF_ARRAY(f32);   SL_DEF_ARRAY(f64);    SL_DEF_ARRAY(f128);
     SL_DEF_ARRAY(SL_ptr(char));
 
-    SL_DEF_ALIAS(SL_array(f32), SL_array(float));                       SL_DEF_ALIAS(SL_slice(f32), SL_slice(float)); 
-    SL_DEF_ALIAS(SL_array(f64), SL_array(double));                      SL_DEF_ALIAS(SL_slice(f64), SL_slice(double));
+    typedef SL_array(f32) SL_array(float);                     typedef SL_slice(f32) SL_slice(float); 
+    typedef SL_array(f64) SL_array(double);                    typedef SL_slice(f64) SL_slice(double);
 
-    SL_DEF_ALIAS(SL_array(u8), SL_array(char8), SL_array(char));        SL_DEF_ALIAS(SL_slice(u8), SL_slice(char8), SL_slice(char));
-    SL_DEF_ALIAS(SL_array(u16), SL_array(char16), SL_array(wchar_t));   SL_DEF_ALIAS(SL_slice(u16), SL_slice(char16), SL_slice(wchar_t));
-    SL_DEF_ALIAS(SL_array(u32), SL_array(char32));                      SL_DEF_ALIAS(SL_slice(u32), SL_slice(char32));
+    typedef SL_array(u8)  SL_array(ch8),  SL_array(char);       typedef SL_slice(u8)  SL_slice(ch8),  SL_slice(char);
+    typedef SL_array(u16) SL_array(ch16), SL_array(wchar_t);    typedef SL_slice(u16) SL_slice(ch16), SL_slice(wchar_t);
+    typedef SL_array(u32) SL_array(ch32);                       typedef SL_slice(u32) SL_slice(ch32);
 #endif
 #endif // _SL_ARRAY_H_

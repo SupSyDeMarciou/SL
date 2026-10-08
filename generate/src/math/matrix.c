@@ -4,32 +4,33 @@
 
 void pushMatDef(FILE *f, type type_)
 {
-    c_type ctype = type_.as.m.type;
-    usize r = type_.as.m.r;
-    usize c = type_.as.m.c;
+    const type ctype = C(type_.as.m.type);
+    const usize r = type_.as.m.r;
+    const usize c = type_.as.m.c;
+    const char *ctype_s = typeAsStr(ctype, false);
+    const char *ctype_f = typeAsStr(ctype, false);
 
     if (r < 2) {
-        push("/// @brief Matrix of %s with arbitrary dimensions\n", ctypeAsStr(ctype));
-        push("typedef struct {\n    union { usize r, c; luv2 size; };\n    %s *data;\n} %s;\n\n", ctypeAsStr(ctype), typeAsStr(type_, true));
+        push("/// @brief Matrix of %s with arbitrary dimensions\n", ctype_s);
+        push("typedef struct {\n    union { usize r, c; luv2 size; };\n    %s *data;\n} %s;\n\n", ctype_s, typeAsStr(type_, true));
         push("#define "SL_PREFIX"as%s(sized_mat) ((%s){.size = "SL_PREFIX"msize(sized_mat), .data = sized_mat.data})", typeAsStr(type_, true), typeAsStr(type_, true));
         prefDefAdd("as%s", typeAsStr(type_, true));
         push("\n");
         return;
     }
 
-    push("/// @brief Matrix of %s of size %zu x %zu\n", ctypeAsStr(ctype), r, c);
-    push("typedef union {\n    %s data[%zu * %zu];\n    %s m[%zu][%zu];\n    struct {\n", ctypeAsStr(ctype), r, c, ctypeAsStr(ctype), r, c);
-    
+    push("/// @brief Matrix of %s of size %zu x %zu\n", ctype_s, r, c);
+    push("typedef union {\n    %s data[%zu * %zu];\n    %s m[%zu][%zu];\n    struct {\n", ctype_s, r, c, ctype_s, r, c);
     for (usize i = 0; i < c; ++i) {
-        push("        %s m%zu%zu", ctypeAsStr(ctype), i, 0ul);
+        push("        %s m%zu%zu", ctype_s, i, 0ul);
         for (usize j = 1; j < r; ++j) {
             push(", m%zu%zu", i, j);
         }
         push(";\n");
     }
-    push("    };\n    struct { %s r0", typeAsStr(V(ctype, c), false));
+    push("    };\n    struct { %s r0", typeAsStr(V(ctype.as.c, c), false));
     for (usize j = 1; j < r; ++j) push(", r%zu", j);
-    push("; };\n} %s;\n\n", typeAsStr(type_, false));
+    push("; };\n} %s;\n\n", typeAsStr(type_, true));
 
     pushDefine(f, type_, "_zero", " ((@o){0})");
     if (r == c) {
@@ -57,7 +58,6 @@ void pushMatrixOp(FILE *f, const char *name, func_sig sig, const char *desc, con
     }
     
     pushFuncCommon(f, name, sig, desc, pre, 0);
-
     switch (sig.ret.variant) {
         case VARIANT_C: {
             if (def[0] == '%' && def[1] == 'S') def += 2;
@@ -111,40 +111,29 @@ void pushMatrixOp(FILE *f, const char *name, func_sig sig, const char *desc, con
     
         default: SL_terminate(-1, "Return type \"%s\" not handled!", typeAsStr(sig.ret, false)); break;
     }
-
     pushFuncDefinitionEnd(f);
 }
 
 int main() {
 
-    c_type ctypes[] = {TYPE_I32, TYPE_I64, TYPE_U32, TYPE_U64, TYPE_FLOAT, TYPE_DOUBLE, TYPE_BOOL};
-    const usize ctypes_count = static_count(ctypes);
+    const c_type ctypes[] = {TYPE_I32, TYPE_I64, TYPE_U32, TYPE_U64, TYPE_FLOAT, TYPE_DOUBLE, TYPE_BOOL};
+    const usize ctypes_count = sa_count(ctypes);
 
-    #define NB_M_VARIANTS 4
-    type mtypes[sizeof(ctypes)/sizeof(c_type) * NB_M_VARIANTS]; // m, m2x2, m3x3, m4x4
-    const usize vtypes_count = static_count(mtypes);
+    #define NB_M_VARIANTS 4 // m, m2x2, m3x3, m4x4
+    type mtypes[ctypes_count * NB_M_VARIANTS]; 
+    const usize vtypes_count = sa_count(mtypes);
 
-    for (usize i = 0; i < ctypes_count; ++i) {
-        mtypes[NB_M_VARIANTS * i + 0] = (type) {
+    for (usize i = 0; i < ctypes_count; ++i)
+    for (usize j = 0; j < NB_M_VARIANTS; ++j) {
+        mtypes[NB_M_VARIANTS * i + j] = (type) {
             .variant = VARIANT_M,
             .ptr = 0,
             .as.m = (mtype) {
-                .r = 0,
-                .c = 0,
+                .r = j == 0 ? 0 : j + 1,
+                .c = j == 0 ? 0 : j + 1,
                 .type = ctypes[i]
             }
         };
-        for (usize j = 1; j < NB_M_VARIANTS; ++j) {
-            mtypes[NB_M_VARIANTS * i + j] = (type) {
-                .variant = VARIANT_M,
-                .ptr = 0,
-                .as.m = (mtype) {
-                    .r = j + 1,
-                    .c = j + 1,
-                    .type = ctypes[i]
-                }
-            };
-        }
     }
 
     FILE *f = fopen(S_PATH"SupSyLibraries/include/math/matrix.h", "w");
@@ -153,6 +142,7 @@ int main() {
     pushDefine_(f, "msize", "(M)      "SL_PREFIX"luv2_(sizeof(((typeof(M) *)NULL)->r0) / sizeof(((typeof(M) *)NULL)->m00), sizeof(((typeof(M) *)NULL)->r0) / sizeof(((typeof(M) *)NULL)->m00))");
     pushDefine_(f, "mget", "(M, i, j) ((M).data[j + i * (M).c])");
     push("\n");
+    pushDefine_(f, "XPD_M", "(M)    (M).r, (M).c, (M).data");
     pushDefine_(f, "XPD_M2X2", "(M) (M).m00, (M).m01, (M).m10, (M).m11");
     pushDefine_(f, "XPD_M3X3", "(M) (M).m00, (M).m01, (M).m02, (M).m10, (M).m11, (M).m12, (M).m20, (M).m21, (M).m22");
     pushDefine_(f, "XPD_M4X4", "(M) (M).m00, (M).m01, (M).m02, (M).m03, (M).m10, (M).m11, (M).m12, (M).m13, (M).m20, (M).m21, (M).m22, (M).m23, (M).m30, (M).m31, (M).m32, (M).m33");
@@ -163,30 +153,28 @@ int main() {
     push("\n\n");
 
 
-    for (usize i = 0; i < ctypes_count; ++i) {
-
-        char buffer[1024];
-        strcpy(buffer, ctypeAsStr(ctypes[i]));
-        push("#pragma region %s\n\n", strupper(buffer));
+    for (usize i = 0; i < ctypes_count; ++i) 
+    {
+        push("#pragma region %s\n\n", strupper(tmpf(ctypeAsStr(ctypes[i]))));
         
         #define ctype C(ctypes[i])
         #define vtype V(ctypes[i], mtype.as.m.c)
         #define vltype V(ctypes[i], mtype.as.m.c - 1)
-        #define vtype_(n) V(ctypes[i], 2)
+        #define vtype_(j) V(ctypes[i], j)
         #define qtype Q(ctypes[i])
         #define mtype mtypes[NB_M_VARIANTS * i + j]
 
         for (usize j = 0; j < NB_M_VARIANTS; ++j) {
             pushMatDef(f, mtype);
-            push("\n");
+            push("\n\n");
 
             if (j == 1) pushDefine(f, mtype, "diag", "(m00_, m11_) ((@o){.m00 = m00_, .m11 = m11_})");
             if (j == 2) pushDefine(f, mtype, "diag", "(m00_, m11_, m22_) ((@o){.m00 = m00_, .m11 = m11_, .m22 = m22_})");
             if (j == 3) pushDefine(f, mtype, "diag", "(m00_, m11_, m22_, m33_) ((@o){.m00 = m00_, .m11 = m11_, .m22 = m22_, .m33 = m33_})");
             
-            // if (j == 1) pushDefine(f, mtype, "_", "(m00_, m01_, m10_, m11_) ((@o){.m00 = m00_, .m11 = m11_})");
-            // if (j == 2) pushDefine(f, mtype, "_", "(m00_, m01_, m02_, m10_, m11_, m12_, m02_, m12_, m22_) ((@o){.m00 = m00_, .m11 = m11_, .m22 = m22_})");
-            // if (j == 3) pushDefine(f, mtype, "_", "(m00_, m11_, m22_, m33_) ((@o){.m00 = m00_, .m11 = m11_, .m22 = m22_, .m33 = m33_})");
+            if (j == 1) pushDefine(f, mtype, "_", "(m00_, m01_, m10_, m11_) ((@o){.m00 = m00_, .m01 = m01_, .m10 = m10_, .m11 = m11_})");
+            if (j == 2) pushDefine(f, mtype, "_", "(m00_, m01_, m02_, m10_, m11_, m12_, m20_, m21_, m22_) ((@o){.m00 = m00_, .m01 = m01_, .m02 = m02_, .m10 = m10_, .m11 = m11_, .m12 = m12_, .m20 = m20_, .m21 = m21_, .m22 = m22_})");
+            if (j == 3) pushDefine(f, mtype, "_", "(m00_, m01_, m02_, m03_, m10_, m11_, m12_, m13_, m20_, m21_, m22_, m23_, m30_, m31_, m32_, m33_) ((@o){.m00 = m00_, .m01 = m01_, .m02 = m02_, .m03 = m03_, .m10 = m10_, .m11 = m11_, .m12 = m12_, .m13 = m13_, .m20 = m20_, .m21 = m21_, .m22 = m22_, .m23 = m23_, .m30 = m30_, .m31 = m31_, .m32 = m32_, .m33 = m33_})");
 
             push("\n");
 
@@ -392,14 +380,13 @@ int main() {
             push("\n\n\n");
         }
 
-        push("#pragma endregion %s\n", buffer);
+        push("#pragma endregion %s\n", strupper(tmpf(ctypeAsStr(ctypes[i]))));
     }
 
+    // pushImplementation(f);
     pushStripPrefix(f);
 
     push("\n#endif // _SL_MATRIX_H_\n\n");
     pushGenerationData(f, "matrix.h");
-    fclose(f);
-
-    return 0;
+    return fclose(f);
 }

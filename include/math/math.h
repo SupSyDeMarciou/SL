@@ -195,15 +195,15 @@ SL_header double SL_drand();
 /// @param low Lowest value
 /// @param high Highest value
 /// @return The randomly generated float
-SL_header float SL_frand_between(float low, float high);
+SL_header float SL_frand_in(float low, float high);
 /// @brief Generate a pseudo-random double in the range [low, high]
 /// @param low Lowest value
 /// @param high Highest value
 /// @return The randomly generated double
-SL_header double SL_drand_between(double low, double high);
+SL_header double SL_drand_in(double low, double high);
 
 #ifndef _WIN32
-SL_header void sincos(double angle, double *s, double *c);
+    SL_header void sincos(double angle, double *s, double *c);
 #endif
 
 
@@ -251,31 +251,31 @@ SL_header void sincos(double angle, double *s, double *c);
 #   define u32rand_in               SL_u32rand_in
 #   define frand                    SL_frand
 #   define drand                    SL_drand
-#   define frand_between            SL_frand_between
-#   define drand_between            SL_drand_between
+#   define frand_in                 SL_frand_in
+#   define drand_in                 SL_drand_in
 #endif
 
 
 
 #ifdef SL_IMPLEMENTATION
-SL_header uint SL_umin(uint a, uint b) { return a < b ? a : b; }
-SL_header u64 SL_u64min(u64 a, u64 b) { return a < b ? a : b; }
-SL_header int SL_imin(int a, int b) { return a < b ? a : b; }
-SL_header i64 SL_i64min(i64 a, i64 b) { return a < b ? a : b; }
-SL_header float SL_fmin(float a, float b) { return a < b ? a : b; }
+SL_header u32 SL_umin(u32 a, u32 b)          { return a < b ? a : b; }
+SL_header u64 SL_u64min(u64 a, u64 b)        { return a < b ? a : b; }
+SL_header int SL_imin(int a, int b)          { return a < b ? a : b; }
+SL_header i64 SL_i64min(i64 a, i64 b)        { return a < b ? a : b; }
+SL_header float SL_fmin(float a, float b)    { return a < b ? a : b; }
 SL_header double SL_dmin(double a, double b) { return a < b ? a : b; }
 
-SL_header uint SL_umax(uint a, uint b) { return a > b ? a : b; }
-SL_header u64 SL_u64max(u64 a, u64 b) { return a > b ? a : b; }
-SL_header int SL_imax(int a, int b) { return a > b ? a : b; }
-SL_header i64 SL_i64max(i64 a, i64 b) { return a > b ? a : b; }
-SL_header float SL_fmax(float a, float b) { return a > b ? a : b; }
+SL_header u32 SL_umax(u32 a, u32 b)          { return a > b ? a : b; }
+SL_header u64 SL_u64max(u64 a, u64 b)        { return a > b ? a : b; }
+SL_header int SL_imax(int a, int b)          { return a > b ? a : b; }
+SL_header i64 SL_i64max(i64 a, i64 b)        { return a > b ? a : b; }
+SL_header float SL_fmax(float a, float b)    { return a > b ? a : b; }
 SL_header double SL_dmax(double a, double b) { return a > b ? a : b; }
 
-SL_header int SL_isign(int i) { return i == 0 ? 0 : i > 0 ? 1 : -1; }
-SL_header i64 SL_i64sign(i64 i) { return i == 0 ? 0 : i > 0 ? 1 : -1; }
-SL_header float SL_fsign(float f) { return f == 0.0f ? 0.0f : f > 0.0f ? 1.0f : -1.0f; }
-SL_header double SL_dsign(double f) { return f == 0.0 ? 0.0 : f > 0.0 ? 1.0 : -1.0; }
+SL_header int SL_isign(int i)   { return i == 0    ? 0    : i > 0    ? 1    : -1;    }
+SL_header i64 SL_i64sign(i64 i) { return i == 0    ? 0    : i > 0    ? 1    : -1;    }
+SL_header f32 SL_fsign(f32 f)   { return f == 0.0f ? 0.0f : f > 0.0f ? 1.0f : -1.0f; }
+SL_header f64 SL_dsign(f64 f)   { return f == 0.0  ? 0.0  : f > 0.0  ? 1.0  : -1.0;  }
 
 SL_header float SL_fstep(float f, float step_size) { return floorf(f / step_size) * step_size; }
 SL_header double SL_dstep(double f, double step_size) { return floor(f / step_size) * step_size; }
@@ -322,15 +322,15 @@ SL_header u32 SL_u32rand_in(u32 low, u32 high) { return high <= low ? low : low 
 
 SL_header float SL_frand() { return SL_inplaceU32ToFloat01(SL_u32rand()); }
 SL_header double SL_drand() { return SL_inplaceU64ToDouble01(((u64)SL_u32rand() << 32LLU) | (u64)SL_u32rand()); }
-SL_header float SL_frand_between(float low, float high) { return low + SL_frand() * (high - low); }
-SL_header double SL_drand_between(double low, double high) { return low + SL_drand() * (high - low); }
+SL_header float SL_frand_in(float low, float high) { return low + SL_frand() * (high - low); }
+SL_header double SL_drand_in(double low, double high) { return low + SL_drand() * (high - low); }
 
 #ifndef _WIN32
-SL_header void sincos(double angle, double *s, double *c)
-{
-    *s = sin(angle);
-    *c = cos(angle);
-}
+    SL_header void sincos(double angle, double *s, double *c)
+    {
+        *s = sin(angle);
+        *c = cos(angle);
+    }
 #endif
 #endif
 #endif // _SL_MATH_H_

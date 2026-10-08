@@ -10,9 +10,6 @@
 */
 
 #include "../base.h"
-#include <errno.h>
-#include <pthread.h>
-#include <time.h>
 
 /// @brief Sleep for nano seconds
 /// @param nano_seconds Number of nanoseconds to sleep
@@ -25,36 +22,35 @@ int SL_sleep_u(usize micro_seconds);
 /// @brief Sleep for nano seconds
 /// @param nano_seconds Number of milliseconds to sleep
 /// @return Error code from `nanosleep` if failed
-int Sl_sleep_m(usize milli_seconds);
+int SL_sleep_m(usize milli_seconds);
 
 #define  __SL_ASYNC_VAR2_1_COM(xpd, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(, xpd(__VA_ARGS__))
-#define  __SL_ASYNC_VAR2_2_COM(xpd, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(, __SL_ASYNC_VAR2_1_COM(xpd, __VA_ARGS__))
-#define  __SL_ASYNC_VAR2_3_COM(xpd, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(, __SL_ASYNC_VAR2_2_COM(xpd, __VA_ARGS__))
-#define  __SL_ASYNC_VAR2_4_COM(xpd, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(, __SL_ASYNC_VAR2_3_COM(xpd, __VA_ARGS__))
-#define  __SL_ASYNC_VAR2_5_COM(xpd, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(, __SL_ASYNC_VAR2_4_COM(xpd, __VA_ARGS__))
-#define  __SL_ASYNC_VAR2_6_COM(xpd, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(, __SL_ASYNC_VAR2_5_COM(xpd, __VA_ARGS__))
-#define  __SL_ASYNC_VAR2_7_COM(xpd, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(, __SL_ASYNC_VAR2_6_COM(xpd, __VA_ARGS__))
-#define  __SL_ASYNC_VAR2_8_COM(xpd, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(, __SL_ASYNC_VAR2_7_COM(xpd, __VA_ARGS__))
-#define  __SL_ASYNC_VAR2_9_COM(xpd, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(, __SL_ASYNC_VAR2_8_COM(xpd, __VA_ARGS__))
-#define __SL_ASYNC_VAR2_10_COM(xpd, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(, __SL_ASYNC_VAR2_9_COM(xpd, __VA_ARGS__))
+#define  __SL_ASYNC_VAR2_2_COM(xpd, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(, __SL_ASYNC_VAR2_1_COM( xpd, __VA_ARGS__))
+#define  __SL_ASYNC_VAR2_3_COM(xpd, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(, __SL_ASYNC_VAR2_2_COM( xpd, __VA_ARGS__))
+#define  __SL_ASYNC_VAR2_4_COM(xpd, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(, __SL_ASYNC_VAR2_3_COM( xpd, __VA_ARGS__))
+#define  __SL_ASYNC_VAR2_5_COM(xpd, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(, __SL_ASYNC_VAR2_4_COM( xpd, __VA_ARGS__))
+#define  __SL_ASYNC_VAR2_6_COM(xpd, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(, __SL_ASYNC_VAR2_5_COM( xpd, __VA_ARGS__))
+#define  __SL_ASYNC_VAR2_7_COM(xpd, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(, __SL_ASYNC_VAR2_6_COM( xpd, __VA_ARGS__))
+#define  __SL_ASYNC_VAR2_8_COM(xpd, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(, __SL_ASYNC_VAR2_7_COM( xpd, __VA_ARGS__))
+#define  __SL_ASYNC_VAR2_9_COM(xpd, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(, __SL_ASYNC_VAR2_8_COM( xpd, __VA_ARGS__))
+#define __SL_ASYNC_VAR2_10_COM(xpd, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(, __SL_ASYNC_VAR2_9_COM( xpd, __VA_ARGS__))
 #define __SL_ASYNC_VAR2_11_COM(xpd, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(, __SL_ASYNC_VAR2_10_COM(xpd, __VA_ARGS__))
 
 #define  __SL_ASYNC_VAR2_1(xpd, sep, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(sep xpd(__VA_ARGS__))
-#define  __SL_ASYNC_VAR2_2(xpd, sep, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(sep __SL_ASYNC_VAR2_1(xpd, sep, __VA_ARGS__))
-#define  __SL_ASYNC_VAR2_3(xpd, sep, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(sep __SL_ASYNC_VAR2_2(xpd, sep, __VA_ARGS__))
-#define  __SL_ASYNC_VAR2_4(xpd, sep, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(sep __SL_ASYNC_VAR2_3(xpd, sep, __VA_ARGS__))
-#define  __SL_ASYNC_VAR2_5(xpd, sep, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(sep __SL_ASYNC_VAR2_4(xpd, sep, __VA_ARGS__))
-#define  __SL_ASYNC_VAR2_6(xpd, sep, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(sep __SL_ASYNC_VAR2_5(xpd, sep, __VA_ARGS__))
-#define  __SL_ASYNC_VAR2_7(xpd, sep, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(sep __SL_ASYNC_VAR2_6(xpd, sep, __VA_ARGS__))
-#define  __SL_ASYNC_VAR2_8(xpd, sep, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(sep __SL_ASYNC_VAR2_7(xpd, sep, __VA_ARGS__))
-#define  __SL_ASYNC_VAR2_9(xpd, sep, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(sep __SL_ASYNC_VAR2_8(xpd, sep, __VA_ARGS__))
-#define __SL_ASYNC_VAR2_10(xpd, sep, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(sep __SL_ASYNC_VAR2_9(xpd, sep, __VA_ARGS__))
+#define  __SL_ASYNC_VAR2_2(xpd, sep, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(sep __SL_ASYNC_VAR2_1( xpd, sep, __VA_ARGS__))
+#define  __SL_ASYNC_VAR2_3(xpd, sep, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(sep __SL_ASYNC_VAR2_2( xpd, sep, __VA_ARGS__))
+#define  __SL_ASYNC_VAR2_4(xpd, sep, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(sep __SL_ASYNC_VAR2_3( xpd, sep, __VA_ARGS__))
+#define  __SL_ASYNC_VAR2_5(xpd, sep, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(sep __SL_ASYNC_VAR2_4( xpd, sep, __VA_ARGS__))
+#define  __SL_ASYNC_VAR2_6(xpd, sep, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(sep __SL_ASYNC_VAR2_5( xpd, sep, __VA_ARGS__))
+#define  __SL_ASYNC_VAR2_7(xpd, sep, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(sep __SL_ASYNC_VAR2_6( xpd, sep, __VA_ARGS__))
+#define  __SL_ASYNC_VAR2_8(xpd, sep, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(sep __SL_ASYNC_VAR2_7( xpd, sep, __VA_ARGS__))
+#define  __SL_ASYNC_VAR2_9(xpd, sep, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(sep __SL_ASYNC_VAR2_8( xpd, sep, __VA_ARGS__))
+#define __SL_ASYNC_VAR2_10(xpd, sep, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(sep __SL_ASYNC_VAR2_9( xpd, sep, __VA_ARGS__))
 #define __SL_ASYNC_VAR2_11(xpd, sep, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(sep __SL_ASYNC_VAR2_10(xpd, sep, __VA_ARGS__))
 
-#define __SL_ASYNC_VAR2_COM(xpd, ...) __VA_OPT__(__SL_ASYNC_VAR2_11_COM(xpd, __VA_ARGS__))
+#define __SL_ASYNC_VAR2_COM(xpd, ...)  __VA_OPT__(__SL_ASYNC_VAR2_11_COM(xpd, __VA_ARGS__))
 #define __SL_ASYNC_VAR2(xpd, sep, ...) __VA_OPT__(__SL_ASYNC_VAR2_11(xpd, sep, __VA_ARGS__))
 
-#define __SL_ASYNC_ARG_TYPE(var_type, var_name) var_type
 #define __SL_ASYNC_ARG_NAME(var_type, var_name) var_name
 #define __SL_ASYNC_ARG_DECL(var_type, var_name) var_type var_name
 #define __SL_ASYNC_ARG_NULL(var_type, var_name) *(var_type *)NULL
@@ -101,7 +97,7 @@ typedef enum sl_task_status
 bool __SL_await(const void *task, usize task_thread_offset, usize ret_size, usize task_ret_offset, void *usr_ret);
 /// @brief Waits until the task is complete
 /// @param task The task to complete
-/// @param ... A pointer in which to store the return value of the task
+/// @param ... A pointer in which to store the return value of the task, or `NULL` (defaults to `NULL`)
 /// @return Wether the task was successfuly completed
 /// @note Error status is recorded in SL_ERROR
 #define SL_await(task, ...) __SL_await((task), offsetof(typeof(*task), thread), sizeof((task)->ret_val), offsetof(typeof(*task), ret_val), (NULL, ##__VA_ARGS__))
@@ -120,21 +116,21 @@ bool __SL_await(const void *task, usize task_thread_offset, usize ret_size, usiz
 
 
 #ifdef SL_IMPLEMENTATION
-int sleep_n(usize nano_seconds)
+int SL_sleep_n(usize nano_seconds)
 {
     struct timespec time = { .tv_sec = nano_seconds / 1000*1000*1000, .tv_nsec = (nano_seconds  % 1000*1000*1000) };
     int err = 0;
     while (nanosleep(&time, &time) < 0 && (err = errno) == EINTR);
     return err;
 }
-int sleep_u(usize micro_seconds)
+int SL_sleep_u(usize micro_seconds)
 {
     struct timespec time = { .tv_sec = micro_seconds / 1000*1000,     .tv_nsec = (micro_seconds % 1000*1000)*1000 };
     int err = 0;
     while (nanosleep(&time, &time) < 0 && (err = errno) == EINTR);
     return err;
 }
-int sleep_m(usize milli_seconds)
+int SL_sleep_m(usize milli_seconds)
 {
     struct timespec time = { .tv_sec = milli_seconds / 1000,          .tv_nsec = (milli_seconds % 1000)*1000*1000 };
     int err = 0;

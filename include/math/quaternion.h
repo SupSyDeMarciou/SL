@@ -8,15 +8,17 @@
 
 #define SL_XPD_Q(Q) (Q).w, (Q).x, (Q).y, (Q).z
 #define SL_FMT_Q(fmt) "quat("fmt" + "fmt"i + "fmt"j + "fmt"k)"
+
 /// @brief Quaternion of float
 typedef union {
     float data[4];
     struct { float a, b, c, d; };
     struct { float w, x, y, z; };
     struct { float r; union { fv3 iv; struct { float i, j, k; }; }; };
+    fv4 fv4;
 } fq;
 
-#define SL_fq_zero     ((fq){0})
+#define SL_fq_zero     ((fq){.a = 0, .b = 0, .c = 0, .d = 0})
 #define SL_fq_identity ((fq){.a = 1, .b = 0, .c = 0, .d = 0})
 
 /// @brief Quaternion of double
@@ -25,9 +27,10 @@ typedef union {
     struct { double a, b, c, d; };
     struct { double w, x, y, z; };
     struct { double r; union { dv3 iv; struct { double i, j, k; }; }; };
+    dv4 dv4;
 } dq;
 
-#define SL_dq_zero     ((dq){0})
+#define SL_dq_zero     ((dq){.a = 0, .b = 0, .c = 0, .d = 0})
 #define SL_dq_identity ((dq){.a = 1, .b = 0, .c = 0, .d = 0})
 
 
@@ -38,9 +41,6 @@ typedef union {
 #define SL_dqv(R, IV)      ((dq){.r = R, .iv = IV})
 #define SL_fqq(Q)          ((fq){SL_XPD_Q(Q)})
 #define SL_dqq(Q)          ((dq){SL_XPD_Q(Q)})
-
-#define SL_fqasfv4(Q)     (*(fv4*)Q.data)
-#define SL_dqasdv4(Q)     (*(dv4*)Q.data)
 
 
 
@@ -148,6 +148,34 @@ SL_header dq SL_dqmul(dq lhs, dq rhs)
 #else
 ;
 #endif
+/// @brief Component-wise multiplication of a fq with a scalar
+SL_header fq SL_fqmuls(fq q, float s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (fq) {
+        .w = q.w * s,
+        .x = q.x * s,
+        .y = q.y * s,
+        .z = q.z * s
+    };
+}
+#else
+;
+#endif
+/// @brief Component-wise multiplication of a dq with a scalar
+SL_header dq SL_dqmuls(dq q, double s)
+#if defined(SL_IMPLEMENTATION)
+{
+    return (dq) {
+        .w = q.w * s,
+        .x = q.x * s,
+        .y = q.y * s,
+        .z = q.z * s
+    };
+}
+#else
+;
+#endif
 /// @brief Negation of a fq
 SL_header fq SL_fqneg(fq q)
 #if defined(SL_IMPLEMENTATION)
@@ -171,34 +199,6 @@ SL_header dq SL_dqneg(dq q)
         .x = -q.x,
         .y = -q.y,
         .z = -q.z
-    };
-}
-#else
-;
-#endif
-/// @brief Component-wise multiplication of a fq with a scalar
-SL_header fq SL_fqscale(fq q, float s)
-#if defined(SL_IMPLEMENTATION)
-{
-    return (fq) {
-        .w = q.w * s,
-        .x = q.x * s,
-        .y = q.y * s,
-        .z = q.z * s
-    };
-}
-#else
-;
-#endif
-/// @brief Component-wise multiplication of a dq with a scalar
-SL_header dq SL_dqscale(dq q, double s)
-#if defined(SL_IMPLEMENTATION)
-{
-    return (dq) {
-        .w = q.w * s,
-        .x = q.x * s,
-        .y = q.y * s,
-        .z = q.z * s
     };
 }
 #else
@@ -554,7 +554,7 @@ SL_header dv3 SL_dqrot(dq q, dv3 v)
 #endif
 /// @brief Spherical interpolation with parameter float t from fq a to fq b
 /// @note With unit quaternions, this acts as an interpolation between two rotations
-SL_header fq SL_fqslerp(fq a, fq b, float t)
+SL_header fq SL_fqserp(fq a, fq b, float t)
 #if defined(SL_IMPLEMENTATION)
 {
     return SL_fqmul(a, SL_fqpow(SL_fqmul(SL_fqinv(a), b), t));
@@ -564,7 +564,7 @@ SL_header fq SL_fqslerp(fq a, fq b, float t)
 #endif
 /// @brief Spherical interpolation with parameter double t from dq a to dq b
 /// @note With unit quaternions, this acts as an interpolation between two rotations
-SL_header dq SL_dqslerp(dq a, dq b, double t)
+SL_header dq SL_dqserp(dq a, dq b, double t)
 #if defined(SL_IMPLEMENTATION)
 {
     return SL_dqmul(a, SL_dqpow(SL_dqmul(SL_dqinv(a), b), t));
@@ -574,7 +574,7 @@ SL_header dq SL_dqslerp(dq a, dq b, double t)
 #endif
 /// @brief Spherical interpolation with parameter float t from fq a to fq b, both assumed of unit length
 /// @note This acts as an interpolation between two rotations, allways following the shortest path
-SL_header fq SL_fqslerp_u(fq a, fq b, float t)
+SL_header fq SL_fqserp_u(fq a, fq b, float t)
 #if defined(SL_IMPLEMENTATION)
 {
     fq inv_a = SL_fqtrsp(a);
@@ -588,7 +588,7 @@ SL_header fq SL_fqslerp_u(fq a, fq b, float t)
 #endif
 /// @brief Spherical interpolation with parameter double t from dq a to dq b, both assumed of unit length
 /// @note This acts as an interpolation between two rotations, allways following the shortest path
-SL_header dq SL_dqslerp_u(dq a, dq b, double t)
+SL_header dq SL_dqserp_u(dq a, dq b, double t)
 #if defined(SL_IMPLEMENTATION)
 {
     dq inv_a = SL_dqtrsp(a);
@@ -713,7 +713,7 @@ SL_header dv3 SL_dqto_euler(dq q)
 ;
 #endif
 /// @brief Unit fq based on angle-axis pair
-SL_header fq SL_fqfrom_angleAxis(double angle, fv3 axis)
+SL_header fq SL_fqfrom_axisAngle(fv3 axis, double angle)
 #if defined(SL_IMPLEMENTATION)
 {
     double sin_angle = sin(angle *= 0.5);
@@ -726,7 +726,7 @@ SL_header fq SL_fqfrom_angleAxis(double angle, fv3 axis)
 ;
 #endif
 /// @brief Unit dq based on angle-axis pair
-SL_header dq SL_dqfrom_angleAxis(double angle, dv3 axis)
+SL_header dq SL_dqfrom_axisAngle(dv3 axis, double angle)
 #if defined(SL_IMPLEMENTATION)
 {
     double sin_angle = sin(angle *= 0.5);
@@ -740,7 +740,7 @@ SL_header dq SL_dqfrom_angleAxis(double angle, dv3 axis)
 #endif
 /// @brief Angle-axis pair based on assumed unit fq
 /// @note The returned vector is of the form `(fv4){ .xyz = axis, .w = angle }`
-SL_header fv4 SL_fqto_angleAxis(fq q)
+SL_header fv4 SL_fqto_axisAngle(fq q)
 #if defined(SL_IMPLEMENTATION)
 {
     double sin_half_angle = SL_fv3len(q.iv);
@@ -754,7 +754,7 @@ SL_header fv4 SL_fqto_angleAxis(fq q)
 #endif
 /// @brief Angle-axis pair based on assumed unit dq
 /// @note The returned vector is of the form `(dv4){ .xyz = axis, .w = angle }`
-SL_header dv4 SL_dqto_angleAxis(dq q)
+SL_header dv4 SL_dqto_axisAngle(dq q)
 #if defined(SL_IMPLEMENTATION)
 {
     double sin_half_angle = SL_dv3len(q.iv);
@@ -773,7 +773,7 @@ SL_header fq SL_fqfrom_fromTo(fv3 from, fv3 to)
     fv3 axis = SL_fv3cross(to, from);
     if (axis.x || axis.y || axis.z) {
         float angle = acos(SL_fv3dot(from, to));
-        return SL_fqfrom_angleAxis(angle, SL_fv3norm(axis));
+        return SL_fqfrom_axisAngle(SL_fv3norm(axis), angle);
     }
     return SL_fq_identity;
 }
@@ -787,45 +787,9 @@ SL_header dq SL_dqfrom_fromTo(dv3 from, dv3 to)
     dv3 axis = SL_dv3cross(to, from);
     if (axis.x || axis.y || axis.z) {
         float angle = acos(SL_dv3dot(from, to));
-        return SL_dqfrom_angleAxis(angle, SL_dv3norm(axis));
+        return SL_dqfrom_axisAngle(SL_dv3norm(axis), angle);
     }
     return SL_dq_identity;
-}
-#else
-;
-#endif
-/// @brief fq from a fv4
-SL_header fq SL_fqfrom_v4(fv4 v)
-#if defined(SL_IMPLEMENTATION)
-{
-    return (fq) { .w = v.x, .x = v.y, .y = v.z, .z = v.w };
-}
-#else
-;
-#endif
-/// @brief dq from a dv4
-SL_header dq SL_dqfrom_v4(dv4 v)
-#if defined(SL_IMPLEMENTATION)
-{
-    return (dq) { .w = v.x, .x = v.y, .y = v.z, .z = v.w };
-}
-#else
-;
-#endif
-/// @brief fq to a fv4
-SL_header fv4 SL_fqto_v4(fq q)
-#if defined(SL_IMPLEMENTATION)
-{
-    return (fv4) { .x = q.w, .y = q.x, .z = q.y, .w = q.z };
-}
-#else
-;
-#endif
-/// @brief dq to a dv4
-SL_header dv4 SL_dqto_v4(dq q)
-#if defined(SL_IMPLEMENTATION)
-{
-    return (dv4) { .x = q.w, .y = q.x, .z = q.y, .w = q.z };
 }
 #else
 ;
@@ -846,8 +810,6 @@ SL_header dv4 SL_dqto_v4(dq q)
 #   define  dqv SL_dqv
 #   define  fqq SL_fqq
 #   define  dqq SL_dqq
-#   define  fqasfv4 SL_fqasfv4
-#   define  dqasdv4 SL_dqasdv4
 #   define  fqequ SL_fqequ
 #   define  dqequ SL_dqequ
 #   define  fqadd SL_fqadd
@@ -856,10 +818,10 @@ SL_header dv4 SL_dqto_v4(dq q)
 #   define  dqsub SL_dqsub
 #   define  fqmul SL_fqmul
 #   define  dqmul SL_dqmul
+#   define  fqmuls SL_fqmuls
+#   define  dqmuls SL_dqmuls
 #   define  fqneg SL_fqneg
 #   define  dqneg SL_dqneg
-#   define  fqscale SL_fqscale
-#   define  dqscale SL_dqscale
 #   define  fqlen_sqr SL_fqlen_sqr
 #   define  dqlen_sqr SL_dqlen_sqr
 #   define  fqlen SL_fqlen
@@ -884,26 +846,22 @@ SL_header dv4 SL_dqto_v4(dq q)
 #   define  dqpow_u SL_dqpow_u
 #   define  fqrot SL_fqrot
 #   define  dqrot SL_dqrot
-#   define  fqslerp SL_fqslerp
-#   define  dqslerp SL_dqslerp
-#   define  fqslerp_u SL_fqslerp_u
-#   define  dqslerp_u SL_dqslerp_u
+#   define  fqserp SL_fqserp
+#   define  dqserp SL_dqserp
+#   define  fqserp_u SL_fqserp_u
+#   define  dqserp_u SL_dqserp_u
 #   define  fqfrom_euler SL_fqfrom_euler
 #   define  dqfrom_euler SL_dqfrom_euler
 #   define  fqto_euler SL_fqto_euler
 #   define  dqto_euler SL_dqto_euler
-#   define  fqfrom_angleAxis SL_fqfrom_angleAxis
-#   define  dqfrom_angleAxis SL_dqfrom_angleAxis
-#   define  fqto_angleAxis SL_fqto_angleAxis
-#   define  dqto_angleAxis SL_dqto_angleAxis
+#   define  fqfrom_axisAngle SL_fqfrom_axisAngle
+#   define  dqfrom_axisAngle SL_dqfrom_axisAngle
+#   define  fqto_axisAngle SL_fqto_axisAngle
+#   define  dqto_axisAngle SL_dqto_axisAngle
 #   define  fqfrom_fromTo SL_fqfrom_fromTo
 #   define  dqfrom_fromTo SL_dqfrom_fromTo
-#   define  fqfrom_v4 SL_fqfrom_v4
-#   define  dqfrom_v4 SL_dqfrom_v4
-#   define  fqto_v4 SL_fqto_v4
-#   define  dqto_v4 SL_dqto_v4
 #endif
 
 #endif // _SL_QUATERNION_H_
 
-// quaternion.h: THIS FILE WAS GENERATED ON 30/09/2026 AT 02:22:56
+// quaternion.h: THIS FILE WAS GENERATED ON 08/10/2026 AT 04:08:07
