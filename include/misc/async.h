@@ -5,12 +5,13 @@
  *  THREAD: Utilities for thread manipulation.
  *  
  *  TODO:
- *  - Try finding better declarative statement
- * 
-*/
+ *  - Try to find better declarative statement
+ *  - Try to add single threaded coroutines (look at Tsoding's coroutines ??)
+ */
 
 #include "../base.h"
 
+#if defined(__SL_POSIX__) &&  _POSIX_C_SOURCE >= 199309L
 /// @brief Sleep for nano seconds
 /// @param nano_seconds Number of nanoseconds to sleep
 /// @return Error code from `nanosleep` if failed
@@ -23,6 +24,7 @@ int SL_sleep_u(usize micro_seconds);
 /// @param nano_seconds Number of milliseconds to sleep
 /// @return Error code from `nanosleep` if failed
 int SL_sleep_m(usize milli_seconds);
+#endif
 
 #define  __SL_ASYNC_VAR2_1_COM(xpd, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(, xpd(__VA_ARGS__))
 #define  __SL_ASYNC_VAR2_2_COM(xpd, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(, __SL_ASYNC_VAR2_1_COM( xpd, __VA_ARGS__))
@@ -70,22 +72,27 @@ int SL_sleep_m(usize milli_seconds);
 /// @warning Due to the internals of how this works, you cannot declare a void return type for an async function. Just use int and ignore the return value instead
 /// @note Macros are declared for up to 12 parameters
 #define SL_DEF_ASYNC(func, ...)                                                                                                                                                                                                 \
-    typedef struct func##_task { sl_task_status status; pthread_t thread; __SL_ASYNC_VAR2(__SL_ASYNC_ARG_DECL, ;, ##__VA_ARGS__); typeof(func(__SL_ASYNC_VAR2_COM(__SL_ASYNC_ARG_NULL, ##__VA_ARGS__))) ret_val; } func##_task; \
-    void *__##func##_async_exec(func##_task *task) {                                                                                                                                                                            \
+    typedef struct SL_task(func) {                                                                                                                                                                                              \
+        sl_task_status status;                                                                                                                                                                                                  \
+        pthread_t thread;                                                                                                                                                                                                       \
+        __SL_ASYNC_VAR2(__SL_ASYNC_ARG_DECL, ;, ##__VA_ARGS__);                                                                                                                                                                 \
+        typeof(func(__SL_ASYNC_VAR2_COM(__SL_ASYNC_ARG_NULL, ##__VA_ARGS__))) ret_val;                                                                                                                                          \
+    } SL_task(func);                                                                                                                                                                                                            \
+    void *CAT(CAT(__, SL_async(func)), _exec) (SL_task(func) *task) {                                                                                                                                                           \
         task->status = SL_TASK_WORKING;                                                                                                                                                                                         \
         task->ret_val = func(__SL_ASYNC_VAR2_COM(__SL_ASYNC_ARG_CALL, ##__VA_ARGS__));                                                                                                                                          \
         task->status = SL_TASK_DONE;                                                                                                                                                                                            \
         pthread_exit(NULL);                                                                                                                                                                                                     \
     }                                                                                                                                                                                                                           \
-    const func##_task *func##_async_full(__SL_ASYNC_VAR2_COM(__SL_ASYNC_ARG_DECL, ##__VA_ARGS__) __VA_OPT__(,) const pthread_attr_t *attr) {                                                                                    \
-        func##_task *task = malloc(sizeof(func##_task));                                                                                                                                                                        \
+    const SL_task(func) *CAT(SL_async(func), _full) (__SL_ASYNC_VAR2_COM(__SL_ASYNC_ARG_DECL, ##__VA_ARGS__) __VA_OPT__(,) const pthread_attr_t *attr) {                                                                          \
+        SL_task(func) *task = malloc(sizeof(SL_task(func)));                                                                                                                                                                        \
         task->status = SL_TASK_WAIT;                                                                                                                                                                                            \
         __SL_ASYNC_VAR2(__SL_ASYNC_ARG_MOVE, ;, ##__VA_ARGS__);                                                                                                                                                                 \
-        if (pthread_create(&task->thread, attr, (void *(*)(void *))__##func##_async_exec, task))                                                                                                                                \
+        if (pthread_create(&task->thread, attr, (void *(*)(void *))CAT(CAT(__, SL_async(func)), _exec), task))                                                                                                                  \
             return free((void *)task), __SL_ERROR(SL_ERROR_THREAD_CREATE), NULL;                                                                                                                                                \
         return task;                                                                                                                                                                                                            \
     }                                                                                                                                                                                                                           \
-    const func##_task *func##_async(__SL_ASYNC_VAR2_COM(__SL_ASYNC_ARG_DECL, ##__VA_ARGS__)) { return func##_async_full(__SL_ASYNC_VAR2_COM(__SL_ASYNC_ARG_NAME, ##__VA_ARGS__) __VA_OPT__(,) NULL); }
+    const SL_task(func) *SL_async(func) (__SL_ASYNC_VAR2_COM(__SL_ASYNC_ARG_DECL, ##__VA_ARGS__)) { return CAT(SL_async(func), _full)(__SL_ASYNC_VAR2_COM(__SL_ASYNC_ARG_NAME, ##__VA_ARGS__) __VA_OPT__(,) NULL); }
 
 typedef enum sl_task_status
 {
@@ -93,6 +100,13 @@ typedef enum sl_task_status
     SL_TASK_WORKING,
     SL_TASK_DONE
 } sl_task_status;
+
+/// @brief Asynchronous version of the function
+/// @note A definition via `SL_DEF_ASYNC` should be made to allow asynchronous call 
+#define SL_async(func) CAT(func, _async)
+#define SL_task(func)  CAT(func, _task)
+/// @brief Get the status of a running task
+#define SL_taskStatus(task) ((sl_task_status)(task)->status)
 
 bool __SL_await(const void *task, usize task_thread_offset, usize ret_size, usize task_ret_offset, void *usr_ret);
 /// @brief Waits until the task is complete
@@ -109,6 +123,8 @@ bool __SL_await(const void *task, usize task_thread_offset, usize ret_size, usiz
 #   define  sleep_u             SL_sleep_u
 #   define  sleep_m             SL_sleep_m
     typedef sl_task_status      task_status;
+#   define  async               SL_async
+#   define  taskStatus          SL_taskStatus
 #   define  await               SL_await
 #   define  DEF_ASYNC           SL_DEF_ASYNC
 #endif
@@ -116,6 +132,7 @@ bool __SL_await(const void *task, usize task_thread_offset, usize ret_size, usiz
 
 
 #ifdef SL_IMPLEMENTATION
+#if defined(__SL_POSIX__) &&  _POSIX_C_SOURCE >= 199309L
 int SL_sleep_n(usize nano_seconds)
 {
     struct timespec time = { .tv_sec = nano_seconds / 1000*1000*1000, .tv_nsec = (nano_seconds  % 1000*1000*1000) };
@@ -137,15 +154,19 @@ int SL_sleep_m(usize milli_seconds)
     while (nanosleep(&time, &time) < 0 && (err = errno) == EINTR);
     return err;
 }
+#endif
 
 bool __SL_await(const void *task, usize task_thread_offset, usize ret_size, usize task_ret_offset, void *usr_ret)
 {
-    if (!task) __SL_ERROR(SL_ERROR_THREAD_CREATE), false;
+    if (!task) return __SL_ERROR(SL_ERROR_THREAD_CREATE), false;
+
     pthread_t thread = *(pthread_t *)(task + task_thread_offset);
+    
     if (pthread_join(thread, NULL))  
         return pthread_cancel(thread), free((void *)task), __SL_ERROR(SL_ERROR_THREAD_JOIN), false;
     if (usr_ret && !memcpy(usr_ret, task + task_ret_offset, ret_size)) 
         return free((void *)task), __SL_ERROR(SL_ERROR_MEMORY), false;
+    
     return free((void *)task), true;
 }
 #endif

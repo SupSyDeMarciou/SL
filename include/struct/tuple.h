@@ -3,17 +3,17 @@
 
 #include "../base.h"
 
-#define SL_DEF_TUPLE2(t0_, t1_)                typedef struct tuple2(t0_, t1_) { u8 count[0][2]; t0 d0; t1 d1; } tuple2(t0_, t1_)
-#define SL_DEF_TUPLE3(t0_, t1_, t2_)           typedef struct tuple3(t0_, t1_, t2_) { u8 count[0][3]; t0 d0; t1 d1; t2 d2; } tuple3(t0_, t1_, t2_)
-#define SL_DEF_TUPLE4(t0_, t1_, t2_, t3_)      typedef struct tuple4(t0_, t1_, t2_, t3_) { u8 count[0][4]; t0 d0; t1 d1; t2 d2; t3 d3; } tuple4(t0_, t1_, t2_, t3_)
-#define SL_DEF_TUPLE5(t0_, t1_, t2_, t3_, t4_) typedef struct tuple5(t0_, t1_, t2_, t3_, t4_) { u8 count[0][5]; t0 d0; t1 d1; t2 d2; t3 d3; t4 d4; } tuple5(t0_, t1_, t2_, t3_, t4_)
+#define SL_DEF_TUPLE2(t0, t1)             typedef struct tuple2(t0, t1)             { u8 count[0][2]; t0 v0; t1 v1; }                      tuple2(t0, t1)
+#define SL_DEF_TUPLE3(t0, t1, t2)         typedef struct tuple3(t0, t1, t2)         { u8 count[0][3]; t0 v0; t1 v1; t2 v2; }               tuple3(t0, t1, t2)
+#define SL_DEF_TUPLE4(t0, t1, t2, t3)     typedef struct tuple4(t0, t1, t2, t3)     { u8 count[0][4]; t0 v0; t1 v1; t2 v2; t3 v3; }        tuple4(t0, t1, t2, t3)
+#define SL_DEF_TUPLE5(t0, t1, t2, t3, t4) typedef struct tuple5(t0, t1, t2, t3, t4) { u8 count[0][5]; t0 v0; t1 v1; t2 v2; t3 v3; t4 v4; } tuple5(t0, t1, t2, t3, t4)
 
 #define SL_DEF_TUPLE(n, ...) SL_DEF_TUPPLE##n(__VA_ARGS__)
 
-#define tuple2(t0_, t1_) CAT(CAT(tuple_, t0_), t1_)
-#define tuple3(t0_, t1_, t2_) CAT(tuple2(t0_, t1_), t2_)
-#define tuple4(t0_, t1_, t2_, t3_) CAT(tuple3(t0_, t1_, t2_), t3_)
-#define tuple5(t0_, t1_, t2_, t3_, t4_) CAT(tuple4(t0_, t1_, t2_, t3_), t4_)
+#define tuple2(t0, t1)             CAT(CAT(CAT(tuple_, t0), _), t1)
+#define tuple3(t0, t1, t2)         CAT(CAT(tuple2(t0, t1), _), t2)
+#define tuple4(t0, t1, t2, t3)     CAT(CAT(tuple3(t0, t1, t2), _), t3)
+#define tuple5(t0, t1, t2, t3, t4) CAT(CAT(tuple4(t0, t1, t2, t3), _), t4)
 
 #define tuple(n, ...)  CAT(tuple, n)(__VA_ARGS__)
 #define tuple_count(t) sizeof((t).count[0])

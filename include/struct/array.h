@@ -46,6 +46,9 @@ SL_DEF_ARRAY(void); SL_DEF_ARRAY(SL_ptr(void));
 /// @param capa_ Initial capacity
 /// @return The newly created array
 #define SL_arrayCreate(type, capa_) SL_arrayCreateA(type, capa_, std_allocator)
+/// @brief Clear array's resources without freeing the memory
+/// @param array Array
+#define SL_arrayClear(array) ((array).count = 0)
 /// @brief Free array's resources and reset its value
 /// @param array Array
 #define SL_arrayDestroy(array) (SL_afree((array).alloc, (array).data), memset(&array, 0, sizeof(array)), array)
@@ -53,13 +56,13 @@ SL_DEF_ARRAY(void); SL_DEF_ARRAY(SL_ptr(void));
 /// @param array Array
 /// @return A clone of array
 /// @note Use this to avoid having shared "data" on multiple arrays
-#define SL_arrayClone(array) ((typeof(array)){.data = SL_aclone((array).alloc, (array).data, sizeof(*(array).data) * (array).capa), .capa = (array).capa, .count = (array).count})
+#define SL_arrayClone(array) ((typeof(array)){.data = SL_aclone((array).alloc, (array).data, sizeof(*(array).data) * (array).capa), .capa = (array).capa, .count = (array).count, .alloc = (array).alloc})
 /// @brief Clone array in a specified allocator
 /// @param array Array
 /// @param allocator Allocator
 /// @return A clone of array
 /// @note Use this to avoid having shared "data" on multiple arrays
-#define SL_arrayCloneA(array, allocator) ((typeof(array)){.data = SL_aclone(allocator, (array).data, sizeof(*(array).data) * (array).capa), .capa = (array).capa, .count = (array).count})
+#define SL_arrayCloneA(array, allocator) ((typeof(array)){.data = SL_aclone(allocator, (array).data, sizeof(*(array).data) * (array).capa), .capa = (array).capa, .count = (array).count, .alloc = (allocator)})
 
 /// @brief Wrap a C array into an SL array
 /// @param carray C array
@@ -75,12 +78,12 @@ SL_DEF_ARRAY(void); SL_DEF_ARRAY(SL_ptr(void));
 /// @brief Wrap a set of values into an SL array
 /// @param ... Values
 /// @warning Opperations like "arrayAdd" may try to reallocate the array, so be careful with static memory and outside references.
-#define SL_arrayWrapVar(type, ...) ((SL_array(type)){.data = (type[]){__VA_ARGS__}, .capa = sizeof((type[]){__VA_ARGS__}) / sizeof(type), .count = sizeof((type[]){__VA_ARGS__}) / sizeof(type), .alloc = std_allocator})
+#define SL_arrayWrap_var(type, ...) ((SL_array(type)){.data = (type[]){__VA_ARGS__}, .capa = sizeof((type[]){__VA_ARGS__}) / sizeof(type), .count = sizeof((type[]){__VA_ARGS__}) / sizeof(type), .alloc = std_allocator})
 
 #define SL_arrayFrom(type, span, carray)                 SL_arrayClone(SL_arrayWrap(type, span, carray))
 #define SL_arrayFromA(type, span, carray, allocator_)    SL_arrayClone(SL_arrayWrapA(type, span, carray, allocator_))
-#define SL_arrayFromVar(type, ...)                       SL_arrayClone(SL_arrayWrapVar(type, ##__VA_ARGS__))
-#define SL_arrayFromVarA(type, allocator_, ...)          SL_arrayCloneA(SL_arrayWrapVar(type, ##__VA_ARGS__), allocator_)
+#define SL_arrayFrom_var(type, ...)                      SL_arrayClone(SL_arrayWrap_var(type, ##__VA_ARGS__))
+#define SL_arrayFromA_var(type, allocator_, ...)         SL_arrayCloneA(SL_arrayWrap_var(type, ##__VA_ARGS__), allocator_)
 
 /// @brief Get first value in array
 /// @param array Array
@@ -99,7 +102,7 @@ SL_header void *__SL_arrayAt(void *data, usize count, usize elemSize, ssize inde
 
 
 
-SL_header void *__SL_arrayInsertRange(void **array_data, usize *array_count, usize *array_capa, sl_allocator *alloc, usize elemSize, usize index, usize span, void *values);
+SL_header void *__SL_arrayInsert_range(void **array_data, usize *array_count, usize *array_capa, sl_allocator *alloc, usize elemSize, usize index, usize span, void *values);
 /// @brief Insert range of values at index in array
 /// @param array Array
 /// @param index Index of first value into the array
@@ -108,7 +111,7 @@ SL_header void *__SL_arrayInsertRange(void **array_data, usize *array_count, usi
 /// @return Pointer to the first inserted value
 /// @warning Will not insert if index is out of array bounds
 /// @note Error status is recorded in SL_ERROR
-#define SL_arrayInsertRange(array, index, span, values) ((typeof((array).data))__SL_arrayInsertRange(__SL_XPD_ARRAY(array, &), index, span, (void *)(typeof((array).data))values))
+#define SL_arrayInsert_range(array, index, span, values) ((typeof((array).data))__SL_arrayInsert_range(__SL_XPD_ARRAY(array, &), index, span, (void *)(typeof((array).data))values))
 /// @brief Insert value at index in array
 /// @param array Array
 /// @param index Index into the array
@@ -116,7 +119,7 @@ SL_header void *__SL_arrayInsertRange(void **array_data, usize *array_count, usi
 /// @return Pointer to the inserted value
 /// @warning Will not insert if index is out of array bounds
 /// @note Error status is recorded in SL_ERROR
-#define SL_arrayInsert(array, index, value) SL_arrayInsertRange(array, index, 1, __SL_PTR(value))
+#define SL_arrayInsert(array, index, value) SL_arrayInsert_range(array, index, 1, __SL_PTR(value))
 /// @brief Insert range of values at index in array
 /// @param array Array
 /// @param index Index of first value into the array
@@ -125,7 +128,7 @@ SL_header void *__SL_arrayInsertRange(void **array_data, usize *array_count, usi
 /// @return Pointer to the first inserted value
 /// @warning Will not insert if index is out of array bounds
 /// @note Error status is recorded in SL_ERROR
-#define SL_arrayInsertVar(array, index, ...) ((typeof((array).data))__SL_arrayInsertRange(__SL_XPD_ARRAY(array, &), index, sizeof((typeof(*(array).data)[]){__VA_ARGS__}) / sizeof(*(array).data), (typeof(*(array).data)[]){__VA_ARGS__})) 
+#define SL_arrayInsert_var(array, index, ...) ((typeof((array).data))__SL_arrayInsert_range(__SL_XPD_ARRAY(array, &), index, sizeof((typeof(*(array).data)[]){__VA_ARGS__}) / sizeof(*(array).data), (typeof(*(array).data)[]){__VA_ARGS__})) 
 
 
 
@@ -135,50 +138,56 @@ SL_header void *__SL_arrayInsertRange(void **array_data, usize *array_count, usi
 /// @param values Values to insert
 /// @return Pointer to the first inserted value
 /// @note Error status is recorded in SL_ERROR
-#define SL_arrayAddRange(array, span, values) SL_arrayInsertRange(array, (array).count, span, values)
+#define SL_arrayAdd_range(array, span, values) SL_arrayInsert_range(array, (array).count, span, values)
 /// @brief Add range of values to end of array
 /// @param array Array
 /// @param ... Values to insert
 /// @return Pointer to the first inserted value
 /// @note Error status is recorded in SL_ERROR
-#define SL_arrayAddVar(array, ...) SL_arrayInsertVar(array, (array).count, __VA_ARGS__)
+#define SL_arrayAdd_var(array, ...) SL_arrayInsert_var(array, (array).count, __VA_ARGS__)
 /// @brief Add value to end of array
 /// @param array Array
 /// @param value Value to add
 /// @return Pointer to the inserted value
 /// @note Error status is recorded in SL_ERROR
-#define SL_arrayAdd(array, value) SL_arrayAddRange(array, 1, (void *)__SL_PTR(value))
+#define SL_arrayAdd(array, value) SL_arrayAdd_range(array, 1, (void *)__SL_PTR(value))
 /// @brief Concatenate two arrays
 /// @param a Left array
 /// @param b Right array
 /// @return Pointer to the first inserted value
 /// @note Result is stored in a
 /// @note Error status is recorded in SL_ERROR
-#define SL_arrayCat(a, b) SL_arrayAddRange(a, (b).count, (b).data)
+#define SL_arrayCat(a, b) SL_arrayAdd_range(a, (b).count, (b).data)
+/// @brief Insert formatted string to `SL_array(SL_ptr(char))`
+/// @param array Array
+/// @param fmt Format of string to add to array
+/// @param ... 
+/// @return Pointer to the first inserted value
+/// @note Result is stored in a
+/// @note Error status is recorded in SL_ERROR
+#define SL_arrayAddf(array, fmt, ...) (__SL_arrayInsert_range(__SL_XPD_ARRAY(array, &), (array).count, strlen(tmpf(fmt, ##__VA_ARGS__)), tmpf(NULL)))
 
-#define SL_arrayAddf(array, fmt, ...) (__SL_arrayInsertRange(__SL_XPD_ARRAY(array, &), (array).count, strlen(tmpf(fmt, ##__VA_ARGS__)), tmpf(NULL)))
-
-SL_header bool __SL_arrayRemoveRange(void *array_data, usize *array_count, usize elemSize, usize index, usize span);
+SL_header bool __SL_arrayRemove_range(void *array_data, usize *array_count, usize elemSize, usize index, usize span);
 /// @brief Remove values from `index` to `index + span` from array
 /// @param index Index of first value to remove
 /// @param span Number of values to remove
 /// @return Wether the removal was successful
 /// @warning Will not remove if full span is outside of array bounds
 /// @note Error status is recorded in SL_ERROR
-#define SL_arrayRemoveRange(array, index, span) (__SL_arrayRemoveRange((void *)(array).data, &(array).count, sizeof(*(array).data), index, span))
+#define SL_arrayRemove_range(array, index, span) (__SL_arrayRemove_range((void *)(array).data, &(array).count, sizeof(*(array).data), index, span))
 /// @brief Remove value at index from array
 /// @param index Index of the value to remove
 /// @return Wether the removal was successful
 /// @note Error status is recorded in SL_ERROR
-#define SL_arrayRemove(array, index) SL_arrayRemoveRange(array, index, 1)
+#define SL_arrayRemove(array, index) SL_arrayRemove_range(array, index, 1)
 
-SL_header bool __SL_arrayRemoveUnordered(void *array_data, usize *array_count, usize elemSize, usize index);
+SL_header bool __SL_arrayRemove_unordered(void *array_data, usize *array_count, usize elemSize, usize index);
 /// @brief Remove value at index from array without regards for order
 /// @param index Index of the value to remove
 /// @return Wether the removal was successful
 /// @warning The order of the elements inside of this array will not be preserved after this operation
 /// @note Error status is recorded in SL_ERROR
-#define SL_arrayRemoveUnordered(array, index) (__SL_arrayRemoveUnordered((array).data, &(array).count, sizeof(*(array).data), index))
+#define SL_arrayRemove_unordered(array, index) (__SL_arrayRemove_unordered((array).data, &(array).count, sizeof(*(array).data), index))
 /// @brief Take out last value of array
 /// @param array Array
 /// @return Pointer to popped value
@@ -197,8 +206,8 @@ SL_header bool __SL_arrayRemoveUnordered(void *array_data, usize *array_count, u
 SL_header void __SL_arrayFill(void *array_data, usize array_count, usize elemSize, void *elem);
 #define SL_arrayFill(array, value) __SL_arrayFill((array).data, (array).count, sizeof(*(array).data), __SL_PTR_T(typeof(*(array).data), value)), array
 
-SL_header bool __SL_arraySetCapacity(void **array_data, usize *array_count, usize *array_capa, sl_allocator *alloc, usize elemSize, usize new_capa);
-#define SL_arrayReserve(array, new_capacity) (__SL_arraySetCapacity(__SL_XPD_ARRAY(array, &), new_capacity))
+SL_header bool __SL_arrayReserve(void **array_data, usize *array_count, usize *array_capa, sl_allocator *alloc, usize elemSize, usize new_capa);
+#define SL_arrayReserve(array, new_capacity) (__SL_arrayReserve(__SL_XPD_ARRAY(array, &), new_capacity))
 
 
 
@@ -239,8 +248,8 @@ SL_header bool __SL_arraySetCapacity(void **array_data, usize *array_count, usiz
 /// @param ... How to expand the value stored to fit the format specified with 'fmt'
 #define SL_arrayPrintf(dst, array, fmt) SL_arrayPrintf_full(dst, array, fmt, __SL_VARNAME__, *__SL_VARNAME__)
 
-#define SL_putArray_full(...) SL_PUT_WRAPPER(SL_arrayPrintf_full(SL_PUT_TARGET, __VA_ARGS__))
-#define SL_putArray(...)      SL_PUT_WRAPPER(SL_arrayPrintf(SL_PUT_TARGET, __VA_ARGS__))
+#define SL_putArray_full(array, fmt, varname, ...) SL_PUT_WRAPPER(SL_arrayPrintf_full(SL_PUT_TARGET, array, fmt, varname, ##__VA_ARGS__))
+#define SL_putArray(array, fmt, ...)               SL_PUT_WRAPPER(SL_arrayPrintf(SL_PUT_TARGET, array, fmt, ##__VA_ARGS__))
 
 
 
@@ -255,31 +264,31 @@ SL_header bool __SL_arraySetCapacity(void **array_data, usize *array_count, usiz
 #   define slicev               SL_slicev
 #   define arrayCreate          SL_arrayCreate
 #   define arrayCreateA         SL_arrayCreateA
+#   define arrayClear           SL_arrayClear
 #   define arrayDestroy         SL_arrayDestroy
 #   define arrayClone           SL_arrayClone
 #   define arrayCloneA          SL_arrayCloneA
 #   define arrayWrap            SL_arrayWrap
-#   define arrayWrapVar         SL_arrayWrapVar
+#   define arrayWrap_var        SL_arrayWrap_var
 #   define arrayFrom            SL_arrayFrom
 #   define arrayFromA           SL_arrayFromA
-#   define arrayFromVar         SL_arrayFromVar
-#   define arrayFromVarA        SL_arrayFromVarA
+#   define arrayFrom_var        SL_arrayFrom_var
+#   define arrayFromA_var       SL_arrayFromA_var
 #   define arrayFirst           SL_arrayFirst
 #   define arrayLast            SL_arrayLast
 #   define arrayAt              SL_arrayAt
-#   define arrayCheckResize     SL_arrayCheckResize
-#   define arrayInsertRange     SL_arrayInsertRange
+#   define arrayInsert_range    SL_arrayInsert_range
 #   define arrayInsert          SL_arrayInsert
-#   define arrayInsertVar       SL_arrayInsertVar
-#   define arrayAddRange        SL_arrayAddRange
+#   define arrayInsert_var      SL_arrayInsert_var
+#   define arrayAdd_range       SL_arrayAdd_range
 #   define arrayAdd             SL_arrayAdd
-#   define arrayAddVar          SL_arrayAddVar
+#   define arrayAdd_var         SL_arrayAdd_var
 #   define arrayCat             SL_arrayCat
-#   define arrayRemoveRange     SL_arrayRemoveRange
+#   define arrayRemove_range    SL_arrayRemove_range
 #   define arrayRemove          SL_arrayRemove
-#   define arrayRemoveUnordered SL_arrayRemoveUnordered
+#   define arrayRemove_unordered SL_arrayRemove_unordered
 #   define arrayPop             SL_arrayPop
-#   define arrayQSort           SL_arraySort
+#   define arraySort            SL_arraySort
 #   define arrayFill            SL_arrayFill
 #   define arrayReserve         SL_arrayReserve
 #   define aforeach             SL_aforeach
@@ -297,7 +306,7 @@ SL_header void *__SL_arrayAt(void *data, usize count, usize elemSize, ssize inde
     if (index < 0) index = count + index;
     return index >= 0 && index < count ? data + index * elemSize : NULL;
 }
-SL_header bool __SL_arraySetCapacity(void **array_data, usize *array_count, usize *array_capa, sl_allocator *alloc, usize elemSize, usize new_capa)
+SL_header bool __SL_arrayReserve(void **array_data, usize *array_count, usize *array_capa, sl_allocator *alloc, usize elemSize, usize new_capa)
 {
     if (new_capa <= *array_capa) return true;
 
@@ -321,11 +330,11 @@ SL_header bool __SL_arraySetCapacity(void **array_data, usize *array_count, usiz
     return true;
 }
 
-SL_header void *__SL_arrayInsertRange(void **array_data, usize *array_count, usize *array_capa, sl_allocator *alloc, usize elemSize, usize index, usize span, void *values)
+SL_header void *__SL_arrayInsert_range(void **array_data, usize *array_count, usize *array_capa, sl_allocator *alloc, usize elemSize, usize index, usize span, void *values)
 {
     usize prev_count = *array_count;
     if (index > prev_count) return __SL_ERROR(SL_ERROR_OUT_OF_BOUNDS), NULL;
-    if (!__SL_arraySetCapacity(array_data, array_count, array_capa, alloc, elemSize, prev_count + span)) return __SL_ERROR(SL_ERROR_MEMORY), NULL;
+    if (!__SL_arrayReserve(array_data, array_count, array_capa, alloc, elemSize, prev_count + span)) return __SL_ERROR(SL_ERROR_MEMORY), NULL;
     
     void *firstElem = *array_data + elemSize * index;
     if (index < prev_count) memmove(firstElem + elemSize * span, firstElem, elemSize * (prev_count - index));
@@ -335,13 +344,13 @@ SL_header void *__SL_arrayInsertRange(void **array_data, usize *array_count, usi
     *array_count += span;
     return firstElem;
 }
-SL_header bool __SL_arrayRemoveRange(void *array_data, usize *array_count, usize elemSize, usize index, usize span)
+SL_header bool __SL_arrayRemove_range(void *array_data, usize *array_count, usize elemSize, usize index, usize span)
 {
     if (index + span > *array_count || span == 0) return __SL_ERROR(SL_ERROR_OUT_OF_BOUNDS), false;
     memmove(array_data + elemSize * index, array_data + elemSize * (index + span), elemSize * ((*array_count -= span) - index + 1));
     return true;
 }
-SL_header bool __SL_arrayRemoveUnordered(void *array_data, usize *array_count, usize elemSize, usize index)
+SL_header bool __SL_arrayRemove_unordered(void *array_data, usize *array_count, usize elemSize, usize index)
 {
     if (*array_count <= index || index < 0) return __SL_ERROR(SL_ERROR_OUT_OF_BOUNDS), false;
     memcpy (array_data + elemSize * index, array_data + elemSize * --*array_count, elemSize);
@@ -363,8 +372,8 @@ SL_header void __SL_arrayFill(void *array_data, usize array_count, usize elemSiz
     SL_DEF_ARRAY(f16);    SL_DEF_ARRAY(f32);   SL_DEF_ARRAY(f64);    SL_DEF_ARRAY(f128);
     SL_DEF_ARRAY(SL_ptr(char));
 
-    typedef SL_array(f32) SL_array(float);                     typedef SL_slice(f32) SL_slice(float); 
-    typedef SL_array(f64) SL_array(double);                    typedef SL_slice(f64) SL_slice(double);
+    typedef SL_array(f32) SL_array(float);                      typedef SL_slice(f32) SL_slice(float); 
+    typedef SL_array(f64) SL_array(double);                     typedef SL_slice(f64) SL_slice(double);
 
     typedef SL_array(u8)  SL_array(ch8),  SL_array(char);       typedef SL_slice(u8)  SL_slice(ch8),  SL_slice(char);
     typedef SL_array(u16) SL_array(ch16), SL_array(wchar_t);    typedef SL_slice(u16) SL_slice(ch16), SL_slice(wchar_t);

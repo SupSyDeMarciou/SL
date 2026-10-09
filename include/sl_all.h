@@ -6,6 +6,12 @@
  *  BASE: Useful constructs reused throughout the SL
  */
 
+#if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
+#   define __SL_POSIX__
+#endif
+
+
+
 #ifndef SL_NO_STDLIB
     #include <stdint.h>
     #include <stdbool.h>
@@ -19,7 +25,12 @@
     #include <ctype.h>
     #include <time.h>
     #include <pthread.h>
+
+    #ifdef __SL_POSIX__ 
+    #   include <unistd.h>
+    #endif
 #endif
+
 
 #ifndef CAT
 #   define __CAT(x, y) x##y
@@ -55,17 +66,17 @@
 
 #pragma region TYPES
 
-#define SL_ptr(type)  CAT(type, _p)
-#define SL_ptr2(type) CAT(type, _pp)
-#define SL_ptr3(type) CAT(type, _ppp)
+#define SL_ptr(type)  CAT(type, p)
+#define SL_ptr2(type) CAT(type, pp)
+#define SL_ptr3(type) CAT(type, ppp)
 #define SL_DEF_PTR(type) \
-    typedef type   *CAT(type, _p); \
-    typedef type  **CAT(type, _pp); \
-    typedef type ***CAT(type, _ppp)
+    typedef type   *CAT(type, p); \
+    typedef type  **CAT(type, pp); \
+    typedef type ***CAT(type, ppp)
 #define SL_ALIAS_PTR(base_type, new_type) \
-    typedef CAT(base_type, _p)   CAT(new_type, _p); \
-    typedef CAT(base_type, _pp)  CAT(new_type, _pp); \
-    typedef CAT(base_type, _ppp) CAT(new_type, _ppp)
+    typedef CAT(base_type, p)   CAT(new_type, p); \
+    typedef CAT(base_type, pp)  CAT(new_type, pp); \
+    typedef CAT(base_type, ppp) CAT(new_type, ppp)
 
 SL_DEF_PTR(void); SL_DEF_PTR(int); SL_DEF_PTR(char); SL_DEF_PTR(float); SL_DEF_PTR(double);
 
@@ -88,8 +99,13 @@ SL_DEF_PTR(void); SL_DEF_PTR(int); SL_DEF_PTR(char); SL_DEF_PTR(float); SL_DEF_P
 #endif
 
 typedef unsigned    uint;   SL_DEF_PTR(uint);
-typedef size_t      usize;  SL_DEF_PTR(usize);  
-typedef ssize_t     ssize;  SL_DEF_PTR(ssize);
+typedef size_t      usize;  SL_DEF_PTR(usize);
+
+#ifdef __SL_POSIX__
+    typedef ssize_t ssize;  SL_DEF_PTR(ssize);
+#else
+    typedef int64_t ssize;  SL_DEF_PTR(ssize);
+#endif
 
 typedef uint8_t     u8;     SL_DEF_PTR(u8);
 typedef uint16_t    u16;    SL_DEF_PTR(u16);
@@ -136,7 +152,7 @@ SL_header sl_error __SL_ERROR(sl_error);
 #define SL_ERROR (__SL_ERROR(SL_ERROR_NONE))
 SL_header const char *SL_strerr(sl_error error);
 
-#define SL_terminate(error_code, msg, ...) (fprintf(stderr, "%s:%u@%s - [TERMINATED(%d)] " msg, __FILE__, __LINE__, __FUNCTION__, error_code, ##__VA_ARGS__), exit(error_code))
+#define SL_terminate(error_code, msg, ...) (fprintf(stderr, "%s:%u@%s - [TERMINATED(%d)] " msg, __FILE__, __LINE__, __func__, error_code, ##__VA_ARGS__), exit(error_code))
 
 #pragma endregion ERROR
 
@@ -180,6 +196,10 @@ SL_header void *memclone(void *memory, size_t size);
 /// @return The smallest power of two greater than `n`
 SL_header u64 SL_alignPow2(u64 n);
 
+#ifndef __SL_POSIX__
+    SL_header char *strdup(const char *src);
+#endif
+
 #pragma endregion MEMORY
 
 
@@ -213,19 +233,14 @@ SL_header u64 SL_alignPow2(u64 n);
 // #include "../base.h"
 
 typedef struct sl_allocator sl_allocator;
-#define std_allocator ((sl_allocator *)NULL)
+/// @brief Allocator representing `stdlib`'s allocation functions (and SL's `memclone`)
+#define std_allocator ((sl_allocator *)NULL) 
 
 typedef void *sl_func_alloc    (sl_allocator *alloc, usize size);                               /// @brief Memory allocate prototype
 typedef void *sl_func_zalloc   (sl_allocator *alloc, usize size);                               /// @brief Memory zero allocate prototype
 typedef void *sl_func_realloc  (sl_allocator *alloc, void *memory, usize size);                 /// @brief Memory reallocate prototype
 typedef void  sl_func_free     (sl_allocator *alloc, void *memory);                             /// @brief Memory free prototype
 typedef void *sl_func_clone    (sl_allocator *alloc, void *memory, usize size);                 /// @brief Memory clone prototype
-
-#define SL_aalloc(allocator, size)             (allocator == std_allocator ? malloc(size)        : (allocator)->alloc(allocator, size))              /// @brief Allocate memory with allocator
-#define SL_azalloc(allocator, size)            (allocator == std_allocator ? calloc(1, size)     : (allocator)->zalloc(allocator, size))             /// @brief Allocate zeroed memory with allocator
-#define SL_arealloc(allocator, ptr, size)      (allocator == std_allocator ? realloc(ptr, size)  : (allocator)->realloc(allocator, ptr, size))       /// @brief Reallocate memory with allocator
-#define SL_afree(allocator, ptr)               (allocator == std_allocator ? free(ptr)           : (allocator)->free(allocator, ptr))                /// @brief Free memory with allocator
-#define SL_aclone(allocator, src, size)        (allocator == std_allocator ? memclone(src, size) : (allocator)->clone(allocator, src, size))         /// @brief Clone memory with allocator    
 
 struct sl_allocator {
     sl_func_alloc      *alloc;
@@ -244,6 +259,13 @@ struct sl_allocator {
 /// @param clone Memory clone function
 /// @return The newly created allocator
 #define SL_allocator_(alloc_, zalloc_, realloc_, free_, clone_) ((sl_allocator) { .alloc = alloc_, .zalloc = zalloc_, .realloc = realloc_, .free = free_, .clone = clone_})
+
+#define SL_aalloc(allocator, size)             (allocator == std_allocator ? malloc(size)        : (allocator)->alloc(allocator, size))              /// @brief Allocate memory with allocator
+#define SL_azalloc(allocator, size)            (allocator == std_allocator ? calloc(1, size)     : (allocator)->zalloc(allocator, size))             /// @brief Allocate zeroed memory with allocator
+#define SL_arealloc(allocator, ptr, size)      (allocator == std_allocator ? realloc(ptr, size)  : (allocator)->realloc(allocator, ptr, size))       /// @brief Reallocate memory with allocator
+#define SL_afree(allocator, ptr)               (allocator == std_allocator ? free(ptr)           : (allocator)->free(allocator, ptr))                /// @brief Free memory with allocator
+#define SL_aclone(allocator, src, size)        (allocator == std_allocator ? memclone(src, size) : (allocator)->clone(allocator, src, size))         /// @brief Clone memory with allocator    
+
 
 
 
@@ -302,6 +324,9 @@ SL_DEF_ARRAY(void); SL_DEF_ARRAY(SL_ptr(void));
 /// @param capa_ Initial capacity
 /// @return The newly created array
 #define SL_arrayCreate(type, capa_) SL_arrayCreateA(type, capa_, std_allocator)
+/// @brief Clear array's resources without freeing the memory
+/// @param array Array
+#define SL_arrayClear(array) ((array).count = 0)
 /// @brief Free array's resources and reset its value
 /// @param array Array
 #define SL_arrayDestroy(array) (SL_afree((array).alloc, (array).data), memset(&array, 0, sizeof(array)), array)
@@ -309,13 +334,13 @@ SL_DEF_ARRAY(void); SL_DEF_ARRAY(SL_ptr(void));
 /// @param array Array
 /// @return A clone of array
 /// @note Use this to avoid having shared "data" on multiple arrays
-#define SL_arrayClone(array) ((typeof(array)){.data = SL_aclone((array).alloc, (array).data, sizeof(*(array).data) * (array).capa), .capa = (array).capa, .count = (array).count})
+#define SL_arrayClone(array) ((typeof(array)){.data = SL_aclone((array).alloc, (array).data, sizeof(*(array).data) * (array).capa), .capa = (array).capa, .count = (array).count, .alloc = (array).alloc})
 /// @brief Clone array in a specified allocator
 /// @param array Array
 /// @param allocator Allocator
 /// @return A clone of array
 /// @note Use this to avoid having shared "data" on multiple arrays
-#define SL_arrayCloneA(array, allocator) ((typeof(array)){.data = SL_aclone(allocator, (array).data, sizeof(*(array).data) * (array).capa), .capa = (array).capa, .count = (array).count})
+#define SL_arrayCloneA(array, allocator) ((typeof(array)){.data = SL_aclone(allocator, (array).data, sizeof(*(array).data) * (array).capa), .capa = (array).capa, .count = (array).count, .alloc = (allocator)})
 
 /// @brief Wrap a C array into an SL array
 /// @param carray C array
@@ -331,12 +356,12 @@ SL_DEF_ARRAY(void); SL_DEF_ARRAY(SL_ptr(void));
 /// @brief Wrap a set of values into an SL array
 /// @param ... Values
 /// @warning Opperations like "arrayAdd" may try to reallocate the array, so be careful with static memory and outside references.
-#define SL_arrayWrapVar(type, ...) ((SL_array(type)){.data = (type[]){__VA_ARGS__}, .capa = sizeof((type[]){__VA_ARGS__}) / sizeof(type), .count = sizeof((type[]){__VA_ARGS__}) / sizeof(type), .alloc = std_allocator})
+#define SL_arrayWrap_var(type, ...) ((SL_array(type)){.data = (type[]){__VA_ARGS__}, .capa = sizeof((type[]){__VA_ARGS__}) / sizeof(type), .count = sizeof((type[]){__VA_ARGS__}) / sizeof(type), .alloc = std_allocator})
 
 #define SL_arrayFrom(type, span, carray)                 SL_arrayClone(SL_arrayWrap(type, span, carray))
 #define SL_arrayFromA(type, span, carray, allocator_)    SL_arrayClone(SL_arrayWrapA(type, span, carray, allocator_))
-#define SL_arrayFromVar(type, ...)                       SL_arrayClone(SL_arrayWrapVar(type, ##__VA_ARGS__))
-#define SL_arrayFromVarA(type, allocator_, ...)          SL_arrayCloneA(SL_arrayWrapVar(type, ##__VA_ARGS__), allocator_)
+#define SL_arrayFrom_var(type, ...)                      SL_arrayClone(SL_arrayWrap_var(type, ##__VA_ARGS__))
+#define SL_arrayFromA_var(type, allocator_, ...)         SL_arrayCloneA(SL_arrayWrap_var(type, ##__VA_ARGS__), allocator_)
 
 /// @brief Get first value in array
 /// @param array Array
@@ -355,7 +380,7 @@ SL_header void *__SL_arrayAt(void *data, usize count, usize elemSize, ssize inde
 
 
 
-SL_header void *__SL_arrayInsertRange(void **array_data, usize *array_count, usize *array_capa, sl_allocator *alloc, usize elemSize, usize index, usize span, void *values);
+SL_header void *__SL_arrayInsert_range(void **array_data, usize *array_count, usize *array_capa, sl_allocator *alloc, usize elemSize, usize index, usize span, void *values);
 /// @brief Insert range of values at index in array
 /// @param array Array
 /// @param index Index of first value into the array
@@ -364,7 +389,7 @@ SL_header void *__SL_arrayInsertRange(void **array_data, usize *array_count, usi
 /// @return Pointer to the first inserted value
 /// @warning Will not insert if index is out of array bounds
 /// @note Error status is recorded in SL_ERROR
-#define SL_arrayInsertRange(array, index, span, values) ((typeof((array).data))__SL_arrayInsertRange(__SL_XPD_ARRAY(array, &), index, span, (void *)(typeof((array).data))values))
+#define SL_arrayInsert_range(array, index, span, values) ((typeof((array).data))__SL_arrayInsert_range(__SL_XPD_ARRAY(array, &), index, span, (void *)(typeof((array).data))values))
 /// @brief Insert value at index in array
 /// @param array Array
 /// @param index Index into the array
@@ -372,7 +397,7 @@ SL_header void *__SL_arrayInsertRange(void **array_data, usize *array_count, usi
 /// @return Pointer to the inserted value
 /// @warning Will not insert if index is out of array bounds
 /// @note Error status is recorded in SL_ERROR
-#define SL_arrayInsert(array, index, value) SL_arrayInsertRange(array, index, 1, __SL_PTR(value))
+#define SL_arrayInsert(array, index, value) SL_arrayInsert_range(array, index, 1, __SL_PTR(value))
 /// @brief Insert range of values at index in array
 /// @param array Array
 /// @param index Index of first value into the array
@@ -381,7 +406,7 @@ SL_header void *__SL_arrayInsertRange(void **array_data, usize *array_count, usi
 /// @return Pointer to the first inserted value
 /// @warning Will not insert if index is out of array bounds
 /// @note Error status is recorded in SL_ERROR
-#define SL_arrayInsertVar(array, index, ...) ((typeof((array).data))__SL_arrayInsertRange(__SL_XPD_ARRAY(array, &), index, sizeof((typeof(*(array).data)[]){__VA_ARGS__}) / sizeof(*(array).data), (typeof(*(array).data)[]){__VA_ARGS__})) 
+#define SL_arrayInsert_var(array, index, ...) ((typeof((array).data))__SL_arrayInsert_range(__SL_XPD_ARRAY(array, &), index, sizeof((typeof(*(array).data)[]){__VA_ARGS__}) / sizeof(*(array).data), (typeof(*(array).data)[]){__VA_ARGS__})) 
 
 
 
@@ -391,50 +416,56 @@ SL_header void *__SL_arrayInsertRange(void **array_data, usize *array_count, usi
 /// @param values Values to insert
 /// @return Pointer to the first inserted value
 /// @note Error status is recorded in SL_ERROR
-#define SL_arrayAddRange(array, span, values) SL_arrayInsertRange(array, (array).count, span, values)
+#define SL_arrayAdd_range(array, span, values) SL_arrayInsert_range(array, (array).count, span, values)
 /// @brief Add range of values to end of array
 /// @param array Array
 /// @param ... Values to insert
 /// @return Pointer to the first inserted value
 /// @note Error status is recorded in SL_ERROR
-#define SL_arrayAddVar(array, ...) SL_arrayInsertVar(array, (array).count, __VA_ARGS__)
+#define SL_arrayAdd_var(array, ...) SL_arrayInsert_var(array, (array).count, __VA_ARGS__)
 /// @brief Add value to end of array
 /// @param array Array
 /// @param value Value to add
 /// @return Pointer to the inserted value
 /// @note Error status is recorded in SL_ERROR
-#define SL_arrayAdd(array, value) SL_arrayAddRange(array, 1, (void *)__SL_PTR(value))
+#define SL_arrayAdd(array, value) SL_arrayAdd_range(array, 1, (void *)__SL_PTR(value))
 /// @brief Concatenate two arrays
 /// @param a Left array
 /// @param b Right array
 /// @return Pointer to the first inserted value
 /// @note Result is stored in a
 /// @note Error status is recorded in SL_ERROR
-#define SL_arrayCat(a, b) SL_arrayAddRange(a, (b).count, (b).data)
+#define SL_arrayCat(a, b) SL_arrayAdd_range(a, (b).count, (b).data)
+/// @brief Insert formatted string to `SL_array(SL_ptr(char))`
+/// @param array Array
+/// @param fmt Format of string to add to array
+/// @param ... 
+/// @return Pointer to the first inserted value
+/// @note Result is stored in a
+/// @note Error status is recorded in SL_ERROR
+#define SL_arrayAddf(array, fmt, ...) (__SL_arrayInsert_range(__SL_XPD_ARRAY(array, &), (array).count, strlen(tmpf(fmt, ##__VA_ARGS__)), tmpf(NULL)))
 
-#define SL_arrayAddf(array, fmt, ...) (__SL_arrayInsertRange(__SL_XPD_ARRAY(array, &), (array).count, strlen(tmpf(fmt, ##__VA_ARGS__)), tmpf(NULL)))
-
-SL_header bool __SL_arrayRemoveRange(void *array_data, usize *array_count, usize elemSize, usize index, usize span);
+SL_header bool __SL_arrayRemove_range(void *array_data, usize *array_count, usize elemSize, usize index, usize span);
 /// @brief Remove values from `index` to `index + span` from array
 /// @param index Index of first value to remove
 /// @param span Number of values to remove
 /// @return Wether the removal was successful
 /// @warning Will not remove if full span is outside of array bounds
 /// @note Error status is recorded in SL_ERROR
-#define SL_arrayRemoveRange(array, index, span) (__SL_arrayRemoveRange((void *)(array).data, &(array).count, sizeof(*(array).data), index, span))
+#define SL_arrayRemove_range(array, index, span) (__SL_arrayRemove_range((void *)(array).data, &(array).count, sizeof(*(array).data), index, span))
 /// @brief Remove value at index from array
 /// @param index Index of the value to remove
 /// @return Wether the removal was successful
 /// @note Error status is recorded in SL_ERROR
-#define SL_arrayRemove(array, index) SL_arrayRemoveRange(array, index, 1)
+#define SL_arrayRemove(array, index) SL_arrayRemove_range(array, index, 1)
 
-SL_header bool __SL_arrayRemoveUnordered(void *array_data, usize *array_count, usize elemSize, usize index);
+SL_header bool __SL_arrayRemove_unordered(void *array_data, usize *array_count, usize elemSize, usize index);
 /// @brief Remove value at index from array without regards for order
 /// @param index Index of the value to remove
 /// @return Wether the removal was successful
 /// @warning The order of the elements inside of this array will not be preserved after this operation
 /// @note Error status is recorded in SL_ERROR
-#define SL_arrayRemoveUnordered(array, index) (__SL_arrayRemoveUnordered((array).data, &(array).count, sizeof(*(array).data), index))
+#define SL_arrayRemove_unordered(array, index) (__SL_arrayRemove_unordered((array).data, &(array).count, sizeof(*(array).data), index))
 /// @brief Take out last value of array
 /// @param array Array
 /// @return Pointer to popped value
@@ -453,8 +484,8 @@ SL_header bool __SL_arrayRemoveUnordered(void *array_data, usize *array_count, u
 SL_header void __SL_arrayFill(void *array_data, usize array_count, usize elemSize, void *elem);
 #define SL_arrayFill(array, value) __SL_arrayFill((array).data, (array).count, sizeof(*(array).data), __SL_PTR_T(typeof(*(array).data), value)), array
 
-SL_header bool __SL_arraySetCapacity(void **array_data, usize *array_count, usize *array_capa, sl_allocator *alloc, usize elemSize, usize new_capa);
-#define SL_arrayReserve(array, new_capacity) (__SL_arraySetCapacity(__SL_XPD_ARRAY(array, &), new_capacity))
+SL_header bool __SL_arrayReserve(void **array_data, usize *array_count, usize *array_capa, sl_allocator *alloc, usize elemSize, usize new_capa);
+#define SL_arrayReserve(array, new_capacity) (__SL_arrayReserve(__SL_XPD_ARRAY(array, &), new_capacity))
 
 
 
@@ -495,8 +526,8 @@ SL_header bool __SL_arraySetCapacity(void **array_data, usize *array_count, usiz
 /// @param ... How to expand the value stored to fit the format specified with 'fmt'
 #define SL_arrayPrintf(dst, array, fmt) SL_arrayPrintf_full(dst, array, fmt, __SL_VARNAME__, *__SL_VARNAME__)
 
-#define SL_putArray_full(...) SL_PUT_WRAPPER(SL_arrayPrintf_full(SL_PUT_TARGET, __VA_ARGS__))
-#define SL_putArray(...)      SL_PUT_WRAPPER(SL_arrayPrintf(SL_PUT_TARGET, __VA_ARGS__))
+#define SL_putArray_full(array, fmt, varname, ...) SL_PUT_WRAPPER(SL_arrayPrintf_full(SL_PUT_TARGET, array, fmt, varname, ##__VA_ARGS__))
+#define SL_putArray(array, fmt, ...)               SL_PUT_WRAPPER(SL_arrayPrintf(SL_PUT_TARGET, array, fmt, ##__VA_ARGS__))
 
 
 
@@ -621,21 +652,21 @@ SL_header void *__SL_dlistInsert(void **first, void **last, usize *count, sl_all
 /// @param value Value to insert
 /// @return Pointer to the added value
 /// @note Error status is recorded in SL_ERROR
-/// @warning The value inserted will have the size of the expression `value`
-#define SL_listInsertTyped(list, _index, value) ((typeof(value) *)(__SL_IS_DLIST(list) ? __SL_dlistInsert : __SL_listInsert)(__SL_XPD_LIST(list, &), sizeof(value), _index, (void *)__SL_PTR(value)))
+/// @warning The value inserted will have the memory size of the expression `value`
+#define SL_listInsert_typed(list, _index, value) ((typeof(value) *)(__SL_IS_DLIST(list) ? __SL_dlistInsert : __SL_listInsert)(__SL_XPD_LIST(list, &), sizeof(value), _index, (void *)__SL_PTR(value)))
 /// @brief Add value to start of list
 /// @param list List
 /// @param value Value to add
 /// @return Pointer to the added value
 /// @return Pointer to the added value
 /// @note Error status is recorded in SL_ERROR
-#define SL_listAddStart(list, value) SL_listInsert((list), 0, (value))
+#define SL_listAdd_first(list, value) SL_listInsert((list), 0, (value))
 /// @brief Add value to end of list
 /// @param list List
 /// @param value Value to add
 /// @return Pointer to the added value
 /// @note Error status is recorded in SL_ERROR
-#define SL_listAddEnd(list, value) SL_listInsert((list), (list).count, (value))
+#define SL_listAdd(list, value) SL_listInsert((list), (list).count, (value))
 
 SL_header bool __SL_listRemove (void **first, void **last, usize *count, sl_allocator *alloc, usize elemSize, usize index, void *into);
 SL_header bool __SL_dlistRemove(void **first, void **last, usize *count, sl_allocator *alloc, usize elemSize, usize index, void *into);
@@ -652,14 +683,14 @@ SL_header bool __SL_dlistRemove(void **first, void **last, usize *count, sl_allo
 /// @return Wether the node was successfully removed
 /// @note Error status is recorded in SL_ERROR
 #define SL_listRemove(list, index) SL_listPop(list, index, NULL)
-SL_header bool __SL_listRemoveRef (void **first, void **last, usize *count, sl_allocator *alloc, void *ptr_to_value);
-SL_header bool __SL_dlistRemoveRef(void **first, void **last, usize *count, sl_allocator *alloc, void *ptr_to_value);
+SL_header bool __SL_listRemove_ref (void **first, void **last, usize *count, sl_allocator *alloc, void *ptr_to_value);
+SL_header bool __SL_dlistRemove_ref(void **first, void **last, usize *count, sl_allocator *alloc, void *ptr_to_value);
 /// @brief Remove a node by reference in list
 /// @param list List
 /// @param ptr_to_value A pointer to a value stored in the list (as outputed by functions such as `listAt` or `listAddEnd`)
 /// @return Wether the node was successfully removed
 /// @note Error status is recorded in SL_ERROR
-#define SL_listRemoveRef(list, ptr_to_value) ((__SL_IS_DLIST(list) ? __SL_dlistRemoveRef : __SL_listRemoveRef)(__SL_XPD_LIST(list, &), ptr_to_value))
+#define SL_listRemove_ref(list, ptr_to_value) ((__SL_IS_DLIST(list) ? __SL_dlistRemove_ref : __SL_listRemove_ref)(__SL_XPD_LIST(list, &), ptr_to_value))
 
 
 
@@ -738,6 +769,8 @@ for ( \
 // #include "array.h"
 
 
+
+#define SL_DICT_BASE_CAPACITY 32
 
 /// @brief Define a new type of dictionary
 /// @param key_type Type of the key representing
@@ -901,17 +934,11 @@ SL_header bool __SL_dictRemove(struct __dict_gen *dict, usize keySize, void *key
 typedef struct sl_arena {
     sl_allocator description;
 
-    SL_array(void_p) buffers;
+    SL_array(SL_ptr(void)) buffers;
     void *currentPage;
     void *current;
     usize pageSize;
 } sl_arena;
-
-SL_header void *SL_arenaAlloc(sl_allocator *a_, usize size);
-SL_header void *SL_arenaZalloc(sl_allocator *a_, usize size);
-SL_header void *SL_arenaRealloc(sl_allocator *a_, void *memory, usize size);
-SL_header void SL_arenaFree(sl_allocator *a_, void *memory);
-SL_header void *SL_arenaClone(sl_allocator *a_, void *memory, usize size);
 
 /// @brief Create an areana allocator
 /// @param pageSize Capacity of each page
@@ -937,17 +964,17 @@ SL_header void SL_arenaDestroy(sl_arena arena);
 
 // #include "../base.h"
 
-#define SL_DEF_TUPLE2(t0_, t1_)                typedef struct tuple2(t0_, t1_) { u8 count[0][2]; t0 d0; t1 d1; } tuple2(t0_, t1_)
-#define SL_DEF_TUPLE3(t0_, t1_, t2_)           typedef struct tuple3(t0_, t1_, t2_) { u8 count[0][3]; t0 d0; t1 d1; t2 d2; } tuple3(t0_, t1_, t2_)
-#define SL_DEF_TUPLE4(t0_, t1_, t2_, t3_)      typedef struct tuple4(t0_, t1_, t2_, t3_) { u8 count[0][4]; t0 d0; t1 d1; t2 d2; t3 d3; } tuple4(t0_, t1_, t2_, t3_)
-#define SL_DEF_TUPLE5(t0_, t1_, t2_, t3_, t4_) typedef struct tuple5(t0_, t1_, t2_, t3_, t4_) { u8 count[0][5]; t0 d0; t1 d1; t2 d2; t3 d3; t4 d4; } tuple5(t0_, t1_, t2_, t3_, t4_)
+#define SL_DEF_TUPLE2(t0, t1)             typedef struct tuple2(t0, t1)             { u8 count[0][2]; t0 v0; t1 v1; }                      tuple2(t0, t1)
+#define SL_DEF_TUPLE3(t0, t1, t2)         typedef struct tuple3(t0, t1, t2)         { u8 count[0][3]; t0 v0; t1 v1; t2 v2; }               tuple3(t0, t1, t2)
+#define SL_DEF_TUPLE4(t0, t1, t2, t3)     typedef struct tuple4(t0, t1, t2, t3)     { u8 count[0][4]; t0 v0; t1 v1; t2 v2; t3 v3; }        tuple4(t0, t1, t2, t3)
+#define SL_DEF_TUPLE5(t0, t1, t2, t3, t4) typedef struct tuple5(t0, t1, t2, t3, t4) { u8 count[0][5]; t0 v0; t1 v1; t2 v2; t3 v3; t4 v4; } tuple5(t0, t1, t2, t3, t4)
 
 #define SL_DEF_TUPLE(n, ...) SL_DEF_TUPPLE##n(__VA_ARGS__)
 
-#define tuple2(t0_, t1_) CAT(CAT(tuple_, t0_), t1_)
-#define tuple3(t0_, t1_, t2_) CAT(tuple2(t0_, t1_), t2_)
-#define tuple4(t0_, t1_, t2_, t3_) CAT(tuple3(t0_, t1_, t2_), t3_)
-#define tuple5(t0_, t1_, t2_, t3_, t4_) CAT(tuple4(t0_, t1_, t2_, t3_), t4_)
+#define tuple2(t0, t1)             CAT(CAT(CAT(tuple_, t0), _), t1)
+#define tuple3(t0, t1, t2)         CAT(CAT(tuple2(t0, t1), _), t2)
+#define tuple4(t0, t1, t2, t3)     CAT(CAT(tuple3(t0, t1, t2), _), t3)
+#define tuple5(t0, t1, t2, t3, t4) CAT(CAT(tuple4(t0, t1, t2, t3), _), t4)
 
 #define tuple(n, ...)  CAT(tuple, n)(__VA_ARGS__)
 #define tuple_count(t) sizeof((t).count[0])
@@ -1110,12 +1137,13 @@ SL_header int __SL_gprintHex(sl_stream dst, usize size, void *data);
  *  THREAD: Utilities for thread manipulation.
  *  
  *  TODO:
- *  - Try finding better declarative statement
- * 
-*/
+ *  - Try to find better declarative statement
+ *  - Try to add single threaded coroutines (look at Tsoding's coroutines ??)
+ */
 
 // #include "../base.h"
 
+#if defined(__SL_POSIX__) &&  _POSIX_C_SOURCE >= 199309L
 /// @brief Sleep for nano seconds
 /// @param nano_seconds Number of nanoseconds to sleep
 /// @return Error code from `nanosleep` if failed
@@ -1128,6 +1156,7 @@ int SL_sleep_u(usize micro_seconds);
 /// @param nano_seconds Number of milliseconds to sleep
 /// @return Error code from `nanosleep` if failed
 int SL_sleep_m(usize milli_seconds);
+#endif
 
 #define  __SL_ASYNC_VAR2_1_COM(xpd, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(, xpd(__VA_ARGS__))
 #define  __SL_ASYNC_VAR2_2_COM(xpd, var_type, var_name, ...) xpd(var_type, var_name) __VA_OPT__(, __SL_ASYNC_VAR2_1_COM( xpd, __VA_ARGS__))
@@ -1175,22 +1204,27 @@ int SL_sleep_m(usize milli_seconds);
 /// @warning Due to the internals of how this works, you cannot declare a void return type for an async function. Just use int and ignore the return value instead
 /// @note Macros are declared for up to 12 parameters
 #define SL_DEF_ASYNC(func, ...)                                                                                                                                                                                                 \
-    typedef struct func##_task { sl_task_status status; pthread_t thread; __SL_ASYNC_VAR2(__SL_ASYNC_ARG_DECL, ;, ##__VA_ARGS__); typeof(func(__SL_ASYNC_VAR2_COM(__SL_ASYNC_ARG_NULL, ##__VA_ARGS__))) ret_val; } func##_task; \
-    void *__##func##_async_exec(func##_task *task) {                                                                                                                                                                            \
+    typedef struct SL_task(func) {                                                                                                                                                                                              \
+        sl_task_status status;                                                                                                                                                                                                  \
+        pthread_t thread;                                                                                                                                                                                                       \
+        __SL_ASYNC_VAR2(__SL_ASYNC_ARG_DECL, ;, ##__VA_ARGS__);                                                                                                                                                                 \
+        typeof(func(__SL_ASYNC_VAR2_COM(__SL_ASYNC_ARG_NULL, ##__VA_ARGS__))) ret_val;                                                                                                                                          \
+    } SL_task(func);                                                                                                                                                                                                            \
+    void *CAT(CAT(__, SL_async(func)), _exec) (SL_task(func) *task) {                                                                                                                                                           \
         task->status = SL_TASK_WORKING;                                                                                                                                                                                         \
         task->ret_val = func(__SL_ASYNC_VAR2_COM(__SL_ASYNC_ARG_CALL, ##__VA_ARGS__));                                                                                                                                          \
         task->status = SL_TASK_DONE;                                                                                                                                                                                            \
         pthread_exit(NULL);                                                                                                                                                                                                     \
     }                                                                                                                                                                                                                           \
-    const func##_task *func##_async_full(__SL_ASYNC_VAR2_COM(__SL_ASYNC_ARG_DECL, ##__VA_ARGS__) __VA_OPT__(,) const pthread_attr_t *attr) {                                                                                    \
-        func##_task *task = malloc(sizeof(func##_task));                                                                                                                                                                        \
+    const SL_task(func) *CAT(SL_async(func), _full) (__SL_ASYNC_VAR2_COM(__SL_ASYNC_ARG_DECL, ##__VA_ARGS__) __VA_OPT__(,) const pthread_attr_t *attr) {                                                                          \
+        SL_task(func) *task = malloc(sizeof(SL_task(func)));                                                                                                                                                                        \
         task->status = SL_TASK_WAIT;                                                                                                                                                                                            \
         __SL_ASYNC_VAR2(__SL_ASYNC_ARG_MOVE, ;, ##__VA_ARGS__);                                                                                                                                                                 \
-        if (pthread_create(&task->thread, attr, (void *(*)(void *))__##func##_async_exec, task))                                                                                                                                \
+        if (pthread_create(&task->thread, attr, (void *(*)(void *))CAT(CAT(__, SL_async(func)), _exec), task))                                                                                                                  \
             return free((void *)task), __SL_ERROR(SL_ERROR_THREAD_CREATE), NULL;                                                                                                                                                \
         return task;                                                                                                                                                                                                            \
     }                                                                                                                                                                                                                           \
-    const func##_task *func##_async(__SL_ASYNC_VAR2_COM(__SL_ASYNC_ARG_DECL, ##__VA_ARGS__)) { return func##_async_full(__SL_ASYNC_VAR2_COM(__SL_ASYNC_ARG_NAME, ##__VA_ARGS__) __VA_OPT__(,) NULL); }
+    const SL_task(func) *SL_async(func) (__SL_ASYNC_VAR2_COM(__SL_ASYNC_ARG_DECL, ##__VA_ARGS__)) { return CAT(SL_async(func), _full)(__SL_ASYNC_VAR2_COM(__SL_ASYNC_ARG_NAME, ##__VA_ARGS__) __VA_OPT__(,) NULL); }
 
 typedef enum sl_task_status
 {
@@ -1198,6 +1232,13 @@ typedef enum sl_task_status
     SL_TASK_WORKING,
     SL_TASK_DONE
 } sl_task_status;
+
+/// @brief Asynchronous version of the function
+/// @note A definition via `SL_DEF_ASYNC` should be made to allow asynchronous call 
+#define SL_async(func) CAT(func, _async)
+#define SL_task(func)  CAT(func, _task)
+/// @brief Get the status of a running task
+#define SL_taskStatus(task) ((sl_task_status)(task)->status)
 
 bool __SL_await(const void *task, usize task_thread_offset, usize ret_size, usize task_ret_offset, void *usr_ret);
 /// @brief Waits until the task is complete
@@ -1546,7 +1587,7 @@ SL_header double SL_drand_in(double low, double high);
 #define SL_FMT_V3(fmt) "v3("fmt", "fmt", "fmt")"
 #define SL_FMT_V4(fmt) "v4("fmt", "fmt", "fmt", "fmt")"
 
-#define SL_vsize(V) ((sizeof(V) / sizeof(((typeof(V) *)(NULL))->data[0])) == 1 ? *(usize*)&(v) : (sizeof(V) / sizeof(((typeof(V) *)(NULL))->data[0])))
+#define SL_vsize(V) (sizeof(V) / sizeof(((typeof(V) *)(NULL))->data[0]))
 
 #pragma region I8
 
@@ -28055,7 +28096,7 @@ typedef u64v4 luv4;
 #pragma endregion U64
 #endif // _SL_VECTOR_H_
 
-// vector.h: THIS FILE WAS GENERATED ON 08/10/2026 AT 04:08:07
+// vector.h: THIS FILE WAS GENERATED ON 09/10/2026 AT 02:24:41
 
 
 
@@ -28864,7 +28905,7 @@ SL_header dq SL_dqfrom_fromTo(dv3 from, dv3 to)
 
 #endif // _SL_QUATERNION_H_
 
-// quaternion.h: THIS FILE WAS GENERATED ON 08/10/2026 AT 04:08:07
+// quaternion.h: THIS FILE WAS GENERATED ON 09/10/2026 AT 02:24:41
 
 
 
@@ -33710,7 +33751,7 @@ SL_header bool SL_bm4x4det(bm4x4 m)
 #pragma endregion BOOL
 #endif // _SL_MATRIX_H_
 
-// matrix.h: THIS FILE WAS GENERATED ON 08/10/2026 AT 04:08:07
+// matrix.h: THIS FILE WAS GENERATED ON 09/10/2026 AT 02:24:41
 
 
 
@@ -33817,7 +33858,7 @@ SL_header void *__SL_arrayAt(void *data, usize count, usize elemSize, ssize inde
     if (index < 0) index = count + index;
     return index >= 0 && index < count ? data + index * elemSize : NULL;
 }
-SL_header bool __SL_arraySetCapacity(void **array_data, usize *array_count, usize *array_capa, sl_allocator *alloc, usize elemSize, usize new_capa)
+SL_header bool __SL_arrayReserve(void **array_data, usize *array_count, usize *array_capa, sl_allocator *alloc, usize elemSize, usize new_capa)
 {
     if (new_capa <= *array_capa) return true;
 
@@ -33841,11 +33882,11 @@ SL_header bool __SL_arraySetCapacity(void **array_data, usize *array_count, usiz
     return true;
 }
 
-SL_header void *__SL_arrayInsertRange(void **array_data, usize *array_count, usize *array_capa, sl_allocator *alloc, usize elemSize, usize index, usize span, void *values)
+SL_header void *__SL_arrayInsert_range(void **array_data, usize *array_count, usize *array_capa, sl_allocator *alloc, usize elemSize, usize index, usize span, void *values)
 {
     usize prev_count = *array_count;
     if (index > prev_count) return __SL_ERROR(SL_ERROR_OUT_OF_BOUNDS), NULL;
-    if (!__SL_arraySetCapacity(array_data, array_count, array_capa, alloc, elemSize, prev_count + span)) return __SL_ERROR(SL_ERROR_MEMORY), NULL;
+    if (!__SL_arrayReserve(array_data, array_count, array_capa, alloc, elemSize, prev_count + span)) return __SL_ERROR(SL_ERROR_MEMORY), NULL;
     
     void *firstElem = *array_data + elemSize * index;
     if (index < prev_count) memmove(firstElem + elemSize * span, firstElem, elemSize * (prev_count - index));
@@ -33855,13 +33896,13 @@ SL_header void *__SL_arrayInsertRange(void **array_data, usize *array_count, usi
     *array_count += span;
     return firstElem;
 }
-SL_header bool __SL_arrayRemoveRange(void *array_data, usize *array_count, usize elemSize, usize index, usize span)
+SL_header bool __SL_arrayRemove_range(void *array_data, usize *array_count, usize elemSize, usize index, usize span)
 {
     if (index + span > *array_count || span == 0) return __SL_ERROR(SL_ERROR_OUT_OF_BOUNDS), false;
     memmove(array_data + elemSize * index, array_data + elemSize * (index + span), elemSize * ((*array_count -= span) - index + 1));
     return true;
 }
-SL_header bool __SL_arrayRemoveUnordered(void *array_data, usize *array_count, usize elemSize, usize index)
+SL_header bool __SL_arrayRemove_unordered(void *array_data, usize *array_count, usize elemSize, usize index)
 {
     if (*array_count <= index || index < 0) return __SL_ERROR(SL_ERROR_OUT_OF_BOUNDS), false;
     memcpy (array_data + elemSize * index, array_data + elemSize * --*array_count, elemSize);
@@ -34014,7 +34055,7 @@ SL_header bool __SL_dlistRemove(void **first, void **last, usize *count, sl_allo
     return true;
 }
 
-SL_header bool __SL_listRemoveRef(void **first, void **last, usize *count, sl_allocator *alloc, void *ptr_to_value)
+SL_header bool __SL_listRemove_ref(void **first, void **last, usize *count, sl_allocator *alloc, void *ptr_to_value)
 {
     __list_gen_node *to_free = ptr_to_value - sizeof(void *);
 
@@ -34036,7 +34077,7 @@ SL_header bool __SL_listRemoveRef(void **first, void **last, usize *count, sl_al
     --*count;
     return true;
 }
-SL_header bool __SL_dlistRemoveRef(void **first, void **last, usize *count, sl_allocator *alloc, void *ptr_to_value)
+SL_header bool __SL_dlistRemove_ref(void **first, void **last, usize *count, sl_allocator *alloc, void *ptr_to_value)
 {
     __dlist_gen_node *at = ptr_to_value - 2 * sizeof(void *);
 
@@ -34091,7 +34132,12 @@ SL_header void *__SL_dictAdd(struct __dict_gen *dict, usize keySize, const void 
     if (!memcpy((void *)&new->key, key, keySize))               return SL_afree(dict->alloc, new), __SL_ERROR(SL_ERROR_MEMORY), NULL;
     if (!memcpy((void *)&new->key + keySize, value, valueSize)) return SL_afree(dict->alloc, new), __SL_ERROR(SL_ERROR_MEMORY), NULL;
 
-    if (dict->count / (double)dict->capa > 3.0)
+    if (dict->capa == 0)
+    {
+        dict->data = SL_azalloc(dict->alloc, SL_DICT_BASE_CAPACITY * sizeof(void *));
+        dict->capa = SL_DICT_BASE_CAPACITY;
+    }
+    else if (dict->count / (double)dict->capa > 3.0)
     {
         // We should double the bucket count and rehash everything
         usize new_capa = dict->capa * 2;
@@ -34144,39 +34190,41 @@ SL_header bool __SL_dictRemove(struct __dict_gen *dict, usize keySize, void *key
     return true;
 }
 
-SL_header void *SL_arenaAlloc(sl_allocator *a_, usize size)
+SL_header void *__SL_arenaAlloc(sl_allocator *a_, usize size)
 {
     sl_arena *a = (sl_arena*)a_;
-    if ((usize)a->current - (usize)a->currentPage + size > a->pageSize) a->currentPage = a->current = *SL_arrayAdd(a->buffers, malloc(a->pageSize));
+    if ((usize)a->current - (usize)a->currentPage + size > a->pageSize)
+        a->currentPage = a->current = *SL_arrayAdd(a->buffers, malloc(a->pageSize));
 
     void *ret = a->current;
     a->current += size;
     return ret;
 }
-SL_header void *SL_arenaZalloc(sl_allocator *a_, usize size)
+SL_header void *__SL_arenaZalloc(sl_allocator *a_, usize size)
 {
-    void *ret = SL_arenaAlloc(a_, size);
+    void *ret = __SL_arenaAlloc(a_, size);
+    if (!ret) return __SL_ERROR(SL_ERROR_MEMORY), NULL;
     memset(ret, 0, size);
     return ret;
 }
-SL_header void *SL_arenaRealloc(sl_allocator *a_, void *memory, usize size)
+SL_header void *__SL_arenaRealloc(sl_allocator *a_, void *memory, usize size)
 {
     SL_terminate(-1, "[UNIMPLEMENTED]");
 }
-SL_header void SL_arenaFree(sl_allocator *a_, void *memory)
+SL_header void __SL_arenaFree(sl_allocator *a_, void *memory)
 {
     SL_terminate(-1, "[UNIMPLEMENTED]");
 }
-SL_header void *SL_arenaClone(sl_allocator *a_, void *memory, usize size)
+SL_header void *__SL_arenaClone(sl_allocator *a_, void *memory, usize size)
 {
-    void *ret = SL_arenaAlloc(a_, size);
+    void *ret = __SL_arenaAlloc(a_, size);
     return ret ? memcpy(ret, memory, size) : (__SL_ERROR(SL_ERROR_MEMORY), NULL);
 }
 
 SL_header sl_arena SL_arenaCreate(usize pageSize)
 {
     sl_arena ret = {
-        .description = SL_allocator_(SL_arenaAlloc, SL_arenaZalloc, SL_arenaRealloc, SL_arenaFree, SL_arenaClone),
+        .description = SL_allocator_(__SL_arenaAlloc, __SL_arenaZalloc, __SL_arenaRealloc, __SL_arenaFree, __SL_arenaClone),
         .buffers = {0}, .currentPage = NULL, .current = NULL, .pageSize = pageSize
     };
     ret.currentPage = ret.current = *SL_arrayAdd(ret.buffers, malloc(pageSize));
@@ -34186,7 +34234,7 @@ SL_header sl_arena SL_arenaCreate(usize pageSize)
 /// @param arena Arena
 SL_header void SL_arenaDestroy(sl_arena arena)
 {
-    SL_aforeach(map, arena.buffers) free(*map);
+    SL_aforeach(page, arena.buffers) free(*page);
     arena.buffers.count = 0;
 }
 
@@ -34315,6 +34363,7 @@ SL_header int __SL_gprintHex(sl_stream dst, usize size, void *data)
     return ret;
 }
 
+#if defined(__SL_POSIX__) &&  _POSIX_C_SOURCE >= 199309L
 int SL_sleep_n(usize nano_seconds)
 {
     struct timespec time = { .tv_sec = nano_seconds / 1000*1000*1000, .tv_nsec = (nano_seconds  % 1000*1000*1000) };
@@ -34336,15 +34385,19 @@ int SL_sleep_m(usize milli_seconds)
     while (nanosleep(&time, &time) < 0 && (err = errno) == EINTR);
     return err;
 }
+#endif
 
 bool __SL_await(const void *task, usize task_thread_offset, usize ret_size, usize task_ret_offset, void *usr_ret)
 {
-    if (!task) __SL_ERROR(SL_ERROR_THREAD_CREATE), false;
+    if (!task) return __SL_ERROR(SL_ERROR_THREAD_CREATE), false;
+
     pthread_t thread = *(pthread_t *)(task + task_thread_offset);
+    
     if (pthread_join(thread, NULL))  
         return pthread_cancel(thread), free((void *)task), __SL_ERROR(SL_ERROR_THREAD_JOIN), false;
     if (usr_ret && !memcpy(usr_ret, task + task_ret_offset, ret_size)) 
         return free((void *)task), __SL_ERROR(SL_ERROR_MEMORY), false;
+    
     return free((void *)task), true;
 }
 
@@ -34404,19 +34457,19 @@ SL_header bool SL_cmd_arg_parse(int argc, char **argv, SL_array(sl_cmd_arg) *arg
     return true;
 }
 
-SL_header u32 SL_umin(u32 a, u32 b)   { return a < b ? a : b; }
-SL_header u64 SL_u64min(u64 a, u64 b) { return a < b ? a : b; }
-SL_header int SL_imin(int a, int b)   { return a < b ? a : b; }
-SL_header i64 SL_i64min(i64 a, i64 b) { return a < b ? a : b; }
-SL_header f32 SL_fmin(f32 a, f32 b)   { return a < b ? a : b; }
-SL_header f64 SL_dmin(f64 a, f64 b)   { return a < b ? a : b; }
+SL_header u32 SL_umin(u32 a, u32 b)          { return a < b ? a : b; }
+SL_header u64 SL_u64min(u64 a, u64 b)        { return a < b ? a : b; }
+SL_header int SL_imin(int a, int b)          { return a < b ? a : b; }
+SL_header i64 SL_i64min(i64 a, i64 b)        { return a < b ? a : b; }
+SL_header float SL_fmin(float a, float b)    { return a < b ? a : b; }
+SL_header double SL_dmin(double a, double b) { return a < b ? a : b; }
 
-SL_header u32 SL_umax(u32 a, u32 b)   { return a > b ? a : b; }
-SL_header u64 SL_u64max(u64 a, u64 b) { return a > b ? a : b; }
-SL_header int SL_imax(int a, int b)   { return a > b ? a : b; }
-SL_header i64 SL_i64max(i64 a, i64 b) { return a > b ? a : b; }
-SL_header f32 SL_fmax(f32 a, f32 b)   { return a > b ? a : b; }
-SL_header f64 SL_dmax(f64 a, f64 b)   { return a > b ? a : b; }
+SL_header u32 SL_umax(u32 a, u32 b)          { return a > b ? a : b; }
+SL_header u64 SL_u64max(u64 a, u64 b)        { return a > b ? a : b; }
+SL_header int SL_imax(int a, int b)          { return a > b ? a : b; }
+SL_header i64 SL_i64max(i64 a, i64 b)        { return a > b ? a : b; }
+SL_header float SL_fmax(float a, float b)    { return a > b ? a : b; }
+SL_header double SL_dmax(double a, double b) { return a > b ? a : b; }
 
 SL_header int SL_isign(int i)   { return i == 0    ? 0    : i > 0    ? 1    : -1;    }
 SL_header i64 SL_i64sign(i64 i) { return i == 0    ? 0    : i > 0    ? 1    : -1;    }
@@ -34608,31 +34661,31 @@ SL_header bool fmSolve_GaussSeidel(fm lhs, fv* rhs, float* x, float maxError, ui
 #   define slicev               SL_slicev
 #   define arrayCreate          SL_arrayCreate
 #   define arrayCreateA         SL_arrayCreateA
+#   define arrayClear           SL_arrayClear
 #   define arrayDestroy         SL_arrayDestroy
 #   define arrayClone           SL_arrayClone
 #   define arrayCloneA          SL_arrayCloneA
 #   define arrayWrap            SL_arrayWrap
-#   define arrayWrapVar         SL_arrayWrapVar
+#   define arrayWrap_var        SL_arrayWrap_var
 #   define arrayFrom            SL_arrayFrom
 #   define arrayFromA           SL_arrayFromA
-#   define arrayFromVar         SL_arrayFromVar
-#   define arrayFromVarA        SL_arrayFromVarA
+#   define arrayFrom_var        SL_arrayFrom_var
+#   define arrayFromA_var       SL_arrayFromA_var
 #   define arrayFirst           SL_arrayFirst
 #   define arrayLast            SL_arrayLast
 #   define arrayAt              SL_arrayAt
-#   define arrayCheckResize     SL_arrayCheckResize
-#   define arrayInsertRange     SL_arrayInsertRange
+#   define arrayInsert_range    SL_arrayInsert_range
 #   define arrayInsert          SL_arrayInsert
-#   define arrayInsertVar       SL_arrayInsertVar
-#   define arrayAddRange        SL_arrayAddRange
+#   define arrayInsert_var      SL_arrayInsert_var
+#   define arrayAdd_range       SL_arrayAdd_range
 #   define arrayAdd             SL_arrayAdd
-#   define arrayAddVar          SL_arrayAddVar
+#   define arrayAdd_var         SL_arrayAdd_var
 #   define arrayCat             SL_arrayCat
-#   define arrayRemoveRange     SL_arrayRemoveRange
+#   define arrayRemove_range    SL_arrayRemove_range
 #   define arrayRemove          SL_arrayRemove
-#   define arrayRemoveUnordered SL_arrayRemoveUnordered
+#   define arrayRemove_unordered SL_arrayRemove_unordered
 #   define arrayPop             SL_arrayPop
-#   define arrayQSort           SL_arraySort
+#   define arraySort            SL_arraySort
 #   define arrayFill            SL_arrayFill
 #   define arrayReserve         SL_arrayReserve
 #   define aforeach             SL_aforeach
@@ -34654,10 +34707,10 @@ SL_header bool fmSolve_GaussSeidel(fm lhs, fv* rhs, float* x, float maxError, ui
 #   define listLast         SL_listLast
 #   define listAt           SL_listAt
 #   define listInsert       SL_listInsert
-#   define listAddStart     SL_listAddStart
-#   define listAddEnd       SL_listAddEnd
+#   define listAdd          SL_listAdd
+#   define listAdd_first    SL_listAdd_first
 #   define listRemove       SL_listRemove
-#   define listRemoveRef    SL_listRemoveRef
+#   define listRemove_ref   SL_listRemove_ref
 #   define listPop          SL_listPop
 #   define lforeach         SL_lforeach
 #   define lindex           SL_lindex
@@ -34670,13 +34723,16 @@ SL_header bool fmSolve_GaussSeidel(fm lhs, fv* rhs, float* x, float maxError, ui
 
 #   define  DEF_DICT            SL_DEF_DICT
 #   define  dict                SL_dict
-#   define  dictClear           SL_dictClear
 #   define  dictCreate          SL_dictCreate
 #   define  dictCreate_full     SL_dictCreate_full
 #   define  dictCreateA         SL_dictCreateA
 #   define  dictCreateA_full    SL_dictCreateA_full
-#   define  dictHash            SL_dictHash
+#   define  dictClear           SL_dictClear
 #   define  dictDestroy         SL_dictDestroy
+#   define  dictCmp2            SL_dictCmp2
+#   define  dictCmp             SL_dictCmp
+#   define  dictHash2           SL_dictHash2
+#   define  dictHash            SL_dictHash
 #   define  dictGet             SL_dictGet
 #   define  dictAdd             SL_dictAdd
 #   define  dictRemove          SL_dictRemove
@@ -34715,6 +34771,8 @@ SL_header bool fmSolve_GaussSeidel(fm lhs, fv* rhs, float* x, float maxError, ui
 #   define  sleep_u             SL_sleep_u
 #   define  sleep_m             SL_sleep_m
     typedef sl_task_status      task_status;
+#   define  async               SL_async
+#   define  taskStatus          SL_taskStatus
 #   define  await               SL_await
 #   define  DEF_ASYNC           SL_DEF_ASYNC
 
@@ -38623,15 +38681,15 @@ SL_header bool fmSolve_GaussSeidel(fm lhs, fv* rhs, float* x, float maxError, ui
 
 
 #ifndef SL_NO_DEFINES
-    __SL_DEF_CMP_FUNC(int,    a, b, SL_header, SL_implement) SL_implement({ return (i64)*a - (i64)*b; });
-    __SL_DEF_CMP_FUNC(i8,     a, b, SL_header, SL_implement) SL_implement({ return (i64)*a - (i64)*b; });
-    __SL_DEF_CMP_FUNC(i16,    a, b, SL_header, SL_implement) SL_implement({ return (i64)*a - (i64)*b; });
-    __SL_DEF_CMP_FUNC(i32,    a, b, SL_header, SL_implement) SL_implement({ return (i64)*a - (i64)*b; });
+    __SL_DEF_CMP_FUNC(int,    a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : *a - *b; });
+    __SL_DEF_CMP_FUNC(i8,     a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : *a - *b; });
+    __SL_DEF_CMP_FUNC(i16,    a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : *a - *b; });
+    __SL_DEF_CMP_FUNC(i32,    a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : *a - *b; });
     __SL_DEF_CMP_FUNC(i64,    a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : *a - *b; });
-    __SL_DEF_CMP_FUNC(uint,   a, b, SL_header, SL_implement) SL_implement({ return (i64)*a - (i64)*b; });
-    __SL_DEF_CMP_FUNC(u8,     a, b, SL_header, SL_implement) SL_implement({ return (i64)*a - (i64)*b; });
-    __SL_DEF_CMP_FUNC(u16,    a, b, SL_header, SL_implement) SL_implement({ return (i64)*a - (i64)*b; });
-    __SL_DEF_CMP_FUNC(u32,    a, b, SL_header, SL_implement) SL_implement({ return (i64)*a - (i64)*b; });
+    __SL_DEF_CMP_FUNC(uint,   a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : *a - *b; });
+    __SL_DEF_CMP_FUNC(u8,     a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : *a - *b; });
+    __SL_DEF_CMP_FUNC(u16,    a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : *a - *b; });
+    __SL_DEF_CMP_FUNC(u32,    a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : *a - *b; });
     __SL_DEF_CMP_FUNC(u64,    a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : *a - *b; });
     __SL_DEF_CMP_FUNC(ssize,  a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : *a - *b; });
     __SL_DEF_CMP_FUNC(usize,  a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : *a - *b; });
@@ -38639,7 +38697,7 @@ SL_header bool fmSolve_GaussSeidel(fm lhs, fv* rhs, float* x, float maxError, ui
     __SL_DEF_CMP_FUNC(double, a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : *a - *b; });
     __SL_DEF_CMP_FUNC(bool,   a, b, SL_header, SL_implement) SL_implement({ return !*a && *b ? -1 : (*a && !*b ? 1 : 0); });
 
-    __SL_DEF_CMP_FUNC(char_p, a, b, SL_header, SL_implement) SL_implement({ return strcmp(*a, *b); });
+    __SL_DEF_CMP_FUNC(charp,  a, b, SL_header, SL_implement) SL_implement({ return strcmp(*a, *b); });
 
     SL_DEF_ARRAY(bool);
     SL_DEF_ARRAY(int);    SL_DEF_ARRAY(uint);  SL_DEF_ARRAY(usize);  SL_DEF_ARRAY(ssize);
@@ -38669,9 +38727,9 @@ SL_header bool fmSolve_GaussSeidel(fm lhs, fv* rhs, float* x, float maxError, ui
     SL_list(u16) SL_list(ch16), SL_list(wchar_t);   typedef SL_dlist(u16) SL_dlist(ch16), SL_dlist(wchar_t);
     SL_list(u32) SL_list(ch32);                     typedef SL_dlist(u32) SL_dlist(ch32);
 
-    SL_DEF_LIST(void_p);
+    SL_DEF_LIST(SL_ptr(void));
 
-SL_DEF_HASH_FUNC(char_p, key) SL_implement
+SL_DEF_HASH_FUNC(charp, key) SL_implement
 ({
     usize h = 0x02468ACE;
     for (const char *c = *key; *c; ++c) {
@@ -38684,4 +38742,4 @@ SL_DEF_HASH_FUNC(char_p, key) SL_implement
 #endif
 
 
-// sl_all.h: THIS FILE WAS GENERATED ON 08/10/2026 AT 04:08:07
+// sl_all.h: THIS FILE WAS GENERATED ON 09/10/2026 AT 02:24:41

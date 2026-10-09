@@ -92,55 +92,55 @@ SL_header sl_string SL_stringLower(sl_string str);
 SL_header sl_string SL_stringCapitalize(sl_string str);
 
 #ifdef SL_STRIP_PREFIX
-    typedef sl_string       string;
+    typedef sl_string           string;
     typedef SL_array(sl_string) SL_array(string);
-#   define  string_         SL_string_
-#   define  stringc         SL_stringc
-#   define  stringa         SL_stringa
-#   define  stringLen       SL_stringLen
-#   define  stringCmp       SL_stringCmp
-#   define  stringStart     SL_stringStart
-#   define  stringEnd       SL_stringEnd
-#   define  stringFind      SL_stringFind
-#   define  stringTrimStart SL_stringTrimStart
-#   define  stringTrimEnd   SL_stringTrimEnd
-#   define  stringTrim      SL_stringTrim
-#   define  stringSplit     SL_stringSplit
-#   define  stringSlice     SL_stringSlice
-#   define  stringUpper     SL_stringUpper
-#   define  stringLower     SL_stringLower
-#   define  stringCapitalize SL_stringCapitalize
-#   define  string_cmp      sl_string_cmp
+#   define  string_             SL_string_
+#   define  stringc             SL_stringc
+#   define  stringa             SL_stringa
+#   define  stringLen           SL_stringLen
+#   define  stringCmp           SL_stringCmp
+#   define  stringStart         SL_stringStart
+#   define  stringEnd           SL_stringEnd
+#   define  stringFind          SL_stringFind
+#   define  stringTrimStart     SL_stringTrimStart
+#   define  stringTrimEnd       SL_stringTrimEnd
+#   define  stringTrim          SL_stringTrim
+#   define  stringSplit         SL_stringSplit
+#   define  stringSlice         SL_stringSlice
+#   define  stringUpper         SL_stringUpper
+#   define  stringLower         SL_stringLower
+#   define  stringCapitalize    SL_stringCapitalize
+#   define  string_cmp          sl_string_cmp
 #endif
 
 #ifdef SL_IMPLEMENTATION
 SL_header int SL_stringCmp(sl_string lhs, sl_string rhs)
 {
-    return strncmp(lhs.data, rhs.data, lhs.count < rhs.count ? lhs.count : rhs.count);
+    return strncmp((const char *)lhs.data, (const char *)rhs.data, lhs.count < rhs.count ? lhs.count : rhs.count);
 }
 SL_header bool SL_stringStart(sl_string str, sl_string fact)
 {
     if (str.count < fact.count) return false;
     if (str.data == fact.data) return str.count >= fact.count;
 
-    const char *a = str.data, *b = fact.data;
-    for (const char *max_a = str.data + fact.count; max_a > a; ++a, ++b) if (*a != *b) return false;
+    const u8 *a = str.data, *b = fact.data;
+    for (const u8 *max_a = str.data + fact.count; max_a > a; ++a, ++b) if (*a != *b) return false;
     return true;
 }
 SL_header bool SL_stringEnd(sl_string str, sl_string fact)
 {
     if (str.count < fact.count) return false;
 
-    const char *a = str.data + str.count - 1, *b = fact.data + fact.count - 1;
-    for (const char *min_a = str.data; min_a <= a; --a, --b) if (*a != *b) return false;
+    const u8 *a = str.data + str.count - 1, *b = fact.data + fact.count - 1;
+    for (const u8 *min_a = str.data; min_a <= a; --a, --b) if (*a != *b) return false;
     return true;
 }
 SL_header ssize SL_stringFind(sl_string str, sl_string fact)
 {
     if (str.count < fact.count) return -1;
 
-    const char *max_strc = str.data + str.count;
-    for (const char *str_start = str.data; (usize)str.data < (usize)max_strc; ++str.data, --str.count) 
+    const u8 *max_strc = str.data + str.count;
+    for (const u8 *str_start = str.data; (usize)str.data < (usize)max_strc; ++str.data, --str.count) 
         if (SL_stringStart(str, fact)) return (ssize)str.data - (ssize)str_start;
 
     return -1;
@@ -148,14 +148,14 @@ SL_header ssize SL_stringFind(sl_string str, sl_string fact)
 
 SL_header sl_string SL_stringTrimStart(sl_string str)
 {
-    char *a = str.data;
-    for (const char *max_a = str.data + str.count; max_a > a && isspace(*a); ++a);
+    u8 *a = str.data;
+    for (const u8 *max_a = str.data + str.count; max_a > a && isspace(*a); ++a);
     return (sl_string){.data = a, .count = str.count + (usize)a - (usize)str.data};
 }
 SL_header sl_string SL_stringTrimEnd(sl_string str)
 {
-    char *a = str.data + str.count - 1;
-    for (const char *min_a = str.data; min_a <= a && isspace(*a); --a);
+    u8 *a = str.data + str.count - 1;
+    for (const u8 *min_a = str.data; min_a <= a && isspace(*a); --a);
     return (sl_string){.data = str.data, .count = (usize)a - (usize)str.data};
 }
 SL_header sl_string SL_stringTrim(sl_string str)
@@ -166,8 +166,8 @@ SL_header sl_string SL_stringTrim(sl_string str)
 SL_header usize SL_stringSplit(sl_string str, sl_string separator, SL_array(sl_string) *into)
 {
     usize separator_count = 0;
-    char *str_start = str.data;
-    const char *max_strc = str.data + str.count;
+    u8 *str_start = str.data;
+    const u8 *max_strc = str.data + str.count;
     while ((usize)str.data < (usize)max_strc)
     {
         if (separator_count += SL_stringStart(str, separator))
@@ -190,14 +190,12 @@ SL_header sl_string SL_stringSlice(sl_string str, usize start, usize count)
 
 SL_header sl_string SL_stringUpper(sl_string str)
 {
-    char *c = str.data;
-    for (const char *max = c + str.count; c < max; ++c) *c = toupper(*c);
+    for (u8 *c = str.data, *max = c + str.count; c < max; ++c) *c = toupper(*c);
     return str;
 }
 SL_header sl_string SL_stringLower(sl_string str)
 {
-    char *c = str.data;
-    for (const char *max = c + str.count; c < max; ++c) *c = tolower(*c);
+    for (u8 *c = str.data, *max = c + str.count; c < max; ++c) *c = tolower(*c);
     return str;
 }
 SL_header sl_string SL_stringCapitalize(sl_string str)

@@ -108,21 +108,21 @@ SL_header void *__SL_dlistInsert(void **first, void **last, usize *count, sl_all
 /// @param value Value to insert
 /// @return Pointer to the added value
 /// @note Error status is recorded in SL_ERROR
-/// @warning The value inserted will have the size of the expression `value`
-#define SL_listInsertTyped(list, _index, value) ((typeof(value) *)(__SL_IS_DLIST(list) ? __SL_dlistInsert : __SL_listInsert)(__SL_XPD_LIST(list, &), sizeof(value), _index, (void *)__SL_PTR(value)))
+/// @warning The value inserted will have the memory size of the expression `value`
+#define SL_listInsert_typed(list, _index, value) ((typeof(value) *)(__SL_IS_DLIST(list) ? __SL_dlistInsert : __SL_listInsert)(__SL_XPD_LIST(list, &), sizeof(value), _index, (void *)__SL_PTR(value)))
 /// @brief Add value to start of list
 /// @param list List
 /// @param value Value to add
 /// @return Pointer to the added value
 /// @return Pointer to the added value
 /// @note Error status is recorded in SL_ERROR
-#define SL_listAddStart(list, value) SL_listInsert((list), 0, (value))
+#define SL_listAdd_first(list, value) SL_listInsert((list), 0, (value))
 /// @brief Add value to end of list
 /// @param list List
 /// @param value Value to add
 /// @return Pointer to the added value
 /// @note Error status is recorded in SL_ERROR
-#define SL_listAddEnd(list, value) SL_listInsert((list), (list).count, (value))
+#define SL_listAdd(list, value) SL_listInsert((list), (list).count, (value))
 
 SL_header bool __SL_listRemove (void **first, void **last, usize *count, sl_allocator *alloc, usize elemSize, usize index, void *into);
 SL_header bool __SL_dlistRemove(void **first, void **last, usize *count, sl_allocator *alloc, usize elemSize, usize index, void *into);
@@ -139,14 +139,14 @@ SL_header bool __SL_dlistRemove(void **first, void **last, usize *count, sl_allo
 /// @return Wether the node was successfully removed
 /// @note Error status is recorded in SL_ERROR
 #define SL_listRemove(list, index) SL_listPop(list, index, NULL)
-SL_header bool __SL_listRemoveRef (void **first, void **last, usize *count, sl_allocator *alloc, void *ptr_to_value);
-SL_header bool __SL_dlistRemoveRef(void **first, void **last, usize *count, sl_allocator *alloc, void *ptr_to_value);
+SL_header bool __SL_listRemove_ref (void **first, void **last, usize *count, sl_allocator *alloc, void *ptr_to_value);
+SL_header bool __SL_dlistRemove_ref(void **first, void **last, usize *count, sl_allocator *alloc, void *ptr_to_value);
 /// @brief Remove a node by reference in list
 /// @param list List
 /// @param ptr_to_value A pointer to a value stored in the list (as outputed by functions such as `listAt` or `listAddEnd`)
 /// @return Wether the node was successfully removed
 /// @note Error status is recorded in SL_ERROR
-#define SL_listRemoveRef(list, ptr_to_value) ((__SL_IS_DLIST(list) ? __SL_dlistRemoveRef : __SL_listRemoveRef)(__SL_XPD_LIST(list, &), ptr_to_value))
+#define SL_listRemove_ref(list, ptr_to_value) ((__SL_IS_DLIST(list) ? __SL_dlistRemove_ref : __SL_listRemove_ref)(__SL_XPD_LIST(list, &), ptr_to_value))
 
 
 
@@ -209,10 +209,10 @@ for ( \
 #   define listLast         SL_listLast
 #   define listAt           SL_listAt
 #   define listInsert       SL_listInsert
-#   define listAddStart     SL_listAddStart
-#   define listAddEnd       SL_listAddEnd
+#   define listAdd          SL_listAdd
+#   define listAdd_first    SL_listAdd_first
 #   define listRemove       SL_listRemove
-#   define listRemoveRef    SL_listRemoveRef
+#   define listRemove_ref   SL_listRemove_ref
 #   define listPop          SL_listPop
 #   define lforeach         SL_lforeach
 #   define lindex           SL_lindex
@@ -369,7 +369,7 @@ SL_header bool __SL_dlistRemove(void **first, void **last, usize *count, sl_allo
     return true;
 }
 
-SL_header bool __SL_listRemoveRef(void **first, void **last, usize *count, sl_allocator *alloc, void *ptr_to_value)
+SL_header bool __SL_listRemove_ref(void **first, void **last, usize *count, sl_allocator *alloc, void *ptr_to_value)
 {
     __list_gen_node *to_free = ptr_to_value - sizeof(void *);
 
@@ -391,7 +391,7 @@ SL_header bool __SL_listRemoveRef(void **first, void **last, usize *count, sl_al
     --*count;
     return true;
 }
-SL_header bool __SL_dlistRemoveRef(void **first, void **last, usize *count, sl_allocator *alloc, void *ptr_to_value)
+SL_header bool __SL_dlistRemove_ref(void **first, void **last, usize *count, sl_allocator *alloc, void *ptr_to_value)
 {
     __dlist_gen_node *at = ptr_to_value - 2 * sizeof(void *);
 
@@ -429,13 +429,13 @@ SL_header bool __SL_dlistRemoveRef(void **first, void **last, usize *count, sl_a
     SL_DEF_LIST(f32);   SL_DEF_LIST(f64);
     SL_DEF_LIST(SL_ptr(char));
 
-    typedef SL_list(f32) SL_list(float);            typedef SL_dlist(f32) SL_dlist(float); 
-    typedef SL_list(f64) SL_list(double);           typedef SL_dlist(f64) SL_dlist(double);
+    typedef SL_list(f32) SL_list(float);                    typedef SL_dlist(f32) SL_dlist(float); 
+    typedef SL_list(f64) SL_list(double);                   typedef SL_dlist(f64) SL_dlist(double);
 
-    SL_list(u8)  SL_list(ch8),  SL_list(char);      typedef SL_dlist(u8)  SL_dlist(ch8),  SL_dlist(char);
-    SL_list(u16) SL_list(ch16), SL_list(wchar_t);   typedef SL_dlist(u16) SL_dlist(ch16), SL_dlist(wchar_t);
-    SL_list(u32) SL_list(ch32);                     typedef SL_dlist(u32) SL_dlist(ch32);
+    typedef SL_list(u8)  SL_list(ch8),  SL_list(char);      typedef SL_dlist(u8)  SL_dlist(ch8),  SL_dlist(char);
+    typedef SL_list(u16) SL_list(ch16), SL_list(wchar_t);   typedef SL_dlist(u16) SL_dlist(ch16), SL_dlist(wchar_t);
+    typedef SL_list(u32) SL_list(ch32);                     typedef SL_dlist(u32) SL_dlist(ch32);
 
-    SL_DEF_LIST(void_p);
+    SL_DEF_LIST(SL_ptr(void));
 #endif
 #endif // _SL_LIST_H_

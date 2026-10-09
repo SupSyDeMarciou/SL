@@ -5,6 +5,12 @@
  *  BASE: Useful constructs reused throughout the SL
  */
 
+#if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
+#   define __SL_POSIX__
+#endif
+
+
+
 #ifndef SL_NO_STDLIB
     #include <stdint.h>
     #include <stdbool.h>
@@ -18,7 +24,12 @@
     #include <ctype.h>
     #include <time.h>
     #include <pthread.h>
+
+    #ifdef __SL_POSIX__ 
+    #   include <unistd.h>
+    #endif
 #endif
+
 
 #ifndef CAT
 #   define __CAT(x, y) x##y
@@ -54,17 +65,17 @@
 
 #pragma region TYPES
 
-#define SL_ptr(type)  CAT(type, _p)
-#define SL_ptr2(type) CAT(type, _pp)
-#define SL_ptr3(type) CAT(type, _ppp)
+#define SL_ptr(type)  CAT(type, p)
+#define SL_ptr2(type) CAT(type, pp)
+#define SL_ptr3(type) CAT(type, ppp)
 #define SL_DEF_PTR(type) \
-    typedef type   *CAT(type, _p); \
-    typedef type  **CAT(type, _pp); \
-    typedef type ***CAT(type, _ppp)
+    typedef type   *CAT(type, p); \
+    typedef type  **CAT(type, pp); \
+    typedef type ***CAT(type, ppp)
 #define SL_ALIAS_PTR(base_type, new_type) \
-    typedef CAT(base_type, _p)   CAT(new_type, _p); \
-    typedef CAT(base_type, _pp)  CAT(new_type, _pp); \
-    typedef CAT(base_type, _ppp) CAT(new_type, _ppp)
+    typedef CAT(base_type, p)   CAT(new_type, p); \
+    typedef CAT(base_type, pp)  CAT(new_type, pp); \
+    typedef CAT(base_type, ppp) CAT(new_type, ppp)
 
 SL_DEF_PTR(void); SL_DEF_PTR(int); SL_DEF_PTR(char); SL_DEF_PTR(float); SL_DEF_PTR(double);
 
@@ -87,8 +98,13 @@ SL_DEF_PTR(void); SL_DEF_PTR(int); SL_DEF_PTR(char); SL_DEF_PTR(float); SL_DEF_P
 #endif
 
 typedef unsigned    uint;   SL_DEF_PTR(uint);
-typedef size_t      usize;  SL_DEF_PTR(usize);  
-typedef ssize_t     ssize;  SL_DEF_PTR(ssize);
+typedef size_t      usize;  SL_DEF_PTR(usize);
+
+#ifdef __SL_POSIX__
+    typedef ssize_t ssize;  SL_DEF_PTR(ssize);
+#else
+    typedef int64_t ssize;  SL_DEF_PTR(ssize);
+#endif
 
 typedef uint8_t     u8;     SL_DEF_PTR(u8);
 typedef uint16_t    u16;    SL_DEF_PTR(u16);
@@ -135,7 +151,7 @@ SL_header sl_error __SL_ERROR(sl_error);
 #define SL_ERROR (__SL_ERROR(SL_ERROR_NONE))
 SL_header const char *SL_strerr(sl_error error);
 
-#define SL_terminate(error_code, msg, ...) (fprintf(stderr, "%s:%u@%s - [TERMINATED(%d)] " msg, __FILE__, __LINE__, __FUNCTION__, error_code, ##__VA_ARGS__), exit(error_code))
+#define SL_terminate(error_code, msg, ...) (fprintf(stderr, "%s:%u@%s - [TERMINATED(%d)] " msg, __FILE__, __LINE__, __func__, error_code, ##__VA_ARGS__), exit(error_code))
 
 #pragma endregion ERROR
 
@@ -178,6 +194,10 @@ SL_header void *memclone(void *memory, size_t size);
 /// @param n The value to approach
 /// @return The smallest power of two greater than `n`
 SL_header u64 SL_alignPow2(u64 n);
+
+#ifndef __SL_POSIX__
+    SL_header char *strdup(const char *src);
+#endif
 
 #pragma endregion MEMORY
 
@@ -233,20 +253,28 @@ SL_header u64 SL_alignPow2(u64 n) {
     while (i < n) i <<= 1;
     return i;
 }
+
+#ifndef __SL_POSIX__
+    SL_header char *strdup(const char *src)
+    {
+        char *ret = malloc(strlen(src) + 1);
+        return ret ? strcpy(ret, src) : NULL; 
+    }
+#endif
 #endif
 
 
 
 #ifndef SL_NO_DEFINES
-    __SL_DEF_CMP_FUNC(int,    a, b, SL_header, SL_implement) SL_implement({ return (i64)*a - (i64)*b; });
-    __SL_DEF_CMP_FUNC(i8,     a, b, SL_header, SL_implement) SL_implement({ return (i64)*a - (i64)*b; });
-    __SL_DEF_CMP_FUNC(i16,    a, b, SL_header, SL_implement) SL_implement({ return (i64)*a - (i64)*b; });
-    __SL_DEF_CMP_FUNC(i32,    a, b, SL_header, SL_implement) SL_implement({ return (i64)*a - (i64)*b; });
+    __SL_DEF_CMP_FUNC(int,    a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : *a - *b; });
+    __SL_DEF_CMP_FUNC(i8,     a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : *a - *b; });
+    __SL_DEF_CMP_FUNC(i16,    a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : *a - *b; });
+    __SL_DEF_CMP_FUNC(i32,    a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : *a - *b; });
     __SL_DEF_CMP_FUNC(i64,    a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : *a - *b; });
-    __SL_DEF_CMP_FUNC(uint,   a, b, SL_header, SL_implement) SL_implement({ return (i64)*a - (i64)*b; });
-    __SL_DEF_CMP_FUNC(u8,     a, b, SL_header, SL_implement) SL_implement({ return (i64)*a - (i64)*b; });
-    __SL_DEF_CMP_FUNC(u16,    a, b, SL_header, SL_implement) SL_implement({ return (i64)*a - (i64)*b; });
-    __SL_DEF_CMP_FUNC(u32,    a, b, SL_header, SL_implement) SL_implement({ return (i64)*a - (i64)*b; });
+    __SL_DEF_CMP_FUNC(uint,   a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : *a - *b; });
+    __SL_DEF_CMP_FUNC(u8,     a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : *a - *b; });
+    __SL_DEF_CMP_FUNC(u16,    a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : *a - *b; });
+    __SL_DEF_CMP_FUNC(u32,    a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : *a - *b; });
     __SL_DEF_CMP_FUNC(u64,    a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : *a - *b; });
     __SL_DEF_CMP_FUNC(ssize,  a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : *a - *b; });
     __SL_DEF_CMP_FUNC(usize,  a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : *a - *b; });
@@ -254,6 +282,6 @@ SL_header u64 SL_alignPow2(u64 n) {
     __SL_DEF_CMP_FUNC(double, a, b, SL_header, SL_implement) SL_implement({ return *a < *b ? -1 : *a - *b; });
     __SL_DEF_CMP_FUNC(bool,   a, b, SL_header, SL_implement) SL_implement({ return !*a && *b ? -1 : (*a && !*b ? 1 : 0); });
 
-    __SL_DEF_CMP_FUNC(char_p, a, b, SL_header, SL_implement) SL_implement({ return strcmp(*a, *b); });
+    __SL_DEF_CMP_FUNC(charp,  a, b, SL_header, SL_implement) SL_implement({ return strcmp(*a, *b); });
 #endif
 #endif // _SL_BASE_H_

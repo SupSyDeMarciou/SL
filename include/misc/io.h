@@ -140,7 +140,7 @@ SL_header int __SL_gprintHex(sl_stream dst, usize size, void *data);
     typedef sl_stream       stream;
 #   define  gprintf         SL_gprintf
 #   define  vgprintf        SL_vgprintf
-#   define  gprintBin       SL_printBin
+#   define  gprintBin       SL_gprintBin
 #   define  printBin        SL_printBin
 #   define  gprintHex       SL_gprintHex
 #   define  printHex        SL_printHex

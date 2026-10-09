@@ -14,7 +14,7 @@
 #define SL_FMT_V3(fmt) "v3("fmt", "fmt", "fmt")"
 #define SL_FMT_V4(fmt) "v4("fmt", "fmt", "fmt", "fmt")"
 
-#define SL_vsize(V) ((sizeof(V) / sizeof(((typeof(V) *)(NULL))->data[0])) == 1 ? *(usize*)&(v) : (sizeof(V) / sizeof(((typeof(V) *)(NULL))->data[0])))
+#define SL_vsize(V) (sizeof(V) / sizeof(((typeof(V) *)(NULL))->data[0]))
 
 #pragma region I8
 
@@ -29853,4 +29853,4 @@ typedef u64v4 luv4;
 
 #endif // _SL_VECTOR_H_
 
-// vector.h: THIS FILE WAS GENERATED ON 08/10/2026 AT 04:08:07
+// vector.h: THIS FILE WAS GENERATED ON 09/10/2026 AT 02:24:41

@@ -233,7 +233,8 @@ int main() {
     pushDefine_(f, "FMT_V3", "(fmt) \"v3(\"fmt\", \"fmt\", \"fmt\")\"");
     pushDefine_(f, "FMT_V4", "(fmt) \"v4(\"fmt\", \"fmt\", \"fmt\", \"fmt\")\"");
     push("\n");
-    pushDefine_(f, "vsize", "(V) ((sizeof(V) / sizeof(((typeof(V) *)(NULL))->data[0])) == 1 ? *(usize*)&(v) : (sizeof(V) / sizeof(((typeof(V) *)(NULL))->data[0])))");
+    // pushDefine_(f, "vsize", "(V) ((sizeof(V) / sizeof(((typeof(V) *)(NULL))->data[0])) == 1 ? *(usize*)&(V) : (sizeof(V) / sizeof(((typeof(V) *)(NULL))->data[0])))");
+    pushDefine_(f, "vsize", "(V) (sizeof(V) / sizeof(((typeof(V) *)(NULL))->data[0]))");
     push("\n");
     
     for (usize i = 0; i < ctypes_count; ++i)

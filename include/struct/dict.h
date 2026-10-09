@@ -14,6 +14,8 @@
 
 
 
+#define SL_DICT_BASE_CAPACITY 32
+
 /// @brief Define a new type of dictionary
 /// @param key_type Type of the key representing
 /// @param value_type Type of the value to be stored
@@ -149,13 +151,16 @@ SL_header bool __SL_dictRemove(struct __dict_gen *dict, usize keySize, void *key
 #ifdef SL_STRIP_PREFIX
 #   define  DEF_DICT            SL_DEF_DICT
 #   define  dict                SL_dict
-#   define  dictClear           SL_dictClear
 #   define  dictCreate          SL_dictCreate
 #   define  dictCreate_full     SL_dictCreate_full
 #   define  dictCreateA         SL_dictCreateA
 #   define  dictCreateA_full    SL_dictCreateA_full
-#   define  dictHash            SL_dictHash
+#   define  dictClear           SL_dictClear
 #   define  dictDestroy         SL_dictDestroy
+#   define  dictCmp2            SL_dictCmp2
+#   define  dictCmp             SL_dictCmp
+#   define  dictHash2           SL_dictHash2
+#   define  dictHash            SL_dictHash
 #   define  dictGet             SL_dictGet
 #   define  dictAdd             SL_dictAdd
 #   define  dictRemove          SL_dictRemove
@@ -195,7 +200,12 @@ SL_header void *__SL_dictAdd(struct __dict_gen *dict, usize keySize, const void 
     if (!memcpy((void *)&new->key, key, keySize))               return SL_afree(dict->alloc, new), __SL_ERROR(SL_ERROR_MEMORY), NULL;
     if (!memcpy((void *)&new->key + keySize, value, valueSize)) return SL_afree(dict->alloc, new), __SL_ERROR(SL_ERROR_MEMORY), NULL;
 
-    if (dict->count / (double)dict->capa > 3.0)
+    if (dict->capa == 0)
+    {
+        dict->data = SL_azalloc(dict->alloc, SL_DICT_BASE_CAPACITY * sizeof(void *));
+        dict->capa = SL_DICT_BASE_CAPACITY;
+    }
+    else if (dict->count / (double)dict->capa > 3.0)
     {
         // We should double the bucket count and rehash everything
         usize new_capa = dict->capa * 2;
@@ -252,7 +262,7 @@ SL_header bool __SL_dictRemove(struct __dict_gen *dict, usize keySize, void *key
 
 
 #ifndef SL_NO_DEFINES
-SL_DEF_HASH_FUNC(char_p, key) SL_implement
+SL_DEF_HASH_FUNC(charp, key) SL_implement
 ({
     usize h = 0x02468ACE;
     for (const char *c = *key; *c; ++c) {
