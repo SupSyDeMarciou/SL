@@ -9,8 +9,9 @@
  * 
 */
 
-#include "../base.h"
-#include "allocator.h"
+#include <SL/base.h>
+#include <SL/struct/allocator.h>
+#include <SL/misc/io.h>
 
 
 
@@ -166,8 +167,6 @@ for ( \
 #define SL_dlprev(list, ptr) (__SL_IS_DLIST(list) && (ptr) && ((typeof((list).first))((void *)(ptr) -                         2 * sizeof(void *)))->prev ? &((typeof((list).first))((void *)(ptr) -                         2 * sizeof(void *)))->prev->data : NULL)
 
 
-
-#include "../misc/io.h"
 
 /// @brief Print list to an arbitrary reciever with user defined formatting
 /// @param dst Destination in which to print. Uses generic "gprintf" function to differenciate between printing to a string or a file

@@ -2,9 +2,9 @@
 #define __SL_GEN_MATHS_H
 
 #define SL_STRIP_PREFIX
-#include "../../include/math/math.h"
-#include "../../include/misc/io.h"
-#include "../../include/struct/array.h"
+#include <SL/math/math.h>
+#include <SL/misc/io.h>
+#include <SL/struct/array.h>
 
 #ifdef _WIN32
 #   define S_PATH "C:/Users/vlada/Desktop/Coding/C/SupSy/"
@@ -441,6 +441,11 @@ SL_header void pushGenerationData(FILE *f, const char *file)
     strftime(buffer, sizeof(buffer), "%d/%m/%Y AT %H:%M:%S", localtime(&timestamp));
 
     push("// %s: THIS FILE WAS GENERATED ON %s\n", file, buffer);
+}
+
+SL_header FILE *openFile(const char *local_path)
+{
+    return fopen(tmpf(S_PATH"SupSyLibraries/include/SL/%s", local_path), "w");
 }
 
 #pragma endregion BUILD

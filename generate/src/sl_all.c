@@ -29,11 +29,10 @@ int main(int argc, char **argv)
         "struct/list.h",
         "struct/dict.h",
         "struct/arena.h",
-        "struct/tuple.h",
 
+        "misc/log.h",
         "misc/io.h",
         "misc/async.h",
-        "misc/log.h",
         "misc/tui.h",
         
         "math/math.h",
@@ -49,34 +48,34 @@ int main(int argc, char **argv)
     array(char) implementation = arrayCreate(char, 2048);
     array(char) no_defines = arrayCreate(char, 2048);
     
-    FILE *f = fopen(S_PATH"SupSyLibraries/include/sl_all.h", "w");
+    FILE *f = openFile("sl_all.h");
     aforeach(path, slice_(ptr(char), sa_count(paths), paths))
     {
         printf("[%zu] %s\n", aindex(path), *path);
         push("// SOURCE: %s\n", *path);
         usize size;
-        char *src = readEntireFile(tmpf(S_PATH"SupSyLibraries/include/%s", *path), &size);
+        char *src = readEntireFile(tmpf(S_PATH"SupSyLibraries/include/SL/%s", *path), &size);
         if (src == NULL)
         {
-            fprintf(stderr, "[ERROR] File %s does not exist!\n", tmpf(S_PATH"SupSyLibraries/include/%s", *path));
+            fprintf(stderr, "[ERROR] File %s does not exist!\n", tmpf(S_PATH"SupSyLibraries/include/SL/%s", *path));
         }
 
         usize ifdef_depth = 0;
-        aforeach(p, slice_(char, size, src))
+        aforeach(p, slice_(char, size, (u8*)src))
         {
-            if (strstart(p, "#ifdef SL_IMPLEMENTATION")) {
+            if (strstart((char *)p, "#ifdef SL_IMPLEMENTATION")) {
                 p += sizeof("#ifdef SL_IMPLEMENTATION");
                 p += ifdef(&implementation, p);
             }
-            else if (strstart(p, "#ifdef SL_STRIP_PREFIX")) {
+            else if (strstart((char *)p, "#ifdef SL_STRIP_PREFIX")) {
                 p += sizeof("#ifdef SL_STRIP_PREFIX");
                 p += ifdef(&strip_prefix, p);
             }
-            else if (strstart(p, "#ifndef SL_NO_DEFINES")) {
+            else if (strstart((char *)p, "#ifndef SL_NO_DEFINES")) {
                 p += sizeof("#ifndef SL_NO_DEFINES");
                 p += ifdef(&no_defines, p);
             }
-            if (strstart(p, "#include \"")) push("// ");
+            if (strstart((char *)p, "#include <SL/")) push("// ");
             pushc(*p);
         }
 

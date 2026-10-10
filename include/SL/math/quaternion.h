@@ -1,10 +1,9 @@
 #ifndef _SL_QUATERNION_H_
 #define _SL_QUATERNION_H_
 
-#include "../base.h"
-
-#include "math.h"
-#include "vector.h"
+#include <SL/base.h>
+#include <SL/math/math.h>
+#include <SL/math/vector.h>
 
 #define SL_XPD_Q(Q) (Q).w, (Q).x, (Q).y, (Q).z
 #define SL_FMT_Q(fmt) "quat("fmt" + "fmt"i + "fmt"j + "fmt"k)"
@@ -864,4 +863,4 @@ SL_header dq SL_dqfrom_fromTo(dv3 from, dv3 to)
 
 #endif // _SL_QUATERNION_H_
 
-// quaternion.h: THIS FILE WAS GENERATED ON 09/10/2026 AT 02:24:41
+// quaternion.h: THIS FILE WAS GENERATED ON 10/10/2026 AT 03:36:05

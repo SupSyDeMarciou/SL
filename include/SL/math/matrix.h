@@ -1,9 +1,9 @@
 #ifndef _SL_MATRIX_H_
 #define _SL_MATRIX_H_
 
-#include "../base.h"
-#include "vector.h"
-#include "quaternion.h"
+#include <SL/base.h>
+#include <SL/math/vector.h>
+#include <SL/math/quaternion.h>
 
 #define SL_msize(M)      SL_luv2_(sizeof(((typeof(M) *)NULL)->r0) / sizeof(((typeof(M) *)NULL)->m00), sizeof(((typeof(M) *)NULL)->r0) / sizeof(((typeof(M) *)NULL)->m00))
 #define SL_mget(M, i, j) ((M).data[j + i * (M).c])
@@ -5287,4 +5287,4 @@ SL_header bool SL_bm4x4det(bm4x4 m)
 
 #endif // _SL_MATRIX_H_
 
-// matrix.h: THIS FILE WAS GENERATED ON 09/10/2026 AT 02:24:41
+// matrix.h: THIS FILE WAS GENERATED ON 10/10/2026 AT 03:36:05

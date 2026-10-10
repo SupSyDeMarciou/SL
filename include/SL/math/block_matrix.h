@@ -9,6 +9,6 @@
  * 
 */
 
-#include "matrix.h"
+#include <SL/math/matrix.h>
 
 #endif

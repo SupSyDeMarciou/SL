@@ -1,6 +1,5 @@
-#define SL_STRIP_PREFIX
 #define SL_IMPLEMENTATION
-#include "../include/sl.h"
+#include "../generate.h"
 
 #define S_PATH "C:/Users/vlada/Desktop/Coding/C/SupSy/"
 

@@ -221,8 +221,8 @@ int main() {
     for (usize j = 0; j < 4; ++j)
         vtypes[j + i * 4] = V(ctypes[i], j == 0 ? 0 : j + 1);
 
-    FILE *f = fopen(S_PATH"SupSyLibraries/include/math/vector.h", "w");
-    push("#ifndef _SL_VECTOR_H_\n#define _SL_VECTOR_H_\n\n#include \"../base.h\"\n\n#include \"math.h\"\n\n");
+    FILE *f = openFile("math/vector.h");
+    push("#ifndef _SL_VECTOR_H_\n#define _SL_VECTOR_H_\n\n#include <SL/base.h>\n#include <SL/math/math.h>\n\n");
 
     pushDefine_(f, "XPD_V", "(V)  (V).count, (V).data");
     pushDefine_(f, "XPD_V2", "(V) (V).x, (V).y");

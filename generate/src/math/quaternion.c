@@ -72,8 +72,8 @@ int main() {
     const type qtypes[2] = {Q(TYPE_FLOAT), Q(TYPE_DOUBLE)};
     const usize qtypes_count = sa_count(qtypes);
     
-    FILE *f = fopen(S_PATH"SupSyLibraries/include/math/quaternion.h", "w");
-    push("#ifndef _SL_QUATERNION_H_\n#define _SL_QUATERNION_H_\n\n#include \"../base.h\"\n\n#include \"math.h\"\n#include \"vector.h\"\n\n");
+    FILE *f = openFile("math/quaternion.h");
+    push("#ifndef _SL_QUATERNION_H_\n#define _SL_QUATERNION_H_\n\n#include <SL/base.h>\n#include <SL/math/math.h>\n#include <SL/math/vector.h>\n\n");
     
     #define qtype qtypes[i]
     #define ctype C(qtypes[i].as.c)

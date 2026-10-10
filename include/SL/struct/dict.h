@@ -9,8 +9,8 @@
  * 
 */
 
-#include "../base.h"
-#include "array.h"
+#include <SL/base.h>
+#include <SL/struct/allocator.h>
 
 
 

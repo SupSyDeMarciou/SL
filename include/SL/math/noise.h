@@ -12,8 +12,18 @@
  * 
 */
 
-#include "vector.h"
+#include <SL/math/vector.h>
 
 
 
+#ifdef SL_IMPLEMENTATION
+SL_header float perlin2D(fv2 p)
+{
+    SL_terminate(-1, "[UNIMPLEMENTED]");
+
+    fv2 ip  = SL_fv2floor(p), fp = SL_fv2frac(p);
+    // fv2 sfp = ...
+    
+}
+#endif
 #endif // __SL_NOISE_H

@@ -9,8 +9,9 @@
  * 
 */
 
-#include "../base.h"
-#include "allocator.h"
+#include <SL/base.h>
+#include <SL/struct/allocator.h>
+#include <SL/misc/io.h>
 
 
 
@@ -225,8 +226,6 @@ SL_header bool __SL_arrayReserve(void **array_data, usize *array_count, usize *a
 #define SL_anext(array, ptr) ((ptr) = ((ptr) >= (array).data + (array).count ? NULL : (ptr) + 1))
 
 
-
-#include "../misc/io.h"
 
 /// @brief Print array to a stream with user defined formatting
 /// @param dst Destination in which to print. Uses generic "gprintf" function to differenciate between printing to a string or a file

@@ -1,9 +1,8 @@
 #ifndef _SL_VECTOR_H_
 #define _SL_VECTOR_H_
 
-#include "../base.h"
-
-#include "math.h"
+#include <SL/base.h>
+#include <SL/math/math.h>
 
 #define SL_XPD_V(V)  (V).count, (V).data
 #define SL_XPD_V2(V) (V).x, (V).y
@@ -29853,4 +29852,4 @@ typedef u64v4 luv4;
 
 #endif // _SL_VECTOR_H_
 
-// vector.h: THIS FILE WAS GENERATED ON 09/10/2026 AT 02:24:41
+// vector.h: THIS FILE WAS GENERATED ON 10/10/2026 AT 03:36:22

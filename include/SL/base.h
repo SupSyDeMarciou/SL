@@ -5,7 +5,7 @@
  *  BASE: Useful constructs reused throughout the SL
  */
 
-#if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
+#if defined(__unix__) || defined(__linux__) || (defined(__APPLE__) && defined(__MACH__))
 #   define __SL_POSIX__
 #endif
 

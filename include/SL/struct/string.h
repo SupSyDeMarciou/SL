@@ -14,8 +14,8 @@
  * 
 */
 
-#include "../base.h"
-#include "array.h"
+#include <SL/base.h>
+#include <SL/struct/array.h>
 
 typedef SL_slice(char) sl_string;
 SL_DEF_ARRAY(sl_string);

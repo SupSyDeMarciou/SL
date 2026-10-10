@@ -1,15 +1,15 @@
 #ifndef _SL_ALGORITHM_H_
 #define _SL_ALGORITHM_H_
 
-#include <complex.h>
+// #include <complex.h>
 
-#include "math.h"
-#include "vector.h"
-#include "quaternion.h"
-#include "matrix.h"
+#include <SL/math/math.h>
+#include <SL/math/vector.h>
+#include <SL/math/quaternion.h>
+#include <SL/math/matrix.h>
 
-SL_header bool fmSolve_pivot(fm lhs, fv* rhs);
-SL_header bool fmSolve_GaussSeidel(fm lhs, fv* rhs, float* x, float maxError, uint maxIter);
+SL_header bool solveSystem_pivot(fm lhs, fv* rhs);
+SL_header bool solveSystem_gaussSeidel(fm lhs, fv* rhs, float* x, float maxError, uint maxIter);
 
 
 
@@ -26,7 +26,7 @@ SL_header bool fmSolve_GaussSeidel(fm lhs, fv* rhs, float* x, float maxError, ui
 #ifdef SL_IMPLEMENTATION
 // Row reduction algorithm (I think)
 // /!\ O(n^3), really slow for big systems (n = systemMatrix.r)
-SL_header bool fmSolve_pivot(fm lhs, fv* rhs) {
+SL_header bool solveSystem_pivot(fm lhs, fv* rhs) {
 
     usize r = lhs.r;
     usize c = lhs.c;
@@ -41,7 +41,7 @@ SL_header bool fmSolve_pivot(fm lhs, fv* rhs) {
             for (; nt < r && SL_mget(lhs, nt, t) == 0.0; nt++);
 
             // The entire column is 0
-            if (nt >= r) __SL_ERROR(SL_ERROR_DIVISION_BY_ZERO), false;
+            if (nt >= r) return __SL_ERROR(SL_ERROR_DIVISION_BY_ZERO), false;
 
             // Set (t, t) to one using this new-found row
             float l = 1.0 / SL_mget(lhs, nt, t);
@@ -75,7 +75,7 @@ SL_header bool fmSolve_pivot(fm lhs, fv* rhs) {
     // Tada!!!
     return true;
 }
-SL_header bool fmSolve_GaussSeidel(fm lhs, fv* rhs, float* x, float maxError, uint maxIter) {
+SL_header bool solveSystem_gaussSeidel(fm lhs, fv* rhs, float* x, float maxError, uint maxIter) {
 
     int size = lhs.r;
     if (lhs.c != size || rhs->count != size) return __SL_ERROR(SL_ERROR_MISSMATCHING_DIMENSIONS), false;

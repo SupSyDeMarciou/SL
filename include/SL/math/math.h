@@ -9,7 +9,7 @@
  * 
 */
 
-#include "../base.h"
+#include <SL/base.h>
 
 /// @brief The ratio of the circumference to the diameter
 #define SL_PI 3.1415926535897931

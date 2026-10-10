@@ -1,8 +1,8 @@
 #ifndef _SL_TUI_H_
 #define _SL_TUI_H_
 
-#include "../base.h"
-#include "../struct/array.h"
+#include <SL/base.h>
+#include <SL/struct/array.h>
 
 typedef enum sl_cmd_arg_type {
     SL_CMD_ARG_TOGGLE = 0,
@@ -33,7 +33,7 @@ SL_DEF_ARRAY(sl_cmd_arg);
 #define sl_cmd_arg_real_(name_long_, name_short_, default)    ((sl_cmd_arg){.type = SL_CMD_ARG_REAL,   .name_long = name_long_, .name_short = name_short_, .default_value = default, .assigned = false, .assigned_value.real    = default})
 #define sl_cmd_arg_string_(name_long_, name_short_, default)  ((sl_cmd_arg){.type = SL_CMD_ARG_STRING, .name_long = name_long_, .name_short = name_short_, .default_value = default, .assigned = false, .assigned_value.string  = default})
 
-SL_header bool SL_cmd_arg_parse(int argc, char **argv, SL_array(sl_cmd_arg) *arguments);
+SL_header bool SL_cmd_arg_parse(int argc, char **argv, SL_slice(sl_cmd_arg) args, SL_array(sl_cmd_arg) *additionnal_args);
 
 
 
@@ -51,42 +51,42 @@ SL_header bool SL_cmd_arg_parse(int argc, char **argv, SL_array(sl_cmd_arg) *arg
 
 
 #ifdef SL_IMPLEMENTATION
-SL_header bool SL_cmd_arg_parse(int argc, char **argv, SL_array(sl_cmd_arg) *arguments)
+SL_header bool SL_cmd_arg_parse(int argc, char **argv, SL_slice(sl_cmd_arg) args, SL_array(sl_cmd_arg) *additionnal_args)
 {
     for (usize i = 1; i < argc; ++i) { // Skip program name
         bool matched = false;
-        for (usize j = 0; j < arguments->count && !matched; ++j)
+        for (usize j = 0; j < args.count && !matched; ++j)
         {
             if (
-                (arguments->data[j].name_short == NULL || strcmp(argv[i], arguments->data[j].name_short) != 0) && 
-                (arguments->data[j].name_long  == NULL || strcmp(argv[i], arguments->data[j].name_long)  != 0)
+                (args.data[j].name_short == NULL || strcmp(argv[i], args.data[j].name_short) != 0) && 
+                (args.data[j].name_long  == NULL || strcmp(argv[i], args.data[j].name_long)  != 0)
             ) continue;
 
             matched = true;
-            switch (arguments->data[j].type)
+            switch (args.data[j].type)
             {
                 case SL_CMD_ARG_TOGGLE: 
                 {
-                    arguments->data[j].assigned_value.toggle = true; 
-                    arguments->data[j].assigned = true;
+                    args.data[j].assigned_value.toggle = true; 
+                    args.data[j].assigned = true;
                 } break;
                 case SL_CMD_ARG_INT:
                 {
                     if (++i == argc || argv[i][0] == '-') return __SL_ERROR(SL_ERROR_MISSING_VALUE), false;
-                    arguments->data[j].assigned_value.integer = atoll(argv[i]);
-                    arguments->data[j].assigned = true;
+                    args.data[j].assigned_value.integer = atoll(argv[i]);
+                    args.data[j].assigned = true;
                 } break;
                 case SL_CMD_ARG_REAL:
                 {
                     if (++i == argc || argv[i][0] == '-') return __SL_ERROR(SL_ERROR_MISSING_VALUE), false;
-                    arguments->data[j].assigned_value.real = atof(argv[i]);
-                    arguments->data[j].assigned = true;
+                    args.data[j].assigned_value.real = atof(argv[i]);
+                    args.data[j].assigned = true;
                 } break;
                 case SL_CMD_ARG_STRING:
                 {
                     if (++i == argc || argv[i][0] == '-') return __SL_ERROR(SL_ERROR_MISSING_VALUE), false;
-                    arguments->data[j].assigned_value.string = argv[i];
-                    arguments->data[j].assigned = true;
+                    args.data[j].assigned_value.string = argv[i];
+                    args.data[j].assigned = true;
                 } break;
                 
                 default:
@@ -96,11 +96,11 @@ SL_header bool SL_cmd_arg_parse(int argc, char **argv, SL_array(sl_cmd_arg) *arg
             }
         }
 
-        if (!matched && argv[i])
+        if (additionnal_args && !matched && argv[i])
         {
             char *assigned_value = NULL;
-            if (i + 1 == argc || argv[i + 1][0] == '-') assigned_value = argv[++i];
-            SL_arrayAdd(*arguments, ((sl_cmd_arg){.type = SL_CMD_ARG_UNKNOWN, .name_long = argv[i], .name_short = argv[i], .assigned = true, .assigned_value.string = assigned_value}) );
+            if (i + 1 < argc && argv[i + 1][0] != '-') assigned_value = argv[++i];
+            SL_arrayAdd(*additionnal_args, ((sl_cmd_arg){.type = SL_CMD_ARG_UNKNOWN, .name_long = argv[i], .name_short = argv[i], .assigned = true, .assigned_value.string = assigned_value}) );
         }
     }
 

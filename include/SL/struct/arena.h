@@ -9,8 +9,8 @@
  * 
 */
 
-#include "allocator.h"
-#include "array.h"
+#include <SL/struct/allocator.h>
+#include <SL/struct/array.h>
 
 typedef struct sl_arena {
     sl_allocator description;

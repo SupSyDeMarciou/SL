@@ -6,7 +6,7 @@
  *  BASE: Useful constructs reused throughout the SL
  */
 
-#if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
+#if defined(__unix__) || defined(__linux__) || (defined(__APPLE__) && defined(__MACH__))
 #   define __SL_POSIX__
 #endif
 
@@ -230,7 +230,7 @@ SL_header u64 SL_alignPow2(u64 n);
  * 
 */
 
-// #include "../base.h"
+// #include <SL/base.h>
 
 typedef struct sl_allocator sl_allocator;
 /// @brief Allocator representing `stdlib`'s allocation functions (and SL's `memclone`)
@@ -287,8 +287,9 @@ struct sl_allocator {
  * 
 */
 
-// #include "../base.h"
-// #include "allocator.h"
+// #include <SL/base.h>
+// #include <SL/struct/allocator.h>
+// #include <SL/misc/io.h>
 
 
 
@@ -504,8 +505,6 @@ SL_header bool __SL_arrayReserve(void **array_data, usize *array_count, usize *a
 
 
 
-// #include "../misc/io.h"
-
 /// @brief Print array to a stream with user defined formatting
 /// @param dst Destination in which to print. Uses generic "gprintf" function to differenciate between printing to a string or a file
 /// @param array Array
@@ -553,8 +552,9 @@ SL_header bool __SL_arrayReserve(void **array_data, usize *array_count, usize *a
  * 
 */
 
-// #include "../base.h"
-// #include "allocator.h"
+// #include <SL/base.h>
+// #include <SL/struct/allocator.h>
+// #include <SL/misc/io.h>
 
 
 
@@ -711,8 +711,6 @@ for ( \
 
 
 
-// #include "../misc/io.h"
-
 /// @brief Print list to an arbitrary reciever with user defined formatting
 /// @param dst Destination in which to print. Uses generic "gprintf" function to differenciate between printing to a string or a file
 /// @param list List
@@ -765,8 +763,8 @@ for ( \
  * 
 */
 
-// #include "../base.h"
-// #include "array.h"
+// #include <SL/base.h>
+// #include <SL/struct/allocator.h>
 
 
 
@@ -928,8 +926,8 @@ SL_header bool __SL_dictRemove(struct __dict_gen *dict, usize keySize, void *key
  * 
 */
 
-// #include "allocator.h"
-// #include "array.h"
+// #include <SL/struct/allocator.h>
+// #include <SL/struct/array.h>
 
 typedef struct sl_arena {
     sl_allocator description;
@@ -958,33 +956,50 @@ SL_header void SL_arenaDestroy(sl_arena arena);
 
 
 
-// SOURCE: struct/tuple.h
-#ifndef _SL_TUPLE_H_
-#define _SL_TUPLE_H_
+// SOURCE: misc/log.h
+#ifndef _SL_LOG_H_
+#define _SL_LOG_H_
 
-// #include "../base.h"
+#include <stdio.h>
 
-#define SL_DEF_TUPLE2(t0, t1)             typedef struct tuple2(t0, t1)             { u8 count[0][2]; t0 v0; t1 v1; }                      tuple2(t0, t1)
-#define SL_DEF_TUPLE3(t0, t1, t2)         typedef struct tuple3(t0, t1, t2)         { u8 count[0][3]; t0 v0; t1 v1; t2 v2; }               tuple3(t0, t1, t2)
-#define SL_DEF_TUPLE4(t0, t1, t2, t3)     typedef struct tuple4(t0, t1, t2, t3)     { u8 count[0][4]; t0 v0; t1 v1; t2 v2; t3 v3; }        tuple4(t0, t1, t2, t3)
-#define SL_DEF_TUPLE5(t0, t1, t2, t3, t4) typedef struct tuple5(t0, t1, t2, t3, t4) { u8 count[0][5]; t0 v0; t1 v1; t2 v2; t3 v3; t4 v4; } tuple5(t0, t1, t2, t3, t4)
+typedef struct sl_logger
+{
+    const char *title;
+    FILE *output; 
+    int level;
+} sl_logger;
 
-#define SL_DEF_TUPLE(n, ...) SL_DEF_TUPPLE##n(__VA_ARGS__)
+#define SL_DEF_LOGGER(logger, title_, ...) \
+    sl_logger logger = { .level = SL_LOG_LVL_GLOBAL, .output = NULL, ##__VA_ARGS__, .title = title_ }; \
+    static sl_logger  *__SL_LOCAL_LOGGER__ = &logger
 
-#define tuple2(t0, t1)             CAT(CAT(CAT(tuple_, t0), _), t1)
-#define tuple3(t0, t1, t2)         CAT(CAT(tuple2(t0, t1), _), t2)
-#define tuple4(t0, t1, t2, t3)     CAT(CAT(tuple3(t0, t1, t2), _), t3)
-#define tuple5(t0, t1, t2, t3, t4) CAT(CAT(tuple4(t0, t1, t2, t3), _), t4)
+#define SL_loggerUse(logger) (__SL_LOCAL_LOGGER__ = &logger)
 
-#define tuple(n, ...)  CAT(tuple, n)(__VA_ARGS__)
-#define tuple_count(t) sizeof((t).count[0])
+typedef enum SL_log_lvl {
+    SL_LOG_LVL_OFF     = -100,
+    SL_LOG_LVL_INFO    =  0,
+    SL_LOG_LVL_WARNING =  1,
+    SL_LOG_LVL_ERROR   =  2,
+    SL_LOG_LVL_ALL     =  100,
+} SL_log_lvl;
 
-#define XPD_TUPLE2(t) t.d0, t.d1
-#define XPD_TUPLE3(t) XPD_TUPLE2(t), t.d3
-#define XPD_TUPLE4(t) XPD_TUPLE3(t), t.d4
-#define XPD_TUPLE5(t) XPD_TUPLE4(t), t.d5
+#ifndef SL_LOG_LVL_GLOBAL
+#   define SL_LOG_LVL_GLOBAL SL_LOG_LVL_ALL
+#endif
 
-#endif // _SL_TUPLE_H_
+#define SL_loggerLog(logger, log_level, color, title_, msg, ...) ((logger)->level >= (log_level) && (logger)->level >= SL_LOG_LVL_GLOBAL ? fprintf((logger)->output ? (logger)->output : stderr, "\033["#color"m%s:%u@%s - [%s "title_"] "msg"\033[0m\n", __FILE__, __LINE__, __func__, (logger)->title, ##__VA_ARGS__) : (0))
+#define SL_loggerLvl(name, log_level)     ((logger)->level  = (log_level))
+#define SL_loggerOut(name, output_stream) ((logger)->stream = (output_stream))
+
+#define SL_todo(msg, ...) (SL_loggerLog(__SL_LOCAL_LOGGER__, SL_LOG_LVL_ALL,     32, "TODO",    msg, ##__VA_ARGS__), exit(1))
+#define SL_logI(msg, ...)  SL_loggerLog(__SL_LOCAL_LOGGER__, SL_LOG_LVL_INFO,    37, "INFO",    msg, ##__VA_ARGS__)
+#define SL_logW(msg, ...)  SL_loggerLog(__SL_LOCAL_LOGGER__, SL_LOG_LVL_WARNING, 33, "WARNING", msg, ##__VA_ARGS__)
+#define SL_logE(msg, ...)  SL_loggerLog(__SL_LOCAL_LOGGER__, SL_LOG_LVL_ERROR,   31, "ERROR",   msg, ##__VA_ARGS__)
+
+
+
+
+#endif // _SL_LOG_H_
 
 
 
@@ -1003,7 +1018,7 @@ SL_header void SL_arenaDestroy(sl_arena arena);
  *  
 */
 
-// #include "../base.h"
+// #include <SL/base.h>
 
 /// @brief Temporary formated string
 /// @param fmt The format. If `NULL`, returns the last temporary string
@@ -1141,9 +1156,9 @@ SL_header int __SL_gprintHex(sl_stream dst, usize size, void *data);
  *  - Try to add single threaded coroutines (look at Tsoding's coroutines ??)
  */
 
-// #include "../base.h"
+// #include <SL/base.h>
 
-#if defined(__SL_POSIX__) &&  _POSIX_C_SOURCE >= 199309L
+#if defined(__SL_POSIX__) && _POSIX_C_SOURCE >= 199309L
 /// @brief Sleep for nano seconds
 /// @param nano_seconds Number of nanoseconds to sleep
 /// @return Error code from `nanosleep` if failed
@@ -1259,52 +1274,12 @@ bool __SL_await(const void *task, usize task_thread_offset, usize ret_size, usiz
 
 
 
-// SOURCE: misc/log.h
-#ifndef _SL_LOG_H_
-#define _SL_LOG_H_
-
-#include <stdio.h>
-
-#define SL_DEF_LOGGER(name, title_, lvl) \
-    struct __LOGGER_##name##_t__ { const char *title; FILE *stream; int level; } __LOGGER_##name##__ = { .level = lvl, .title = title_, .stream = NULL }; \
-    static struct __LOGGER_##name##_t__  *__LOGGER__ = &__LOGGER_##name##__
-
-typedef enum SL_log_lvl {
-    SL_LOG_LVL_OFF     = -100,
-    SL_LOG_LVL_INFO    =  0,
-    SL_LOG_LVL_WARNING =  1,
-    SL_LOG_LVL_ERROR   =  2,
-    SL_LOG_LVL_ALL     =  100,
-} SL_log_lvl;
-
-#ifndef SL_LOG_LVL_GLOBAL
-#   define SL_LOG_LVL_GLOBAL SL_LOG_LVL_ALL
-#endif
-
-#define SL_logger_log(logger, log_level, color, title_, msg, ...) (logger->level >= (log_level) && logger->level >= SL_LOG_LVL_GLOBAL ? fprintf(logger->stream ? logger->stream : stderr, "\033["#color"m%s:%u@%s - [%s "title_"] "msg"\033[0m\n", __FILE__, __LINE__, __FUNCTION__, logger->title, ##__VA_ARGS__) : (0))
-#define SL_logger_lvl(name, log_level)     (__LOGGER_##name##__.level = (log_level))
-#define SL_logger_out(name, output_stream) (__LOGGER_##name##__.stream = (output_stream))
-
-#define SL_todo(msg, ...) (SL_logger_log(__LOGGER__, SL_LOG_LVL_ALL,     32, "TODO",    msg, ##__VA_ARGS__), exit(1))
-#define SL_logI(msg, ...)  SL_logger_log(__LOGGER__, SL_LOG_LVL_INFO,    37, "INFO",    msg, ##__VA_ARGS__)
-#define SL_logW(msg, ...)  SL_logger_log(__LOGGER__, SL_LOG_LVL_WARNING, 33, "WARNING", msg, ##__VA_ARGS__)
-#define SL_logE(msg, ...)  SL_logger_log(__LOGGER__, SL_LOG_LVL_ERROR,   31, "ERROR",   msg, ##__VA_ARGS__)
-
-
-
-
-#endif // _SL_LOG_H_
-
-
-
-
-
 // SOURCE: misc/tui.h
 #ifndef _SL_TUI_H_
 #define _SL_TUI_H_
 
-// #include "../base.h"
-// #include "../struct/array.h"
+// #include <SL/base.h>
+// #include <SL/struct/array.h>
 
 typedef enum sl_cmd_arg_type {
     SL_CMD_ARG_TOGGLE = 0,
@@ -1335,7 +1310,7 @@ SL_DEF_ARRAY(sl_cmd_arg);
 #define sl_cmd_arg_real_(name_long_, name_short_, default)    ((sl_cmd_arg){.type = SL_CMD_ARG_REAL,   .name_long = name_long_, .name_short = name_short_, .default_value = default, .assigned = false, .assigned_value.real    = default})
 #define sl_cmd_arg_string_(name_long_, name_short_, default)  ((sl_cmd_arg){.type = SL_CMD_ARG_STRING, .name_long = name_long_, .name_short = name_short_, .default_value = default, .assigned = false, .assigned_value.string  = default})
 
-SL_header bool SL_cmd_arg_parse(int argc, char **argv, SL_array(sl_cmd_arg) *arguments);
+SL_header bool SL_cmd_arg_parse(int argc, char **argv, SL_slice(sl_cmd_arg) args, SL_array(sl_cmd_arg) *additionnal_args);
 
 
 
@@ -1362,7 +1337,7 @@ SL_header bool SL_cmd_arg_parse(int argc, char **argv, SL_array(sl_cmd_arg) *arg
  * 
 */
 
-// #include "../base.h"
+// #include <SL/base.h>
 
 /// @brief The ratio of the circumference to the diameter
 #define SL_PI 3.1415926535897931
@@ -1574,9 +1549,8 @@ SL_header double SL_drand_in(double low, double high);
 #ifndef _SL_VECTOR_H_
 #define _SL_VECTOR_H_
 
-// #include "../base.h"
-
-// #include "math.h"
+// #include <SL/base.h>
+// #include <SL/math/math.h>
 
 #define SL_XPD_V(V)  (V).count, (V).data
 #define SL_XPD_V2(V) (V).x, (V).y
@@ -28096,7 +28070,7 @@ typedef u64v4 luv4;
 #pragma endregion U64
 #endif // _SL_VECTOR_H_
 
-// vector.h: THIS FILE WAS GENERATED ON 09/10/2026 AT 02:24:41
+// vector.h: THIS FILE WAS GENERATED ON 10/10/2026 AT 03:36:22
 
 
 
@@ -28107,10 +28081,9 @@ typedef u64v4 luv4;
 #ifndef _SL_QUATERNION_H_
 #define _SL_QUATERNION_H_
 
-// #include "../base.h"
-
-// #include "math.h"
-// #include "vector.h"
+// #include <SL/base.h>
+// #include <SL/math/math.h>
+// #include <SL/math/vector.h>
 
 #define SL_XPD_Q(Q) (Q).w, (Q).x, (Q).y, (Q).z
 #define SL_FMT_Q(fmt) "quat("fmt" + "fmt"i + "fmt"j + "fmt"k)"
@@ -28905,7 +28878,7 @@ SL_header dq SL_dqfrom_fromTo(dv3 from, dv3 to)
 
 #endif // _SL_QUATERNION_H_
 
-// quaternion.h: THIS FILE WAS GENERATED ON 09/10/2026 AT 02:24:41
+// quaternion.h: THIS FILE WAS GENERATED ON 10/10/2026 AT 03:36:05
 
 
 
@@ -28916,9 +28889,9 @@ SL_header dq SL_dqfrom_fromTo(dv3 from, dv3 to)
 #ifndef _SL_MATRIX_H_
 #define _SL_MATRIX_H_
 
-// #include "../base.h"
-// #include "vector.h"
-// #include "quaternion.h"
+// #include <SL/base.h>
+// #include <SL/math/vector.h>
+// #include <SL/math/quaternion.h>
 
 #define SL_msize(M)      SL_luv2_(sizeof(((typeof(M) *)NULL)->r0) / sizeof(((typeof(M) *)NULL)->m00), sizeof(((typeof(M) *)NULL)->r0) / sizeof(((typeof(M) *)NULL)->m00))
 #define SL_mget(M, i, j) ((M).data[j + i * (M).c])
@@ -33751,7 +33724,7 @@ SL_header bool SL_bm4x4det(bm4x4 m)
 #pragma endregion BOOL
 #endif // _SL_MATRIX_H_
 
-// matrix.h: THIS FILE WAS GENERATED ON 09/10/2026 AT 02:24:41
+// matrix.h: THIS FILE WAS GENERATED ON 10/10/2026 AT 03:36:05
 
 
 
@@ -33773,7 +33746,7 @@ SL_header bool SL_bm4x4det(bm4x4 m)
  * 
 */
 
-// #include "vector.h"
+// #include <SL/math/vector.h>
 
 
 
@@ -33789,13 +33762,13 @@ SL_header bool SL_bm4x4det(bm4x4 m)
 
 // #include <complex.h>
 
-// #include "math.h"
-// #include "vector.h"
-// #include "quaternion.h"
-// #include "matrix.h"
+// #include <SL/math/math.h>
+// #include <SL/math/vector.h>
+// #include <SL/math/quaternion.h>
+// #include <SL/math/matrix.h>
 
-SL_header bool fmSolve_pivot(fm lhs, fv* rhs);
-SL_header bool fmSolve_GaussSeidel(fm lhs, fv* rhs, float* x, float maxError, uint maxIter);
+SL_header bool solveSystem_pivot(fm lhs, fv* rhs);
+SL_header bool solveSystem_gaussSeidel(fm lhs, fv* rhs, float* x, float maxError, uint maxIter);
 
 
 
@@ -33852,6 +33825,14 @@ SL_header u64 SL_alignPow2(u64 n) {
     while (i < n) i <<= 1;
     return i;
 }
+
+#ifndef __SL_POSIX__
+    SL_header char *strdup(const char *src)
+    {
+        char *ret = malloc(strlen(src) + 1);
+        return ret ? strcpy(ret, src) : NULL; 
+    }
+#endif
 
 SL_header void *__SL_arrayAt(void *data, usize count, usize elemSize, ssize index)
 {
@@ -34401,42 +34382,42 @@ bool __SL_await(const void *task, usize task_thread_offset, usize ret_size, usiz
     return free((void *)task), true;
 }
 
-SL_header bool SL_cmd_arg_parse(int argc, char **argv, SL_array(sl_cmd_arg) *arguments)
+SL_header bool SL_cmd_arg_parse(int argc, char **argv, SL_slice(sl_cmd_arg) args, SL_array(sl_cmd_arg) *additionnal_args)
 {
     for (usize i = 1; i < argc; ++i) { // Skip program name
         bool matched = false;
-        for (usize j = 0; j < arguments->count && !matched; ++j)
+        for (usize j = 0; j < args.count && !matched; ++j)
         {
             if (
-                (arguments->data[j].name_short == NULL || strcmp(argv[i], arguments->data[j].name_short) != 0) && 
-                (arguments->data[j].name_long  == NULL || strcmp(argv[i], arguments->data[j].name_long)  != 0)
+                (args.data[j].name_short == NULL || strcmp(argv[i], args.data[j].name_short) != 0) && 
+                (args.data[j].name_long  == NULL || strcmp(argv[i], args.data[j].name_long)  != 0)
             ) continue;
 
             matched = true;
-            switch (arguments->data[j].type)
+            switch (args.data[j].type)
             {
                 case SL_CMD_ARG_TOGGLE: 
                 {
-                    arguments->data[j].assigned_value.toggle = true; 
-                    arguments->data[j].assigned = true;
+                    args.data[j].assigned_value.toggle = true; 
+                    args.data[j].assigned = true;
                 } break;
                 case SL_CMD_ARG_INT:
                 {
                     if (++i == argc || argv[i][0] == '-') return __SL_ERROR(SL_ERROR_MISSING_VALUE), false;
-                    arguments->data[j].assigned_value.integer = atoll(argv[i]);
-                    arguments->data[j].assigned = true;
+                    args.data[j].assigned_value.integer = atoll(argv[i]);
+                    args.data[j].assigned = true;
                 } break;
                 case SL_CMD_ARG_REAL:
                 {
                     if (++i == argc || argv[i][0] == '-') return __SL_ERROR(SL_ERROR_MISSING_VALUE), false;
-                    arguments->data[j].assigned_value.real = atof(argv[i]);
-                    arguments->data[j].assigned = true;
+                    args.data[j].assigned_value.real = atof(argv[i]);
+                    args.data[j].assigned = true;
                 } break;
                 case SL_CMD_ARG_STRING:
                 {
                     if (++i == argc || argv[i][0] == '-') return __SL_ERROR(SL_ERROR_MISSING_VALUE), false;
-                    arguments->data[j].assigned_value.string = argv[i];
-                    arguments->data[j].assigned = true;
+                    args.data[j].assigned_value.string = argv[i];
+                    args.data[j].assigned = true;
                 } break;
                 
                 default:
@@ -34446,11 +34427,11 @@ SL_header bool SL_cmd_arg_parse(int argc, char **argv, SL_array(sl_cmd_arg) *arg
             }
         }
 
-        if (!matched && argv[i])
+        if (additionnal_args && !matched && argv[i])
         {
             char *assigned_value = NULL;
-            if (i + 1 == argc || argv[i + 1][0] == '-') assigned_value = argv[++i];
-            SL_arrayAdd(*arguments, ((sl_cmd_arg){.type = SL_CMD_ARG_UNKNOWN, .name_long = argv[i], .name_short = argv[i], .assigned = true, .assigned_value.string = assigned_value}) );
+            if (i + 1 < argc && argv[i + 1][0] != '-') assigned_value = argv[++i];
+            SL_arrayAdd(*additionnal_args, ((sl_cmd_arg){.type = SL_CMD_ARG_UNKNOWN, .name_long = argv[i], .name_short = argv[i], .assigned = true, .assigned_value.string = assigned_value}) );
         }
     }
 
@@ -34543,7 +34524,7 @@ SL_header float perlin2D(fv2 p)
 
 // Row reduction algorithm (I think)
 // /!\ O(n^3), really slow for big systems (n = systemMatrix.r)
-SL_header bool fmSolve_pivot(fm lhs, fv* rhs) {
+SL_header bool solveSystem_pivot(fm lhs, fv* rhs) {
 
     usize r = lhs.r;
     usize c = lhs.c;
@@ -34558,7 +34539,7 @@ SL_header bool fmSolve_pivot(fm lhs, fv* rhs) {
             for (; nt < r && SL_mget(lhs, nt, t) == 0.0; nt++);
 
             // The entire column is 0
-            if (nt >= r) __SL_ERROR(SL_ERROR_DIVISION_BY_ZERO), false;
+            if (nt >= r) return __SL_ERROR(SL_ERROR_DIVISION_BY_ZERO), false;
 
             // Set (t, t) to one using this new-found row
             float l = 1.0 / SL_mget(lhs, nt, t);
@@ -34592,7 +34573,7 @@ SL_header bool fmSolve_pivot(fm lhs, fv* rhs) {
     // Tada!!!
     return true;
 }
-SL_header bool fmSolve_GaussSeidel(fm lhs, fv* rhs, float* x, float maxError, uint maxIter) {
+SL_header bool solveSystem_gaussSeidel(fm lhs, fv* rhs, float* x, float maxError, uint maxIter) {
 
     int size = lhs.r;
     if (lhs.c != size || rhs->count != size) return __SL_ERROR(SL_ERROR_MISSMATCHING_DIMENSIONS), false;
@@ -34744,6 +34725,18 @@ SL_header bool fmSolve_GaussSeidel(fm lhs, fv* rhs, float* x, float maxError, ui
 #   define arenaCreate      SL_arenaCreate
 #   define arenaDestroy     SL_arenaDestroy
 
+#   define  DEF_LOGGER      SL_DEF_LOGGER
+#   define  loggerUse       SL_loggerUse
+    typedef SL_log_lvl      log_lvl;
+#   define  LOG_LVL_GLOBAL  SL_LOG_LVL_GLOBAL
+#   define  loggerLog       SL_loggerLog
+#   define  loggerLvl       SL_loggerLvl
+#   define  loggerOut       SL_loggerOut
+#   define  todo            SL_todo
+#   define  logI            SL_logI
+#   define  logW            SL_logW
+#   define  logE            SL_logE
+
 #   define  tmpf            SL_tmpf
 #   define  strf            SL_strf
 #   define  strtrsfrm       SL_strtrsfrm
@@ -34756,7 +34749,7 @@ SL_header bool fmSolve_GaussSeidel(fm lhs, fv* rhs, float* x, float maxError, ui
     typedef sl_stream       stream;
 #   define  gprintf         SL_gprintf
 #   define  vgprintf        SL_vgprintf
-#   define  gprintBin       SL_printBin
+#   define  gprintBin       SL_gprintBin
 #   define  printBin        SL_printBin
 #   define  gprintHex       SL_gprintHex
 #   define  printHex        SL_printHex
@@ -34775,17 +34768,6 @@ SL_header bool fmSolve_GaussSeidel(fm lhs, fv* rhs, float* x, float maxError, ui
 #   define  taskStatus          SL_taskStatus
 #   define  await               SL_await
 #   define  DEF_ASYNC           SL_DEF_ASYNC
-
-#   define DEF_LOGGER     SL_DEF_LOGGER
-    typedef SL_log_lvl    log_lvl;
-#   define LOG_LVL_GLOBAL SL_LOG_LVL_GLOBAL
-#   define logger_log     SL_logger_log
-#   define logger_lvl     SL_logger_lvl
-#   define logger_out     SL_logger_out
-#   define todo           SL_todo
-#   define logI           SL_logI
-#   define logW           SL_logW
-#   define logE           SL_logE
 
     typedef sl_cmd_arg_type      cmd_arg_type;
     typedef sl_cmd_arg_union     cmd_arg_union;
@@ -38706,8 +38688,8 @@ SL_header bool fmSolve_GaussSeidel(fm lhs, fv* rhs, float* x, float maxError, ui
     SL_DEF_ARRAY(f16);    SL_DEF_ARRAY(f32);   SL_DEF_ARRAY(f64);    SL_DEF_ARRAY(f128);
     SL_DEF_ARRAY(SL_ptr(char));
 
-    typedef SL_array(f32) SL_array(float);                     typedef SL_slice(f32) SL_slice(float); 
-    typedef SL_array(f64) SL_array(double);                    typedef SL_slice(f64) SL_slice(double);
+    typedef SL_array(f32) SL_array(float);                      typedef SL_slice(f32) SL_slice(float); 
+    typedef SL_array(f64) SL_array(double);                     typedef SL_slice(f64) SL_slice(double);
 
     typedef SL_array(u8)  SL_array(ch8),  SL_array(char);       typedef SL_slice(u8)  SL_slice(ch8),  SL_slice(char);
     typedef SL_array(u16) SL_array(ch16), SL_array(wchar_t);    typedef SL_slice(u16) SL_slice(ch16), SL_slice(wchar_t);
@@ -38720,12 +38702,12 @@ SL_header bool fmSolve_GaussSeidel(fm lhs, fv* rhs, float* x, float maxError, ui
     SL_DEF_LIST(f32);   SL_DEF_LIST(f64);
     SL_DEF_LIST(SL_ptr(char));
 
-    typedef SL_list(f32) SL_list(float);            typedef SL_dlist(f32) SL_dlist(float); 
-    typedef SL_list(f64) SL_list(double);           typedef SL_dlist(f64) SL_dlist(double);
+    typedef SL_list(f32) SL_list(float);                    typedef SL_dlist(f32) SL_dlist(float); 
+    typedef SL_list(f64) SL_list(double);                   typedef SL_dlist(f64) SL_dlist(double);
 
-    SL_list(u8)  SL_list(ch8),  SL_list(char);      typedef SL_dlist(u8)  SL_dlist(ch8),  SL_dlist(char);
-    SL_list(u16) SL_list(ch16), SL_list(wchar_t);   typedef SL_dlist(u16) SL_dlist(ch16), SL_dlist(wchar_t);
-    SL_list(u32) SL_list(ch32);                     typedef SL_dlist(u32) SL_dlist(ch32);
+    typedef SL_list(u8)  SL_list(ch8),  SL_list(char);      typedef SL_dlist(u8)  SL_dlist(ch8),  SL_dlist(char);
+    typedef SL_list(u16) SL_list(ch16), SL_list(wchar_t);   typedef SL_dlist(u16) SL_dlist(ch16), SL_dlist(wchar_t);
+    typedef SL_list(u32) SL_list(ch32);                     typedef SL_dlist(u32) SL_dlist(ch32);
 
     SL_DEF_LIST(SL_ptr(void));
 
@@ -38742,4 +38724,4 @@ SL_DEF_HASH_FUNC(charp, key) SL_implement
 #endif
 
 
-// sl_all.h: THIS FILE WAS GENERATED ON 09/10/2026 AT 02:24:41
+// sl_all.h: THIS FILE WAS GENERATED ON 10/10/2026 AT 03:39:00

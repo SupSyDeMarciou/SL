@@ -10,7 +10,7 @@
  * 
 */
 
-#include "../base.h"
+#include <SL/base.h>
 
 typedef struct sl_allocator sl_allocator;
 /// @brief Allocator representing `stdlib`'s allocation functions (and SL's `memclone`)

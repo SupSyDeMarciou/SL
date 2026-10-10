@@ -136,9 +136,10 @@ int main() {
         };
     }
 
-    FILE *f = fopen(S_PATH"SupSyLibraries/include/math/matrix.h", "w");
-    push("#ifndef _SL_MATRIX_H_\n#define _SL_MATRIX_H_\n\n#include \"../base.h\"\n#include \"vector.h\"\n#include \"quaternion.h\"\n\n");
-    
+    FILE *f = openFile("math/matrix.h");
+    push("#ifndef _SL_MATRIX_H_\n#define _SL_MATRIX_H_\n\n#include <SL/base.h>\n#include <SL/math/vector.h>\n#include <SL/math/quaternion.h>\n\n");
+
+
     pushDefine_(f, "msize", "(M)      "SL_PREFIX"luv2_(sizeof(((typeof(M) *)NULL)->r0) / sizeof(((typeof(M) *)NULL)->m00), sizeof(((typeof(M) *)NULL)->r0) / sizeof(((typeof(M) *)NULL)->m00))");
     pushDefine_(f, "mget", "(M, i, j) ((M).data[j + i * (M).c])");
     push("\n");

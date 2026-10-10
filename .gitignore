@@ -9,5 +9,5 @@
 *.exe
 
 .clangd
-generate/bin/*
+*/bin/*
 test/*

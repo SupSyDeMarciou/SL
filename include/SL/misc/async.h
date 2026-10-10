@@ -9,9 +9,9 @@
  *  - Try to add single threaded coroutines (look at Tsoding's coroutines ??)
  */
 
-#include "../base.h"
+#include <SL/base.h>
 
-#if defined(__SL_POSIX__) &&  _POSIX_C_SOURCE >= 199309L
+#if defined(__SL_POSIX__) && _POSIX_C_SOURCE >= 199309L
 /// @brief Sleep for nano seconds
 /// @param nano_seconds Number of nanoseconds to sleep
 /// @return Error code from `nanosleep` if failed

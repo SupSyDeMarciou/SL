@@ -10,7 +10,7 @@
  *  
 */
 
-#include "../base.h"
+#include <SL/base.h>
 
 /// @brief Temporary formated string
 /// @param fmt The format. If `NULL`, returns the last temporary string
